@@ -8,6 +8,7 @@ import type { ProcessingJob } from "@/lib/api";
 function getTone(status: string | null | undefined) {
   if (status === "completed") return "success" as const;
   if (status === "failed") return "danger" as const;
+  if (status === "cancelled") return "warning" as const;
   if (status === "running") return "info" as const;
   if (status === "queued") return "warning" as const;
   return "neutral" as const;
@@ -18,6 +19,7 @@ function getLabel(job: ProcessingJob) {
   if (job.status === "running") return job.current_message || "Processing";
   if (job.status === "completed") return "Completed";
   if (job.status === "failed") return "Failed";
+  if (job.status === "cancelled") return "Cancelled";
   return job.status;
 }
 
@@ -62,6 +64,7 @@ export function JobStatusPanel({
 
         {job.status === "running" && runningHint ? <Alert tone="info">{runningHint}</Alert> : null}
         {job.status === "failed" && job.error_text ? <Alert tone="danger">{job.error_text}</Alert> : null}
+        {job.status === "cancelled" ? <Alert tone="warning">{job.error_text || "This job was cancelled."}</Alert> : null}
         {job.status === "queued" ? (
           <Alert tone="warning">The worker has accepted the job and will start processing shortly.</Alert>
         ) : null}

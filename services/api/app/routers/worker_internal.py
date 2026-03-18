@@ -60,6 +60,8 @@ async def update_job(
     job = result.scalar_one_or_none()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    if job.status == "cancelled" and body.status != "cancelled":
+        return {"ok": True, "ignored": True}
     await set_job_status(
         db,
         job_id,
@@ -93,6 +95,8 @@ async def create_transcript(
     job = result.scalar_one_or_none()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    if job.status == "cancelled":
+        return {"transcript_id": None, "ignored": True}
 
     # Persist the transcript first so prep-step failures do not roll back completed transcription.
     await db.execute(

@@ -78,7 +78,7 @@ export default function TranscriptPage() {
     enabled: !!transcribeJobId,
     refetchInterval: (query) => {
       const status = query.state.data?.status;
-      return status === "completed" || status === "failed" ? false : 2000;
+      return status === "completed" || status === "failed" || status === "cancelled" ? false : 2000;
     },
   });
 
@@ -88,7 +88,7 @@ export default function TranscriptPage() {
     enabled: !!transcribeJobId,
     refetchInterval: () => {
       const status = transcribeJob?.status;
-      return status === "completed" || status === "failed" ? false : 2000;
+      return status === "completed" || status === "failed" || status === "cancelled" ? false : 2000;
     },
   });
 
@@ -98,7 +98,7 @@ export default function TranscriptPage() {
     enabled: !!artifactJobId,
     refetchInterval: (query) => {
       const status = query.state.data?.status;
-      return status === "completed" || status === "failed" ? false : 2000;
+      return status === "completed" || status === "failed" || status === "cancelled" ? false : 2000;
     },
   });
 
@@ -108,7 +108,7 @@ export default function TranscriptPage() {
     enabled: !!artifactJobId,
     refetchInterval: () => {
       const status = artifactJob?.status;
-      return status === "completed" || status === "failed" ? false : 2000;
+      return status === "completed" || status === "failed" || status === "cancelled" ? false : 2000;
     },
   });
 
@@ -123,6 +123,9 @@ export default function TranscriptPage() {
     if (visibleJob?.status === "failed") {
       setTranscriptionRequested(false);
     }
+    if (visibleJob?.status === "cancelled") {
+      setTranscriptionRequested(false);
+    }
   }, [projectId, queryClient, visibleJob?.status]);
 
   useEffect(() => {
@@ -130,6 +133,9 @@ export default function TranscriptPage() {
       setArtifactRequested(false);
     }
     if (visibleArtifactJob?.status === "failed") {
+      setArtifactRequested(false);
+    }
+    if (visibleArtifactJob?.status === "cancelled") {
       setArtifactRequested(false);
     }
   }, [visibleArtifactJob?.status]);
@@ -207,6 +213,16 @@ export default function TranscriptPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["transcript", projectId] }),
   });
 
+  const cancelTranscription = useMutation({
+    mutationFn: (jobId: string) => jobs.cancel(jobId),
+    onSuccess: async (_, jobId) => {
+      setTranscriptionRequested(false);
+      setLogMessages((prev) => [...prev, "Job cancelled."]);
+      await queryClient.invalidateQueries({ queryKey: ["jobs", projectId] });
+      await queryClient.invalidateQueries({ queryKey: ["job", jobId] });
+    },
+  });
+
   const generateArtifacts = useMutation({
     mutationFn: transcript.generateArtifacts,
     onMutate: () => {
@@ -229,7 +245,12 @@ export default function TranscriptPage() {
   const transcriptionBusy =
     startTranscribe.isPending ||
     transcriptionRequested ||
-    Boolean(visibleJob && visibleJob.status !== "completed" && visibleJob.status !== "failed");
+    Boolean(
+      visibleJob &&
+        visibleJob.status !== "completed" &&
+        visibleJob.status !== "failed" &&
+        visibleJob.status !== "cancelled"
+    );
 
   const artifactBusy =
     generateArtifacts.isPending ||
@@ -248,6 +269,14 @@ export default function TranscriptPage() {
       project_id: projectId,
       sermon_asset_id: sermonAsset.id,
     });
+  };
+
+  const cancelAndRestartJob = async () => {
+    if (!sermonAsset) return;
+    if (visibleJob && (visibleJob.status === "queued" || visibleJob.status === "running")) {
+      await cancelTranscription.mutateAsync(visibleJob.id);
+    }
+    startJob();
   };
 
   const startArtifactJob = () => {
@@ -287,9 +316,21 @@ export default function TranscriptPage() {
                   }
                 />
                 <div className="mt-6 space-y-4">
-                  <Button onClick={startJob} disabled={transcriptionBusy} size="lg">
-                    {startTranscribe.isPending ? "Starting..." : "Start Transcription"}
-                  </Button>
+                  <div className="flex flex-wrap gap-3">
+                    <Button onClick={startJob} disabled={transcriptionBusy} size="lg">
+                      {startTranscribe.isPending ? "Starting..." : "Start Transcription"}
+                    </Button>
+                    {visibleJob && (visibleJob.status === "queued" || visibleJob.status === "running") ? (
+                      <Button
+                        variant="secondary"
+                        onClick={cancelAndRestartJob}
+                        disabled={cancelTranscription.isPending || startTranscribe.isPending}
+                        size="lg"
+                      >
+                        {cancelTranscription.isPending ? "Cancelling..." : "Cancel and Restart"}
+                      </Button>
+                    ) : null}
+                  </div>
                   <Alert tone="info">
                     Full-sermon transcription on CPU can pause on one step for a while. If the activity log keeps changing, the process is still alive.
                   </Alert>
@@ -305,6 +346,15 @@ export default function TranscriptPage() {
                       <Button variant="secondary" onClick={startJob} disabled={transcriptionBusy}>
                         {transcriptionBusy ? "Transcribing..." : "Re-Transcribe"}
                       </Button>
+                      {visibleJob && (visibleJob.status === "queued" || visibleJob.status === "running") ? (
+                        <Button
+                          variant="secondary"
+                          onClick={cancelAndRestartJob}
+                          disabled={cancelTranscription.isPending || startTranscribe.isPending}
+                        >
+                          {cancelTranscription.isPending ? "Cancelling..." : "Cancel and Restart"}
+                        </Button>
+                      ) : null}
                       {transcriptData.approved_at ? (
                         <Badge tone="success">Approved</Badge>
                       ) : (

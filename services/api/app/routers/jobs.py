@@ -1,5 +1,6 @@
 """Job routes."""
 
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -7,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
+from app.lib.job_events import append_job_event
 from app.models import ProcessingJob, ProcessingJobEvent
 from app.schemas import ProcessingJobRead
 
@@ -67,3 +69,34 @@ async def get_job_events(
         }
         for e in events
     ]
+
+
+@router.post("/{job_id}/cancel")
+async def cancel_job(
+    job_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Cancel a queued or running job."""
+    result = await db.execute(select(ProcessingJob).where(ProcessingJob.id == job_id))
+    job = result.scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    if job.status in ("completed", "failed", "cancelled"):
+        return {"ok": True, "status": job.status}
+
+    job.status = "cancelled"
+    job.current_message = "Cancelled by user"
+    job.current_step = "cancelled"
+    job.error_text = "Job cancelled by user."
+    job.completed_at = datetime.now(timezone.utc)
+    await append_job_event(
+        db,
+        job_id,
+        "error",
+        "Job cancelled by user.",
+        progress_percent=job.progress_percent,
+        step_code="cancelled",
+    )
+    await db.flush()
+    return {"ok": True, "status": "cancelled"}

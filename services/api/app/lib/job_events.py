@@ -71,5 +71,5 @@ async def set_job_status(
     job.error_text = error_text
     if status == "running" and not job.started_at:
         job.started_at = datetime.now(timezone.utc)
-    if status in ("completed", "failed"):
+    if status in ("completed", "failed", "cancelled"):
         job.completed_at = datetime.now(timezone.utc)

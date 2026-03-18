@@ -158,6 +158,10 @@ export const projects = {
 export const jobs = {
   get: (jobId: string) => api<ProcessingJob>(`/api/jobs/${jobId}`),
   listForProject: (projectId: string) => api<ProcessingJob[]>(`/api/jobs/project/${projectId}`),
+  cancel: (jobId: string) =>
+    api<{ ok: boolean; status: string }>(`/api/jobs/${jobId}/cancel`, {
+      method: "POST",
+    }),
   getEvents: (jobId: string, afterSequence?: number) => {
     const q = afterSequence != null ? `?after_sequence=${afterSequence}` : "";
     return api<Array<{ sequence_no: number; event_type: string; message: string; progress_percent?: number }>>(
