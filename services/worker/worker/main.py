@@ -31,3 +31,4 @@ class WorkerSettings:
     on_startup = startup
     on_shutdown = shutdown
     functions = [sample_task, trim_sermon, transcribe_sermon_task]
+    job_timeout = 1800
