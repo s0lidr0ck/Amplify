@@ -9,6 +9,8 @@ RUN corepack enable pnpm && pnpm install
 
 FROM base AS builder
 WORKDIR /app
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
 COPY --from=deps /app/packages/api-client/node_modules ./packages/api-client/node_modules
