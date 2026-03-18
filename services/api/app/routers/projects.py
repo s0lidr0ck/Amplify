@@ -1,16 +1,27 @@
 """Project routes."""
 
+import shutil
 import uuid
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db import get_db
-from app.models import MediaAsset, Organization, Project, Transcript
+from app.models import (
+    ClipAnalysisRun,
+    ClipCandidate,
+    MediaAsset,
+    Organization,
+    ProcessingJob,
+    ProcessingJobEvent,
+    Project,
+    Transcript,
+    TrimOperation,
+)
 from app.schemas import ProjectCreate, ProjectRead
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
@@ -144,6 +155,42 @@ async def get_project(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     return project
+
+
+@router.delete("/{project_id}", status_code=204)
+async def delete_project(
+    project_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a project and its related records/files."""
+    project = await db.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    job_ids = (
+        select(ProcessingJob.id)
+        .where(ProcessingJob.project_id == project_id)
+        .scalar_subquery()
+    )
+
+    await db.execute(delete(ProcessingJobEvent).where(ProcessingJobEvent.processing_job_id.in_(job_ids)))
+    await db.execute(delete(ProcessingJob).where(ProcessingJob.project_id == project_id))
+    await db.execute(delete(ClipCandidate).where(ClipCandidate.project_id == project_id))
+    await db.execute(delete(ClipAnalysisRun).where(ClipAnalysisRun.project_id == project_id))
+    await db.execute(delete(Transcript).where(Transcript.project_id == project_id))
+    await db.execute(delete(TrimOperation).where(TrimOperation.project_id == project_id))
+    await db.execute(delete(MediaAsset).where(MediaAsset.project_id == project_id))
+    await db.execute(delete(Project).where(Project.id == project_id))
+    await db.flush()
+
+    upload_dir = Path(settings.upload_dir)
+    if not upload_dir.is_absolute():
+        upload_dir = _PROJECT_ROOT / upload_dir
+    project_dir = upload_dir / "projects" / project_id
+    if project_dir.exists():
+        shutil.rmtree(project_dir, ignore_errors=True)
+
+    return Response(status_code=204)
 
 
 @router.get("/{project_id}/sermon-asset", response_model=Optional[dict])

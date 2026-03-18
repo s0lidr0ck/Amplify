@@ -115,6 +115,19 @@ export interface ArtifactStatus {
 export const projects = {
   list: () => api<Project[]>("/api/projects"),
   get: (id: string) => api<Project>(`/api/projects/${id}`),
+  delete: async (id: string) => {
+    const res = await fetch(`${API_BASE}/api/projects/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const text = await res.text();
+      try {
+        const json = JSON.parse(text) as { detail?: string };
+        throw new Error(json.detail ?? `API error ${res.status}`);
+      } catch (e) {
+        if (e instanceof SyntaxError) throw new Error(`API error ${res.status}: ${text}`);
+        throw e;
+      }
+    }
+  },
   create: (data: { title: string; speaker: string; sermon_date: string; source_type: string; source_url?: string }) =>
     api<Project>("/api/projects", { method: "POST", body: JSON.stringify(data) }),
   getSourceAsset: (projectId: string) =>

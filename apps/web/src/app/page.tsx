@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ProjectList } from "@/components/dashboard/ProjectList";
 import { ResumeWorkCard } from "@/components/dashboard/ResumeWorkCard";
 import { AppShell } from "@/components/layout/AppShell";
@@ -11,10 +11,25 @@ import { Card, CardHeader } from "@/components/ui/Card";
 import { projects } from "@/lib/api";
 
 export default function Dashboard() {
+  const queryClient = useQueryClient();
   const { data: projectList, isLoading } = useQuery({
     queryKey: ["projects"],
     queryFn: projects.list,
   });
+  const deleteProject = useMutation({
+    mutationFn: (projectId: string) => projects.delete(projectId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["projects"] });
+    },
+  });
+
+  function handleDeleteProject(project: { id: string; title: string }) {
+    const confirmed = window.confirm(
+      `Delete "${project.title}" and all of its uploaded files, jobs, transcripts, clips, and drafts? This cannot be undone.`
+    );
+    if (!confirmed) return;
+    deleteProject.mutate(project.id);
+  }
 
   return (
     <AppShell>
@@ -42,6 +57,13 @@ export default function Dashboard() {
                   description="Pick up the next sermon in progress and jump back into the workflow."
                 />
                 <div className="mt-6">
+                  {deleteProject.isError ? (
+                    <Alert tone="danger" title="Project deletion failed">
+                      {deleteProject.error instanceof Error
+                        ? deleteProject.error.message
+                        : "The project could not be deleted."}
+                    </Alert>
+                  ) : null}
                   {isLoading ? (
                     <Alert tone="info">Loading projects from the local API.</Alert>
                   ) : projectList?.length === 0 ? (
@@ -49,7 +71,11 @@ export default function Dashboard() {
                       Create the first sermon project to start building the studio rhythm.
                     </Alert>
                   ) : (
-                    <ProjectList projects={projectList ?? []} />
+                    <ProjectList
+                      projects={projectList ?? []}
+                      onDelete={handleDeleteProject}
+                      deletingProjectId={deleteProject.isPending ? deleteProject.variables : null}
+                    />
                   )}
                 </div>
               </Card>
