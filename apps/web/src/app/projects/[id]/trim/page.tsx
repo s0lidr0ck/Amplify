@@ -1,0 +1,313 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { useParams } from "next/navigation";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { jobs, projects, trim, getMediaPlaybackUrl } from "@/lib/api";
+import { Alert } from "@/components/ui/Alert";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Card, CardHeader } from "@/components/ui/Card";
+import { JobStatusPanel } from "@/components/workflow/JobStatusPanel";
+import { StepIntro } from "@/components/workflow/StepIntro";
+
+function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+export default function TrimPage() {
+  const params = useParams();
+  const projectId = params.id as string;
+  const queryClient = useQueryClient();
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const timelineRef = useRef<HTMLDivElement>(null);
+
+  const { data: project } = useQuery({
+    queryKey: ["project", projectId],
+    queryFn: () => projects.get(projectId),
+  });
+
+  const { data: sourceAsset } = useQuery({
+    queryKey: ["source-asset", projectId],
+    queryFn: () => projects.getSourceAsset(projectId),
+  });
+
+  const [startSeconds, setStartSeconds] = useState(0);
+  const [endSeconds, setEndSeconds] = useState(60);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [useFullFile, setUseFullFile] = useState(false);
+  const [videoDuration, setVideoDuration] = useState<number | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [hasSetStart, setHasSetStart] = useState(false);
+  const [jobId, setJobId] = useState<string | null>(null);
+
+  const duration = videoDuration ?? sourceAsset?.duration_seconds ?? 60;
+
+  useEffect(() => {
+    if (sourceAsset?.duration_seconds != null && videoDuration == null) {
+      setEndSeconds(sourceAsset.duration_seconds);
+    }
+  }, [sourceAsset?.duration_seconds, videoDuration]);
+
+  useEffect(() => {
+    if (videoDuration != null && endSeconds > videoDuration) {
+      setEndSeconds(videoDuration);
+    }
+  }, [videoDuration, endSeconds]);
+
+  const trimMutation = useMutation({
+    mutationFn: trim.start,
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["jobs", projectId] });
+      setJobId(data.job_id);
+    },
+  });
+
+  const { data: job } = useQuery({
+    queryKey: ["job", jobId],
+    queryFn: () => jobs.get(jobId!),
+    enabled: !!jobId,
+    refetchInterval: (query) =>
+      query.state.data?.status === "completed" || query.state.data?.status === "failed" ? false : 2000,
+  });
+
+  const safeEnd = useFullFile ? duration : Math.min(endSeconds, duration);
+  const safeStart = useFullFile ? 0 : Math.max(0, Math.min(startSeconds, safeEnd - 1));
+  const selectedDuration = Math.max(0, safeEnd - safeStart);
+  const playbackUrl = sourceAsset ? getMediaPlaybackUrl(sourceAsset.id) : null;
+
+  const seekToTime = (time: number) => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.currentTime = time;
+    setCurrentTime(time);
+  };
+
+  const getTimeFromClientX = (clientX: number) => {
+    const element = timelineRef.current;
+    if (!element || duration <= 0) return 0;
+    const rect = element.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    return ratio * duration;
+  };
+
+  useEffect(() => {
+    if (!isDragging) return;
+    const onMove = (event: MouseEvent) => seekToTime(getTimeFromClientX(event.clientX));
+    const onUp = () => setIsDragging(false);
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [duration, isDragging]);
+
+  return (
+    <div className="space-y-6">
+      <StepIntro
+        eyebrow="Sermon Master"
+        title={`Shape the usable sermon for ${project?.title ?? "this project"}.`}
+        description="Review the uploaded source, set the sermon boundaries, and generate the clean master asset that the rest of the workflow depends on."
+        meta={[
+          project?.speaker ?? "Speaker pending",
+          sourceAsset?.filename ?? "Source upload pending",
+          useFullFile ? "Using full file" : `${formatTime(selectedDuration)} selected`,
+        ]}
+      />
+
+      {!sourceAsset ? (
+        <Alert tone="warning" title="Source required">
+          Upload a source video in the Source step before creating the sermon master.
+        </Alert>
+      ) : (
+        <div className="grid gap-6 2xl:grid-cols-[minmax(0,1.5fr)_360px]">
+          <div className="space-y-6">
+            <Card>
+              <CardHeader
+                eyebrow="Preview"
+                title="Source review"
+                description="Scrub through the uploaded video, choose the exact sermon range, and confirm the master boundaries."
+              />
+
+              <div className="mt-6 space-y-5">
+                {playbackUrl ? (
+                  <>
+                    <div className="overflow-hidden rounded-[1.75rem] bg-black shadow-soft">
+                      <video
+                        ref={videoRef}
+                        src={playbackUrl}
+                        crossOrigin="anonymous"
+                        controls
+                        className="aspect-video w-full"
+                        onTimeUpdate={() => {
+                          const video = videoRef.current;
+                          if (video) setCurrentTime(video.currentTime);
+                        }}
+                        onLoadedMetadata={() => {
+                          const video = videoRef.current;
+                          if (video && Number.isFinite(video.duration) && video.duration > 0) {
+                            setVideoDuration(video.duration);
+                            setCurrentTime(video.currentTime);
+                            if (endSeconds > video.duration) setEndSeconds(video.duration);
+                          }
+                        }}
+                      />
+                    </div>
+
+                    <div className="surface-panel p-5">
+                      <div
+                        ref={timelineRef}
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          seekToTime(getTimeFromClientX(event.clientX));
+                          setIsDragging(true);
+                        }}
+                        className={`relative h-12 overflow-hidden rounded-full bg-surface-strong select-none ${
+                          isDragging ? "cursor-grabbing" : "cursor-grab"
+                        }`}
+                      >
+                        <div
+                          className="absolute inset-y-0 rounded-full bg-gradient-to-r from-brand to-accent"
+                          style={{
+                            left: `${(safeStart / duration) * 100}%`,
+                            width: `${((safeEnd - safeStart) / duration) * 100}%`,
+                          }}
+                        />
+                        <div
+                          className="absolute top-0 h-full w-1 rounded-full bg-white shadow"
+                          style={{
+                            left: `${duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0}%`,
+                          }}
+                        />
+                      </div>
+
+                      <div className="mt-4 flex flex-wrap items-center gap-3">
+                        <Badge tone="info">Current {formatTime(currentTime)}</Badge>
+                        <Badge tone="brand">Start {formatTime(safeStart)}</Badge>
+                        <Badge tone="warning">End {formatTime(safeEnd)}</Badge>
+                        <Badge tone="neutral">Source {formatTime(duration)}</Badge>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <Alert tone="warning">
+                    Playback is not available for this source yet, but you can still generate the master once the asset is ready.
+                  </Alert>
+                )}
+              </div>
+            </Card>
+          </div>
+
+          <div className="space-y-6">
+            <Card>
+              <CardHeader
+                eyebrow="Selection"
+                title="Boundary controls"
+                description="Use the live playhead to mark the sermon start and end, or keep the entire source file."
+              />
+
+              <div className="mt-6 space-y-5">
+                <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-1">
+                  <Button variant="secondary" onClick={() => seekToTime(Math.max(0, currentTime - 5))}>
+                    Back 5s
+                  </Button>
+                  <Button variant="secondary" onClick={() => seekToTime(Math.min(duration, currentTime + 5))}>
+                    Forward 5s
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      const video = videoRef.current;
+                      if (!video) return;
+                      const next = Math.min(video.currentTime, safeEnd - 0.5);
+                      setStartSeconds(Math.max(0, next));
+                      setHasSetStart(true);
+                    }}
+                  >
+                    Set Start
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      const video = videoRef.current;
+                      if (!video) return;
+                      const next = Math.max(video.currentTime, safeStart + 0.5);
+                      setEndSeconds(Math.min(duration, next));
+                    }}
+                    disabled={!hasSetStart}
+                  >
+                    Set End
+                  </Button>
+                </div>
+
+                <label className="flex items-start gap-3 rounded-2xl border border-border/80 bg-background-alt p-4">
+                  <input
+                    type="checkbox"
+                    checked={useFullFile}
+                    onChange={(event) => setUseFullFile(event.target.checked)}
+                    className="mt-1"
+                  />
+                  <span className="text-sm text-muted">
+                    <span className="block font-semibold text-ink">Use full file</span>
+                    Skip manual boundaries and keep the entire uploaded source as the sermon master.
+                  </span>
+                </label>
+
+                <div className="space-y-3 rounded-2xl bg-surface-tint p-4 text-sm text-muted">
+                  <div className="flex items-center justify-between gap-3">
+                    <span>Selected range</span>
+                    <span className="font-semibold text-ink">
+                      {formatTime(safeStart)} to {formatTime(safeEnd)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span>Total sermon master</span>
+                    <span className="font-semibold text-ink">{formatTime(selectedDuration)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span>Source file</span>
+                    <span className="font-semibold text-ink">{sourceAsset.filename}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <Button
+                    onClick={() =>
+                      trimMutation.mutate({
+                        project_id: projectId,
+                        source_asset_id: sourceAsset.id,
+                        start_seconds: useFullFile ? 0 : safeStart,
+                        end_seconds: useFullFile ? duration : safeEnd,
+                        use_full_file: useFullFile,
+                      })
+                    }
+                    disabled={trimMutation.isPending}
+                    className="w-full"
+                    size="lg"
+                  >
+                    {trimMutation.isPending ? "Starting..." : "Generate Sermon Master"}
+                  </Button>
+                  {trimMutation.isError ? (
+                    <Alert tone="danger">{(trimMutation.error as Error).message}</Alert>
+                  ) : null}
+                </div>
+              </div>
+            </Card>
+
+            {job ? (
+              <JobStatusPanel
+                title="Trim and sermon-master generation"
+                job={job}
+                runningHint="This step prepares the master asset used by transcript generation and clip analysis. It can take a little while on larger source files."
+              />
+            ) : null}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

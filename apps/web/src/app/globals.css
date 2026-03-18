@@ -1,0 +1,83 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 38 33% 96%;
+    --background-alt: 35 43% 99%;
+    --surface: 0 0% 100%;
+    --surface-strong: 38 27% 94%;
+    --surface-tint: 42 60% 97%;
+    --border: 28 18% 82%;
+    --border-strong: 28 16% 72%;
+    --text: 220 24% 16%;
+    --text-muted: 215 14% 41%;
+    --brand: 17 88% 55%;
+    --brand-strong: 12 77% 42%;
+    --brand-soft: 18 100% 96%;
+    --accent: 194 63% 36%;
+    --accent-soft: 194 70% 95%;
+    --success: 148 48% 34%;
+    --success-soft: 140 44% 94%;
+    --warning: 34 82% 44%;
+    --warning-soft: 41 100% 93%;
+    --danger: 0 65% 47%;
+    --danger-soft: 0 86% 96%;
+    --info: 212 67% 46%;
+    --info-soft: 214 100% 95%;
+    --shadow-soft: 0 18px 50px -28px rgba(31, 41, 55, 0.28);
+    --shadow-card: 0 16px 40px -28px rgba(15, 23, 42, 0.28);
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply bg-background text-ink scroll-smooth;
+  }
+
+  body {
+    @apply min-h-screen bg-background text-ink antialiased;
+    background-image:
+      radial-gradient(circle at top left, hsl(var(--brand-soft)) 0, transparent 34%),
+      linear-gradient(180deg, hsl(var(--background-alt)), hsl(var(--background)));
+  }
+
+  a {
+    @apply transition-colors;
+  }
+
+  ::selection {
+    background: hsl(var(--brand) / 0.18);
+  }
+}
+
+@layer components {
+  .surface-card {
+    @apply rounded-3xl border border-border/80 bg-surface shadow-card;
+  }
+
+  .surface-panel {
+    @apply rounded-2xl border border-border/80 bg-surface backdrop-blur;
+  }
+
+  .section-label {
+    @apply text-xs font-semibold uppercase tracking-[0.24em] text-muted;
+  }
+}
+
+@layer utilities {
+  .page-frame {
+    @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+
+  .page-stack {
+    @apply space-y-8 lg:space-y-10;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+}
