@@ -46,11 +46,9 @@ async function downloadAsset(asset: NonNullable<VisualAsset>) {
 
 function AssetCard({
   title,
-  description,
   asset,
 }: {
   title: string;
-  description: string;
   asset: VisualAsset;
 }) {
   const [downloadError, setDownloadError] = useState("");
@@ -59,9 +57,7 @@ function AssetCard({
   return (
     <Card>
       <CardHeader
-        eyebrow="Asset"
         title={title}
-        description={description}
         action={
           asset ? (
             <Button
@@ -183,27 +179,22 @@ export default function VisualAssetsPage() {
       <div className="grid gap-6 2xl:grid-cols-2">
         <AssetCard
           title="Source video"
-          description="The raw uploaded sermon video that started the workflow."
           asset={sourceAsset ?? null}
         />
         <AssetCard
           title="Sermon master"
-          description="The trimmed sermon master used for transcript generation and downstream content."
           asset={sermonAsset ?? null}
         />
         <AssetCard
           title="Sermon thumbnail"
-          description="The chosen thumbnail image for the full-sermon packaging."
           asset={sermonThumbnailAsset ?? null}
         />
         <AssetCard
           title="Final reel"
-          description="The finished reel upload used for short-form distribution."
           asset={reelAsset ?? null}
         />
         <AssetCard
           title="Reel thumbnail"
-          description="The chosen cover image for the reel package."
           asset={reelThumbnailAsset ?? null}
         />
       </div>

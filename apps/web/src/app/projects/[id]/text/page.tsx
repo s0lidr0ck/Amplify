@@ -258,7 +258,7 @@ export default function TextAssetsPage() {
           badge={metadataJson !== "{}" ? "Structured" : "Missing"}
         />
         <CopyCard
-          title="Blog post"
+          title="Blog draft"
           value={blogMarkdown}
           copyKey="blog"
           copiedKey={copiedKey}
@@ -270,7 +270,7 @@ export default function TextAssetsPage() {
 
       <div className="grid gap-6 2xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
         <Card>
-          <CardHeader title="Title & description" />
+          <CardHeader title="Sermon packaging copy" />
           <div className="mt-6 grid gap-4 lg:grid-cols-2">
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-3">
@@ -312,7 +312,7 @@ export default function TextAssetsPage() {
         </Card>
 
         <CopyCard
-          title="Text post"
+          title="Facebook post"
           value={facebookPost}
           copyKey="facebook-post"
           copiedKey={copiedKey}

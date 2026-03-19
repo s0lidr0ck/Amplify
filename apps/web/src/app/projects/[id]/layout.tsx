@@ -22,12 +22,17 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
     queryFn: () => projects.get(projectId),
   });
 
-  const utilityPage =
-    pathname?.endsWith("/visuals")
+  const utilityPage = pathname?.endsWith("/visuals")
+    ? {
+        label: "Visual Assets",
+        shortLabel: "Visuals",
+        description: "Review the sermon master, thumbnails, and final reel assets together in one shared media hub.",
+      }
+    : pathname?.endsWith("/text")
       ? {
-          label: "Visual Assets",
-          shortLabel: "Visuals",
-          description: "Review the sermon master, thumbnails, and final reel assets together in one shared media hub.",
+          label: "Text Assets",
+          shortLabel: "Text",
+          description: "Review the sermon transcript, generated drafts, and reel copy together in one text-first hub.",
         }
       : null;
 
@@ -53,6 +58,9 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
               <>
                 <Badge tone="info">{currentStage.shortLabel}</Badge>
                 <Badge tone="neutral">{project?.speaker_display_name ?? project?.speaker ?? "Speaker pending"}</Badge>
+                <LinkButton href={`/projects/${projectId}/text`} variant="secondary" size="sm">
+                  Text Assets
+                </LinkButton>
                 <LinkButton href={`/projects/${projectId}/visuals`} variant="secondary" size="sm">
                   Visual Assets
                 </LinkButton>
@@ -64,14 +72,17 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
             <aside className="space-y-6">
               <ProjectWorkflowNav projectId={projectId} />
               <Card className="p-5">
-                <p className="section-label">Media Hub</p>
-                <h2 className="mt-3 text-lg font-semibold text-ink">Visual Assets</h2>
+                <p className="section-label">Asset Hubs</p>
+                <h2 className="mt-3 text-lg font-semibold text-ink">Review Everything Faster</h2>
                 <p className="mt-2 text-sm leading-6 text-muted">
-                  Open one shared view for the sermon master, sermon thumbnail, reel, and reel thumbnail.
+                  Jump into one shared media hub or one shared text hub instead of chasing files and copy across the workflow.
                 </p>
-                <div className="mt-5">
+                <div className="mt-5 space-y-3">
                   <LinkButton href={`/projects/${projectId}/visuals`} variant="secondary" className="w-full">
                     Open Visual Assets
+                  </LinkButton>
+                  <LinkButton href={`/projects/${projectId}/text`} variant="secondary" className="w-full">
+                    Open Text Assets
                   </LinkButton>
                 </div>
               </Card>
