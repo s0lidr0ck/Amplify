@@ -462,6 +462,23 @@ def _thumbnail_creative_profile(theme_text: str) -> dict[str, str]:
     }
 
 
+def _thumbnail_framing_variants() -> list[dict[str, str]]:
+    return [
+        {
+            "framing_guidance": "Object-led close-up with the symbolic object and text both dominant. Compose so the core idea survives horizontal and vertical crops.",
+            "shot_preference": "symbolic close-up",
+        },
+        {
+            "framing_guidance": "Tight emotional portrait or torso-up human moment. Keep the face, gesture, and text inside a safe central zone for both 16:9 and 9:16 use.",
+            "shot_preference": "tight portrait",
+        },
+        {
+            "framing_guidance": "Medium environmental composition with stronger atmosphere, but keep the subject large enough that the frame never feels empty in landscape.",
+            "shot_preference": "medium environmental",
+        },
+    ]
+
+
 def _clean_thumbnail_phrase(phrase: str) -> str:
     words = re.findall(r"[A-Za-z0-9']+", _ensure_str(phrase))
     cleaned = " ".join(words[:3]).upper().strip()
@@ -511,6 +528,8 @@ def render_thumbnail_prompt(variant: dict[str, str]) -> str:
         f"Layout style: {_ensure_str(variant.get('layout_style')) or 'clear focal subject with large readable headline and layered depth'}\n"
         f"Background style: {_ensure_str(variant.get('background_style')) or 'soft environmental texture with subtle cinematic blur'}\n"
         f"Typography feel: {_ensure_str(variant.get('typography_feel')) or 'bold modern sans-serif with clean hierarchy'}\n"
+        f"Shot preference: {_ensure_str(variant.get('shot_preference')) or 'tight portrait'}\n"
+        f"Framing / crop guidance: {_ensure_str(variant.get('framing_guidance')) or 'Keep the subject and headline readable in both horizontal and vertical crops.'}\n"
         f"Editor notes: {_ensure_str(variant.get('editor_notes')) or 'Aim for a polished YouTube sermon thumbnail that feels premium, emotional, and instantly readable.'}\n\n"
         f"Scene:\n{_ensure_str(variant.get('scene_concept')) or 'person watching sunrise from a hillside'}\n\n"
         "Composition:\n"
@@ -524,7 +543,9 @@ def render_thumbnail_prompt(variant: dict[str, str]) -> str:
         "Important constraints:\n"
         "Use a visual metaphor for the sermon message, not a literal church service scene.\n"
         f'Only visible text in the image should be "{phrase}".\n'
-        "Keep the text large, bold, and easy to read at small sizes."
+        "Keep the text large, bold, and easy to read at small sizes.\n"
+        "Do not let the subject become a tiny figure in a generic wide landscape.\n"
+        "The composition must still feel strong if adapted to either horizontal or vertical output."
     )
 
 
@@ -537,6 +558,7 @@ def fallback_thumbnail_prompt_variants(
     sermon_summary = _pick_sermon_summary(youtube_description, sermon_metadata)
     scenes, lighting_options = _keyword_profile(sermon_theme)
     creative_profile = _thumbnail_creative_profile(sermon_theme)
+    framing_variants = _thumbnail_framing_variants()
     base_phrase = _pick_thumbnail_phrase(youtube_title, youtube_description, sermon_metadata)
     variants: list[dict[str, str]] = []
     for index, label in enumerate(THUMBNAIL_VARIANT_LABELS):
@@ -560,6 +582,8 @@ def fallback_thumbnail_prompt_variants(
             "background_style": creative_profile["background_style"],
             "typography_feel": creative_profile["typography_feel"],
             "editor_notes": creative_profile["editor_notes"],
+            "framing_guidance": framing_variants[index]["framing_guidance"],
+            "shot_preference": framing_variants[index]["shot_preference"],
         }
         variant["prompt"] = render_thumbnail_prompt(variant)
         variants.append(variant)
@@ -602,7 +626,11 @@ def build_thumbnail_prompt_planner(
         "- Each variant should feel visually distinct, not like tiny edits of the same scene.\n"
         "- Use color, mood, layout, and typography direction that reinforce the message.\n"
         "- Avoid generic sunrise-placeholder ideas unless the sermon genuinely points there.\n"
-        "- The best concepts usually feel like a visual metaphor, not a summary sentence.\n\n"
+        "- The best concepts usually feel like a visual metaphor, not a summary sentence.\n"
+        "- At least one variant should be object-led or symbolic close-up, at least one should be a tight portrait, and at most one should lean environmental.\n"
+        "- Avoid generic dramatic field, ruins, or spotlight imagery unless the sermon clearly demands it.\n"
+        "- Design each concept so the main subject and text survive both horizontal and vertical crops.\n"
+        "- Wide concepts are allowed, but never let the person become a tiny figure floating in empty scenery.\n\n"
         'OUTPUT FORMAT: Return only valid JSON with a "variants" array.\n\n'
         + _context_block(preacher_name, date_preached)
         + f"YouTube title:\n{youtube_title.strip()}\n\n"
@@ -610,7 +638,7 @@ def build_thumbnail_prompt_planner(
         + f"Sermon metadata:\n{metadata_block}\n\n"
         + f"Transcript excerpt:\n{_safe_excerpt(transcript, 2200)}\n\n"
         "Return exactly 3 variants in JSON now.\n"
-        'Each variant should include these keys: label, title, sermon_theme, sermon_summary, thumbnail_phrase, scene_concept, text_position, lighting_description, mood_color_direction, layout_style, background_style, typography_feel, editor_notes.'
+        'Each variant should include these keys: label, title, sermon_theme, sermon_summary, thumbnail_phrase, scene_concept, text_position, lighting_description, mood_color_direction, layout_style, background_style, typography_feel, shot_preference, framing_guidance, editor_notes.'
     )
 
 
@@ -651,6 +679,8 @@ def parse_thumbnail_prompt_variants(
         variant["layout_style"] = _ensure_str(source.get("layout_style")) or default_variant["layout_style"]
         variant["background_style"] = _ensure_str(source.get("background_style")) or default_variant["background_style"]
         variant["typography_feel"] = _ensure_str(source.get("typography_feel")) or default_variant["typography_feel"]
+        variant["shot_preference"] = _ensure_str(source.get("shot_preference")) or default_variant["shot_preference"]
+        variant["framing_guidance"] = _ensure_str(source.get("framing_guidance")) or default_variant["framing_guidance"]
         variant["editor_notes"] = _ensure_str(source.get("editor_notes")) or default_variant["editor_notes"]
         variant["prompt"] = render_thumbnail_prompt(variant)
         output.append(variant)
