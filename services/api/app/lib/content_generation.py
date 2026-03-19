@@ -377,7 +377,8 @@ def _pick_sermon_theme(youtube_title: str, youtube_description: str, sermon_meta
                 text = _ensure_str(item)
                 if text:
                     return text
-    return _ensure_str(youtube_title) or _ensure_str(youtube_description) or "hope in hardship"
+    cleaned_title = _ensure_str(youtube_title).split("|", 1)[0].split(" - ", 1)[0].strip()
+    return cleaned_title or _ensure_str(youtube_description) or "hope in hardship"
 
 
 def _pick_sermon_summary(youtube_description: str, sermon_metadata: dict[str, Any] | None = None) -> str:
@@ -415,6 +416,52 @@ def _keyword_profile(theme_text: str) -> tuple[list[str], list[str]]:
     )
 
 
+def _thumbnail_creative_profile(theme_text: str) -> dict[str, str]:
+    text = (theme_text or "").lower()
+    profiles = [
+        (
+            ("battle", "storm", "warfare", "attack", "struggle"),
+            {
+                "mood_color_direction": "deep charcoal, steel blue, and electric white highlights",
+                "layout_style": "off-center subject with oversized statement text cutting across the frame",
+                "background_style": "storm clouds, blowing rain, and atmospheric haze",
+                "typography_feel": "bold condensed sans-serif with high contrast and cinematic weight",
+                "editor_notes": "Make the image feel urgent, resilient, and confrontational without becoming chaotic.",
+            },
+        ),
+        (
+            ("hope", "healing", "future", "light", "restoration"),
+            {
+                "mood_color_direction": "warm gold, amber, soft cream, and sunrise blue",
+                "layout_style": "hero portrait with spacious negative space and hopeful upward movement",
+                "background_style": "sunrise glow, soft haze, and expansive natural depth",
+                "typography_feel": "clean bold sans-serif with elegant spacing and calm confidence",
+                "editor_notes": "Favor emotional lift and clarity over intensity so the promise feels believable.",
+            },
+        ),
+        (
+            ("truth", "repent", "conviction", "holy", "righteous"),
+            {
+                "mood_color_direction": "rich black, ivory, muted bronze, and focused spotlight contrast",
+                "layout_style": "tight portrait framing with strong eye-line and centered headline force",
+                "background_style": "minimal dramatic backdrop with subtle texture and shadow falloff",
+                "typography_feel": "sharp modern serif-sans hybrid with conviction and authority",
+                "editor_notes": "Keep the composition clean and forceful so the message feels direct and weighty.",
+            },
+        ),
+    ]
+    for keywords, profile in profiles:
+        if any(keyword in text for keyword in keywords):
+            return profile
+    return {
+        "mood_color_direction": "warm cinematic contrast with natural skin tones and atmospheric highlights",
+        "layout_style": "clear focal subject with large readable headline and layered depth",
+        "background_style": "soft environmental texture with subtle cinematic blur",
+        "typography_feel": "bold modern sans-serif with clean hierarchy",
+        "editor_notes": "Aim for a polished YouTube sermon thumbnail that feels premium, emotional, and easy to understand at a glance.",
+    }
+
+
 def _clean_thumbnail_phrase(phrase: str) -> str:
     words = re.findall(r"[A-Za-z0-9']+", _ensure_str(phrase))
     cleaned = " ".join(words[:3]).upper().strip()
@@ -426,6 +473,11 @@ def _pick_thumbnail_phrase(youtube_title: str, youtube_description: str, sermon_
         part for part in (_pick_sermon_theme(youtube_title, youtube_description, sermon_metadata), _ensure_str(youtube_title)) if part
     ).lower()
     for keywords, phrase in [
+        (("guard", "heart"), "GUARD YOUR HEART"),
+        (("check", "heart"), "CHECK YOUR HEART"),
+        (("heart", "condition"), "HEART CONDITION"),
+        (("mirror",), "CHECK THE MIRROR"),
+        (("change", "you"), "LET IT CHANGE YOU"),
         (("battle", "storm", "warfare", "struggle"), "STAND FIRM"),
         (("hope", "future", "light", "healing"), "HOLD ON"),
         (("truth", "reflect", "repent", "honest"), "FACE THE TRUTH"),
@@ -453,6 +505,13 @@ def render_thumbnail_prompt(variant: dict[str, str]) -> str:
         f"Message context:\nTitle: {_ensure_str(variant.get('sermon_title')) or 'Untitled sermon'}\n"
         f"Theme: {_ensure_str(variant.get('sermon_theme')) or 'hope'}\n"
         f"Summary: {_ensure_str(variant.get('sermon_summary')) or 'A message of faith, hope, and perseverance.'}\n\n"
+        "Creative direction:\n"
+        f"Concept title: {_ensure_str(variant.get('title')) or 'Hero sermon thumbnail'}\n"
+        f"Mood / color direction: {_ensure_str(variant.get('mood_color_direction')) or 'warm cinematic contrast with natural skin tones and atmospheric highlights'}\n"
+        f"Layout style: {_ensure_str(variant.get('layout_style')) or 'clear focal subject with large readable headline and layered depth'}\n"
+        f"Background style: {_ensure_str(variant.get('background_style')) or 'soft environmental texture with subtle cinematic blur'}\n"
+        f"Typography feel: {_ensure_str(variant.get('typography_feel')) or 'bold modern sans-serif with clean hierarchy'}\n"
+        f"Editor notes: {_ensure_str(variant.get('editor_notes')) or 'Aim for a polished YouTube sermon thumbnail that feels premium, emotional, and instantly readable.'}\n\n"
         f"Scene:\n{_ensure_str(variant.get('scene_concept')) or 'person watching sunrise from a hillside'}\n\n"
         "Composition:\n"
         "A human subject is in the foreground.\n"
@@ -477,6 +536,7 @@ def fallback_thumbnail_prompt_variants(
     sermon_theme = _pick_sermon_theme(youtube_title, youtube_description, sermon_metadata)
     sermon_summary = _pick_sermon_summary(youtube_description, sermon_metadata)
     scenes, lighting_options = _keyword_profile(sermon_theme)
+    creative_profile = _thumbnail_creative_profile(sermon_theme)
     base_phrase = _pick_thumbnail_phrase(youtube_title, youtube_description, sermon_metadata)
     variants: list[dict[str, str]] = []
     for index, label in enumerate(THUMBNAIL_VARIANT_LABELS):
@@ -487,6 +547,7 @@ def fallback_thumbnail_prompt_variants(
             phrase = "STAND FIRM"
         variant = {
             "label": label,
+            "title": f"Variant {label}",
             "sermon_title": _ensure_str(youtube_title),
             "sermon_summary": sermon_summary,
             "sermon_theme": sermon_theme,
@@ -494,6 +555,11 @@ def fallback_thumbnail_prompt_variants(
             "scene_concept": scenes[index % len(scenes)],
             "text_position": THUMBNAIL_DEFAULT_POSITIONS[index],
             "lighting_description": lighting_options[index % len(lighting_options)],
+            "mood_color_direction": creative_profile["mood_color_direction"],
+            "layout_style": creative_profile["layout_style"],
+            "background_style": creative_profile["background_style"],
+            "typography_feel": creative_profile["typography_feel"],
+            "editor_notes": creative_profile["editor_notes"],
         }
         variant["prompt"] = render_thumbnail_prompt(variant)
         variants.append(variant)
@@ -521,7 +587,7 @@ def build_thumbnail_prompt_planner(
         indent=2,
     )
     return (
-        "You are planning 3 YouTube thumbnail prompt variants for a church sermon video.\n\n"
+        "You are a VISUAL CREATIVE DIRECTOR planning 3 YouTube thumbnail prompt variants for a church sermon video.\n\n"
         "HARD RULES:\n"
         "- The composition must be layered as subject in foreground, text in middle layer, environment in background.\n"
         "- The foreground subject must partially overlap the text.\n"
@@ -530,13 +596,21 @@ def build_thumbnail_prompt_planner(
         "- Create exactly 3 variants.\n"
         "- Use these text positions in order: A=center, B=left, C=right.\n"
         "- Choose lighting from this list only: " + ", ".join(THUMBNAIL_ALLOWED_LIGHTING) + ".\n\n"
+        "CREATIVE STRATEGY RULES:\n"
+        "- Think like a premium YouTube thumbnail designer, not a metadata formatter.\n"
+        "- Favor a strong emotional image, bold hook phrase, and instantly readable concept.\n"
+        "- Each variant should feel visually distinct, not like tiny edits of the same scene.\n"
+        "- Use color, mood, layout, and typography direction that reinforce the message.\n"
+        "- Avoid generic sunrise-placeholder ideas unless the sermon genuinely points there.\n"
+        "- The best concepts usually feel like a visual metaphor, not a summary sentence.\n\n"
         'OUTPUT FORMAT: Return only valid JSON with a "variants" array.\n\n'
         + _context_block(preacher_name, date_preached)
         + f"YouTube title:\n{youtube_title.strip()}\n\n"
         + f"YouTube description:\n{_safe_excerpt(youtube_description, 500)}\n\n"
         + f"Sermon metadata:\n{metadata_block}\n\n"
         + f"Transcript excerpt:\n{_safe_excerpt(transcript, 2200)}\n\n"
-        "Return exactly 3 variants in JSON now."
+        "Return exactly 3 variants in JSON now.\n"
+        'Each variant should include these keys: label, title, sermon_theme, sermon_summary, thumbnail_phrase, scene_concept, text_position, lighting_description, mood_color_direction, layout_style, background_style, typography_feel, editor_notes.'
     )
 
 
@@ -560,6 +634,7 @@ def parse_thumbnail_prompt_variants(
         source = source_variants[index] if index < len(source_variants) and isinstance(source_variants[index], dict) else {}
         variant = dict(default_variant)
         variant["label"] = THUMBNAIL_VARIANT_LABELS[index]
+        variant["title"] = _ensure_str(source.get("title")) or default_variant["title"]
         variant["sermon_theme"] = _ensure_str(source.get("sermon_theme")) or default_variant["sermon_theme"]
         variant["sermon_summary"] = _safe_excerpt(
             _ensure_str(source.get("sermon_summary")) or default_variant["sermon_summary"],
@@ -572,6 +647,11 @@ def parse_thumbnail_prompt_variants(
         position = _ensure_str(source.get("text_position")).lower()
         variant["text_position"] = position if position in THUMBNAIL_ALLOWED_POSITIONS else default_variant["text_position"]
         variant["lighting_description"] = _ensure_str(source.get("lighting_description")) or default_variant["lighting_description"]
+        variant["mood_color_direction"] = _ensure_str(source.get("mood_color_direction")) or default_variant["mood_color_direction"]
+        variant["layout_style"] = _ensure_str(source.get("layout_style")) or default_variant["layout_style"]
+        variant["background_style"] = _ensure_str(source.get("background_style")) or default_variant["background_style"]
+        variant["typography_feel"] = _ensure_str(source.get("typography_feel")) or default_variant["typography_feel"]
+        variant["editor_notes"] = _ensure_str(source.get("editor_notes")) or default_variant["editor_notes"]
         variant["prompt"] = render_thumbnail_prompt(variant)
         output.append(variant)
     return output
