@@ -10,9 +10,18 @@ from pathlib import Path
 from typing import Callable
 
 _SERVICE_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-_REPO_ROOT = _SERVICE_ROOT.parent
-_FASTCAP_ROOT = _REPO_ROOT / "FastCaption"
 _VENDOR_ROOT = _SERVICE_ROOT / "api" / "vendor"
+_FASTCAP_ROOT_CANDIDATES = (
+    _SERVICE_ROOT / "FastCaption",
+    _SERVICE_ROOT.parent / "FastCaption",
+)
+
+
+def _resolve_fastcap_root() -> Path:
+    for candidate in _FASTCAP_ROOT_CANDIDATES:
+        if candidate.exists():
+            return candidate
+    return _FASTCAP_ROOT_CANDIDATES[0]
 
 
 def _ensure_fastcap_imports() -> None:
@@ -25,7 +34,7 @@ def _ensure_fastcap_imports() -> None:
         user_site = ""
     if user_site and user_site not in sys.path:
         sys.path.append(user_site)
-    fastcap_str = str(_FASTCAP_ROOT)
+    fastcap_str = str(_resolve_fastcap_root())
     if fastcap_str not in sys.path:
         sys.path.insert(0, fastcap_str)
 

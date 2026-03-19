@@ -10,11 +10,21 @@ from pathlib import Path
 from typing import Any, Callable
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-_FASTCAP_ROOT = _PROJECT_ROOT / "FastCaption"
+_FASTCAP_ROOT_CANDIDATES = (
+    _PROJECT_ROOT / "FastCaption",
+    _PROJECT_ROOT.parent / "FastCaption",
+)
+
+
+def _resolve_fastcap_root() -> Path:
+    for candidate in _FASTCAP_ROOT_CANDIDATES:
+        if candidate.exists():
+            return candidate
+    return _FASTCAP_ROOT_CANDIDATES[0]
 
 
 def _ensure_fastcap_imports() -> None:
-    fastcap_str = str(_FASTCAP_ROOT)
+    fastcap_str = str(_resolve_fastcap_root())
     if fastcap_str not in sys.path:
         sys.path.insert(0, fastcap_str)
 
