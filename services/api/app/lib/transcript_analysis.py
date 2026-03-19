@@ -14,13 +14,13 @@ from typing import Callable
 
 from app.config import settings
 
-_SERVICE_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+_SERVICE_ROOT = Path(__file__).resolve().parents[2]
 _FASTCAP_ROOT_CANDIDATES = (
     _SERVICE_ROOT / "app" / "lib" / "fastcap_runtime",
     _SERVICE_ROOT / "FastCaption",
     _SERVICE_ROOT.parent / "FastCaption",
 )
-_VENDOR_ROOT = _SERVICE_ROOT / "api" / "vendor"
+_VENDOR_ROOT = _SERVICE_ROOT / "vendor"
 REQUIRED_ANALYSIS_FILES = ("words.json", "energy.json", "cadence.json", "moments.json")
 
 
@@ -52,7 +52,7 @@ def _load_caption_video_module():
 
 
 def _resolve_ffmpeg_executable() -> str:
-    local_copy = _SERVICE_ROOT / "api" / "ffmpeg.exe"
+    local_copy = _SERVICE_ROOT / "ffmpeg.exe"
     if local_copy.exists():
         return str(local_copy)
     bundled = _VENDOR_ROOT / "imageio_ffmpeg" / "binaries" / "ffmpeg-win-x86_64-v7.1.exe"

@@ -9,7 +9,7 @@ import tempfile
 from pathlib import Path
 from typing import Any, Callable
 
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _FASTCAP_ROOT_CANDIDATES = (
     _PROJECT_ROOT / "app" / "lib" / "fastcap_runtime",
     _PROJECT_ROOT / "FastCaption",

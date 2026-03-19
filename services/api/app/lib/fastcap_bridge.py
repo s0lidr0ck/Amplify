@@ -9,8 +9,8 @@ import sys
 from pathlib import Path
 from typing import Callable
 
-_SERVICE_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-_VENDOR_ROOT = _SERVICE_ROOT / "api" / "vendor"
+_SERVICE_ROOT = Path(__file__).resolve().parents[2]
+_VENDOR_ROOT = _SERVICE_ROOT / "vendor"
 _FASTCAP_ROOT_CANDIDATES = (
     _SERVICE_ROOT / "app" / "lib" / "fastcap_runtime",
     _SERVICE_ROOT / "FastCaption",
