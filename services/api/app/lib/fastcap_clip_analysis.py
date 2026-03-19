@@ -11,6 +11,7 @@ from typing import Any, Callable
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 _FASTCAP_ROOT_CANDIDATES = (
+    _PROJECT_ROOT / "app" / "lib" / "fastcap_runtime",
     _PROJECT_ROOT / "FastCaption",
     _PROJECT_ROOT.parent / "FastCaption",
 )

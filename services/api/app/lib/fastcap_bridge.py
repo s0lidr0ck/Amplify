@@ -12,6 +12,7 @@ from typing import Callable
 _SERVICE_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 _VENDOR_ROOT = _SERVICE_ROOT / "api" / "vendor"
 _FASTCAP_ROOT_CANDIDATES = (
+    _SERVICE_ROOT / "app" / "lib" / "fastcap_runtime",
     _SERVICE_ROOT / "FastCaption",
     _SERVICE_ROOT.parent / "FastCaption",
 )
