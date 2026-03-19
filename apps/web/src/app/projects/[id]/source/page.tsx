@@ -6,17 +6,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, jobs, projects, uploads } from "@/lib/api";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
-import { JobStatusPanel } from "@/components/workflow/JobStatusPanel";
 
 export default function SourcePage() {
   const params = useParams();
   const projectId = params.id as string;
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const logEndRef = useRef<HTMLDivElement>(null);
-  const [youtubeUrl, setYoutubeUrl] = useState("");
-  const [youtubeJobId, setYoutubeJobId] = useState<string | null>(null);
-  const [logMessages, setLogMessages] = useState<string[]>([]);
 
   const { data: project } = useQuery({
     queryKey: ["project", projectId],
@@ -34,53 +29,6 @@ export default function SourcePage() {
     queryFn: () => jobs.listForProject(projectId),
     refetchInterval: 2000,
   });
-
-  const latestYoutubeJob =
-    [...projectJobs]
-      .filter((job) => job.job_type === "import_youtube_source")
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0] ?? null;
-
-  useEffect(() => {
-    if (!youtubeJobId && latestYoutubeJob?.id) {
-      setYoutubeJobId(latestYoutubeJob.id);
-    }
-  }, [latestYoutubeJob?.id, youtubeJobId]);
-
-  const { data: youtubeJob } = useQuery({
-    queryKey: ["job", youtubeJobId],
-    queryFn: () => jobs.get(youtubeJobId!),
-    enabled: !!youtubeJobId,
-    refetchInterval: (query) => {
-      const status = query.state.data?.status;
-      return status === "completed" || status === "failed" || status === "cancelled" ? false : 2000;
-    },
-  });
-
-  const { data: youtubeEvents = [] } = useQuery({
-    queryKey: ["job-events", youtubeJobId],
-    queryFn: () => jobs.getEvents(youtubeJobId!),
-    enabled: !!youtubeJobId,
-    refetchInterval: () => {
-      const status = youtubeJob?.status;
-      return status === "completed" || status === "failed" || status === "cancelled" ? false : 2000;
-    },
-  });
-
-  useEffect(() => {
-    if (youtubeEvents.length === 0) return;
-    setLogMessages(
-      youtubeEvents.map((event) =>
-        event.progress_percent != null ? `[${event.progress_percent}%] ${event.message}` : event.message
-      )
-    );
-  }, [youtubeEvents]);
-
-  useEffect(() => {
-    if (youtubeJob?.status === "completed") {
-      queryClient.invalidateQueries({ queryKey: ["source-asset", projectId] });
-      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
-    }
-  }, [projectId, queryClient, youtubeJob?.status]);
 
   const seedMutation = useMutation({
     mutationFn: () =>
@@ -101,22 +49,6 @@ export default function SourcePage() {
       queryClient.invalidateQueries({ queryKey: ["jobs", projectId] });
     },
   });
-
-  const youtubeMutation = useMutation({
-    mutationFn: (sourceUrl: string) => projects.startYoutubeImport(projectId, sourceUrl),
-    onMutate: () => {
-      setLogMessages(["YouTube import requested. Waiting for the worker to start..."]);
-    },
-    onSuccess: (data) => {
-      setYoutubeJobId(data.job_id);
-      setLogMessages([data.message]);
-      queryClient.invalidateQueries({ queryKey: ["jobs", projectId] });
-      queryClient.invalidateQueries({ queryKey: ["source-asset", projectId] });
-      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
-    },
-  });
-
-  const visibleYoutubeJob = youtubeJob ?? latestYoutubeJob ?? null;
   const sourceReady = sourceAsset?.status === "ready";
 
   return (
@@ -154,7 +86,7 @@ export default function SourcePage() {
               <>
                 <p className="text-gray-500">No source file yet.</p>
                 <p className="mt-2 text-sm text-gray-400">
-                  Upload a video file or import directly from YouTube.
+                  Upload a video file to start this sermon workflow.
                 </p>
               </>
             )}
@@ -163,7 +95,7 @@ export default function SourcePage() {
           <div className="rounded-lg border border-dashed border-gray-300 bg-white p-6">
             <h3 className="text-base font-medium text-gray-900">Choose a source</h3>
             <p className="mt-2 text-sm text-gray-500">
-              Upload a file from your computer or pull the sermon directly from YouTube. Starting a new source will replace the current source for this project.
+              Upload a file from your computer. Starting a new source will replace the current source for this project.
             </p>
 
             <input
@@ -185,25 +117,6 @@ export default function SourcePage() {
               <Button variant="secondary" onClick={() => seedMutation.mutate()} disabled={seedMutation.isPending}>
                 {seedMutation.isPending ? "Seeding..." : "Seed Source (Dev)"}
               </Button>
-            </div>
-
-            <div className="mt-6 rounded-lg border bg-gray-50 p-4">
-              <label className="block text-sm font-medium text-gray-700">YouTube URL</label>
-              <input
-                type="url"
-                value={youtubeUrl}
-                onChange={(e) => setYoutubeUrl(e.target.value)}
-                placeholder="https://youtube.com/watch?v=..."
-                className="mt-2 w-full rounded border border-gray-300 px-3 py-2"
-                suppressHydrationWarning
-              />
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button
-                  onClick={() => youtubeMutation.mutate(youtubeUrl)}
-                  disabled={youtubeMutation.isPending || !youtubeUrl.trim()}
-                >
-                  {youtubeMutation.isPending ? "Queueing..." : sourceAsset ? "Replace with YouTube Import" : "Import from YouTube"}
-                </Button>
                 {sourceReady ? (
                   <a
                     href={`/projects/${projectId}/trim`}
@@ -213,27 +126,14 @@ export default function SourcePage() {
                   </a>
                 ) : null}
               </div>
-            </div>
 
             {uploadMutation.isError ? (
               <p className="mt-3 text-sm text-red-600">{(uploadMutation.error as Error).message}</p>
             ) : null}
-            {youtubeMutation.isError ? (
-              <p className="mt-3 text-sm text-red-600">{(youtubeMutation.error as Error).message}</p>
-            ) : null}
+            <div className="mt-4">
+              <Alert tone="info">YouTube import is temporarily hidden while we harden it for production reliability.</Alert>
+            </div>
           </div>
-        </div>
-
-        <div className="space-y-6">
-          {visibleYoutubeJob ? (
-            <JobStatusPanel
-              title="YouTube import job"
-              job={visibleYoutubeJob}
-              messages={logMessages}
-              endRef={logEndRef}
-              runningHint="Large YouTube videos can take a while to download and mux. The worker keeps going even if you leave this page."
-            />
-          ) : null}
         </div>
       </div>
     </div>
