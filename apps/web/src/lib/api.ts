@@ -65,10 +65,60 @@ export interface Project {
   title: string;
   speaker: string;
   speaker_display_name: string | null;
+  source_type: string;
+  source_url: string | null;
   sermon_date: string;
   status: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface Speaker {
+  id: string;
+  organization_id: string;
+  speaker_name: string;
+  display_name: string;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LibraryProject {
+  id: string;
+  title: string;
+  speaker: string;
+  speaker_display_name: string | null;
+  sermon_date: string;
+  status: string;
+  updated_at: string;
+  source_type: string;
+  source_url: string | null;
+  search_match: {
+    field: string;
+    excerpt: string;
+    target_href: string;
+  } | null;
+  preview_asset: {
+    id: string;
+    filename: string;
+    asset_kind: string;
+    status: string;
+    mime_type: string;
+    playback_url: string;
+  } | null;
+}
+
+export interface ProjectAsset {
+  id: string;
+  project_id: string;
+  asset_kind: string;
+  filename: string;
+  mime_type?: string;
+  duration_seconds: number | null;
+  status: string;
+  storage_key: string;
+  playback_url?: string;
 }
 
 export interface ProjectDraft<T = Record<string, unknown>> {
@@ -124,6 +174,28 @@ export interface ArtifactStatus {
 
 export const projects = {
   list: () => api<Project[]>("/api/projects"),
+  library: (filters?: {
+    q?: string;
+    speaker?: string;
+    status?: string;
+    source_type?: string;
+    has_reel?: boolean;
+    has_thumbnail?: boolean;
+    from_date?: string;
+    to_date?: string;
+  }) => {
+    const params = new URLSearchParams();
+    if (filters?.q?.trim()) params.set("q", filters.q.trim());
+    if (filters?.speaker?.trim() && filters.speaker !== "all") params.set("speaker", filters.speaker);
+    if (filters?.status?.trim() && filters.status !== "all") params.set("status", filters.status);
+    if (filters?.source_type?.trim() && filters.source_type !== "all") params.set("source_type", filters.source_type);
+    if (filters?.has_reel) params.set("has_reel", "true");
+    if (filters?.has_thumbnail) params.set("has_thumbnail", "true");
+    if (filters?.from_date?.trim()) params.set("from_date", filters.from_date);
+    if (filters?.to_date?.trim()) params.set("to_date", filters.to_date);
+    const query = params.toString();
+    return api<LibraryProject[]>(`/api/projects/library${query ? `?${query}` : ""}`);
+  },
   get: (id: string) => api<Project>(`/api/projects/${id}`),
   getDraft: async <T>(projectId: string, draftKind: string): Promise<ProjectDraft<T> | null> => {
     const res = await fetch(`${API_BASE}/api/projects/${projectId}/drafts/${encodeURIComponent(draftKind)}`);
@@ -154,32 +226,40 @@ export const projects = {
     speaker: string;
     speaker_display_name?: string;
     sermon_date: string;
-    source_type: string;
+    source_type?: string;
     source_url?: string;
   }) =>
     api<Project>("/api/projects", { method: "POST", body: JSON.stringify(data) }),
+  startYoutubeImport: (projectId: string, sourceUrl: string) =>
+    api<{ job_id: string; asset_id: string; status: string; message: string }>(
+      `/api/projects/${projectId}/youtube-import`,
+      { method: "POST", body: JSON.stringify({ source_url: sourceUrl }) }
+    ),
   getSourceAsset: (projectId: string) =>
-    api<
-      | {
-          id: string;
-          filename: string;
-          duration_seconds: number | null;
-          status: string;
-          playback_url: string;
-        }
-      | null
-    >(`/api/projects/${projectId}/source-asset`),
+    api<ProjectAsset | null>(`/api/projects/${projectId}/source-asset`),
   getReelAsset: async (projectId: string) => {
     const res = await fetch(`${API_BASE}/api/projects/${projectId}/reel-asset`);
     if (!res.ok) return null;
     if (res.status === 204) return null;
-    return res.json();
+    return res.json() as Promise<ProjectAsset | null>;
   },
   getSermonAsset: async (projectId: string) => {
     const res = await fetch(`${API_BASE}/api/projects/${projectId}/sermon-asset`);
     if (!res.ok) return null;
     if (res.status === 204) return null;
-    return res.json();
+    return res.json() as Promise<ProjectAsset | null>;
+  },
+  getSermonThumbnailAsset: async (projectId: string) => {
+    const res = await fetch(`${API_BASE}/api/projects/${projectId}/sermon-thumbnail-asset`);
+    if (!res.ok) return null;
+    if (res.status === 204) return null;
+    return res.json() as Promise<ProjectAsset | null>;
+  },
+  getReelThumbnailAsset: async (projectId: string) => {
+    const res = await fetch(`${API_BASE}/api/projects/${projectId}/reel-thumbnail-asset`);
+    if (!res.ok) return null;
+    if (res.status === 204) return null;
+    return res.json() as Promise<ProjectAsset | null>;
   },
 };
 
@@ -295,6 +375,30 @@ export const clips = {
       body: JSON.stringify(data),
     }),
   exportClip: (candidateId: string) => download(`/api/clips/candidates/${candidateId}/export`, { method: "POST" }),
+};
+
+export const speakers = {
+  list: (includeInactive = false) =>
+    api<Speaker[]>(`/api/speakers${includeInactive ? "?include_inactive=true" : ""}`),
+  create: (data: { speaker_name: string; display_name: string; is_active?: boolean; sort_order?: number }) =>
+    api<Speaker>("/api/speakers", { method: "POST", body: JSON.stringify(data) }),
+  update: (
+    speakerId: string,
+    data: { speaker_name: string; display_name: string; is_active?: boolean; sort_order?: number }
+  ) => api<Speaker>(`/api/speakers/${speakerId}`, { method: "PUT", body: JSON.stringify(data) }),
+  delete: async (speakerId: string) => {
+    const res = await fetch(`${API_BASE}/api/speakers/${speakerId}`, { method: "DELETE" });
+    if (!res.ok) {
+      const text = await res.text();
+      try {
+        const json = JSON.parse(text) as { detail?: string };
+        throw new Error(json.detail ?? `API error ${res.status}`);
+      } catch (e) {
+        if (e instanceof SyntaxError) throw new Error(`API error ${res.status}: ${text}`);
+        throw e;
+      }
+    }
+  },
 };
 
 export const transcript = {

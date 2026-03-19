@@ -39,6 +39,19 @@ class User(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+class Speaker(Base):
+    __tablename__ = "speakers"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=uuid4_str)
+    organization_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("organizations.id"), nullable=False)
+    speaker_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class Project(Base):
     __tablename__ = "projects"
 
@@ -47,6 +60,8 @@ class Project(Base):
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     speaker: Mapped[str] = mapped_column(String(255), nullable=False)
     speaker_display_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    source_type: Mapped[str] = mapped_column(String(50), default="upload")
+    source_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     sermon_date: Mapped[date] = mapped_column(Date, nullable=False)
     status: Mapped[str] = mapped_column(String(50), default="draft")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

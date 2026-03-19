@@ -28,7 +28,13 @@ export function AppShell({
           </Link>
           <div className="flex items-center gap-3">
             <Link href="/" className="hidden text-sm font-medium text-muted hover:text-ink sm:inline-flex">
-              Dashboard
+              Home
+            </Link>
+            <Link href="/library" className="hidden text-sm font-medium text-muted hover:text-ink sm:inline-flex">
+              Library
+            </Link>
+            <Link href="/speakers" className="hidden text-sm font-medium text-muted hover:text-ink sm:inline-flex">
+              Speakers
             </Link>
             {action ?? <LinkButton href="/projects/new">New Project</LinkButton>}
           </div>

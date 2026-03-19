@@ -1,26 +1,32 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
-import { projects } from "@/lib/api";
-
-const SPEAKER_PRESETS = [
-  { key: "custom", label: "Custom speaker", speaker: "", displayName: "" },
-  { key: "chris-tidwell", label: "Chris Tidwell", speaker: "Chris Tidwell", displayName: "Pastor Chris" },
-  { key: "mickey-kelly", label: "Mickey Kelly", speaker: "Mickey Kelly", displayName: "Brother Mickey" },
-  { key: "misty-sanders", label: "Misty Sanders", displayName: "Sister Misty", speaker: "Misty Sanders" },
-] as const;
+import { useEffect, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { projects, speakers } from "@/lib/api";
 
 export default function NewProject() {
   const router = useRouter();
   const [title, setTitle] = useState("");
-  const [speakerPreset, setSpeakerPreset] = useState<(typeof SPEAKER_PRESETS)[number]["key"]>("custom");
+  const [speakerId, setSpeakerId] = useState("");
   const [speaker, setSpeaker] = useState("");
   const [speakerDisplayName, setSpeakerDisplayName] = useState("");
   const [sermonDate, setSermonDate] = useState("");
-  const [sourceType, setSourceType] = useState<"upload" | "youtube">("upload");
-  const [sourceUrl, setSourceUrl] = useState("");
+
+  const { data: speakerList = [] } = useQuery({
+    queryKey: ["speakers"],
+    queryFn: () => speakers.list(),
+  });
+
+  useEffect(() => {
+    if (!speakerId && speakerList.length > 0) {
+      const first = speakerList[0];
+      setSpeakerId(first.id);
+      setSpeaker(first.speaker_name);
+      setSpeakerDisplayName(first.display_name);
+    }
+  }, [speakerId, speakerList]);
 
   const create = useMutation({
     mutationFn: projects.create,
@@ -29,6 +35,14 @@ export default function NewProject() {
     },
   });
 
+  const handleSpeakerChange = (nextId: string) => {
+    setSpeakerId(nextId);
+    const nextSpeaker = speakerList.find((entry) => entry.id === nextId);
+    if (!nextSpeaker) return;
+    setSpeaker(nextSpeaker.speaker_name);
+    setSpeakerDisplayName(nextSpeaker.display_name);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     create.mutate({
@@ -36,8 +50,6 @@ export default function NewProject() {
       speaker,
       speaker_display_name: speakerDisplayName || speaker,
       sermon_date: sermonDate,
-      source_type: sourceType,
-      source_url: sourceType === "youtube" ? sourceUrl : undefined,
     });
   };
 
@@ -67,28 +79,31 @@ export default function NewProject() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">Speaker preset</label>
+            <div className="flex items-center justify-between gap-3">
+              <label className="block text-sm font-medium text-gray-700">Speaker</label>
+              <Link href="/speakers" className="text-sm font-medium text-indigo-600 hover:text-indigo-700">
+                Manage speakers
+              </Link>
+            </div>
             <select
-              value={speakerPreset}
-              onChange={(e) => {
-                const nextKey = e.target.value as (typeof SPEAKER_PRESETS)[number]["key"];
-                setSpeakerPreset(nextKey);
-                const preset = SPEAKER_PRESETS.find((item) => item.key === nextKey);
-                if (!preset) return;
-                setSpeaker(preset.speaker);
-                setSpeakerDisplayName(preset.displayName);
-              }}
+              value={speakerId}
+              onChange={(e) => handleSpeakerChange(e.target.value)}
               className="mt-1 w-full rounded border border-gray-300 px-3 py-2"
+              disabled={speakerList.length === 0}
             >
-              {SPEAKER_PRESETS.map((preset) => (
-                <option key={preset.key} value={preset.key}>
-                  {preset.label}
-                </option>
-              ))}
+              {speakerList.length === 0 ? (
+                <option value="">No speakers yet</option>
+              ) : (
+                speakerList.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.display_name} ({preset.speaker_name})
+                  </option>
+                ))
+              )}
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">Speaker</label>
+            <label className="block text-sm font-medium text-gray-700">Canonical name</label>
             <input
               type="text"
               value={speaker}
@@ -120,53 +135,21 @@ export default function NewProject() {
               className="mt-1 w-full rounded border border-gray-300 px-3 py-2"
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Source type</label>
-            <div className="mt-2 flex gap-4">
-              <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                checked={sourceType === "upload"}
-                onChange={() => setSourceType("upload")}
-                suppressHydrationWarning
-              />
-                Upload file
-              </label>
-              <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                checked={sourceType === "youtube"}
-                onChange={() => setSourceType("youtube")}
-                suppressHydrationWarning
-              />
-                YouTube link
-              </label>
-            </div>
-          </div>
-          {sourceType === "youtube" && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700">YouTube URL</label>
-              <input
-                type="url"
-                value={sourceUrl}
-                onChange={(e) => setSourceUrl(e.target.value)}
-                placeholder="https://youtube.com/watch?v=..."
-                className="mt-1 w-full rounded border border-gray-300 px-3 py-2"
-                suppressHydrationWarning
-              />
-            </div>
-          )}
+          <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            Create the project first, then choose a source on the Source Intake step. You can upload a file there or import directly from YouTube.
+          </p>
           <div className="pt-4">
             <button
               type="submit"
-              disabled={create.isPending}
+              disabled={create.isPending || speakerList.length === 0}
               className="w-full rounded bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
             >
               {create.isPending ? "Creating..." : "Create project"}
             </button>
-            {create.isError && (
-              <p className="mt-2 text-sm text-red-600">{(create.error as Error).message}</p>
-            )}
+            {speakerList.length === 0 ? (
+              <p className="mt-2 text-sm text-amber-700">Add at least one speaker before creating projects.</p>
+            ) : null}
+            {create.isError && <p className="mt-2 text-sm text-red-600">{(create.error as Error).message}</p>}
           </div>
         </form>
       </div>

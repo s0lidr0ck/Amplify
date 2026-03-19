@@ -11,7 +11,7 @@ class ProjectCreate(BaseModel):
     speaker: str
     speaker_display_name: Optional[str] = None
     sermon_date: date
-    source_type: str  # "upload" | "youtube"
+    source_type: str = "upload"  # "upload" | "youtube"
     source_url: Optional[str] = None
 
 
@@ -23,8 +23,37 @@ class ProjectRead(BaseModel):
     title: str
     speaker: str
     speaker_display_name: Optional[str]
+    source_type: str
+    source_url: Optional[str]
     sermon_date: date
     status: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class SpeakerCreate(BaseModel):
+    speaker_name: str
+    display_name: str
+    is_active: bool = True
+    sort_order: int = 0
+
+
+class SpeakerUpdate(BaseModel):
+    speaker_name: str
+    display_name: str
+    is_active: bool = True
+    sort_order: int = 0
+
+
+class SpeakerRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    organization_id: str
+    speaker_name: str
+    display_name: str
+    is_active: bool
+    sort_order: int
     created_at: datetime
     updated_at: datetime
 
@@ -89,3 +118,7 @@ class ProjectDraftRead(BaseModel):
     payload: dict[str, Any]
     created_at: datetime
     updated_at: datetime
+
+
+class StartYoutubeImportBody(BaseModel):
+    source_url: str

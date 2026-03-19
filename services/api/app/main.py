@@ -11,7 +11,7 @@ from app.config import settings
 from app.queue import close_queue, get_queue
 
 logger = logging.getLogger(__name__)
-from app.routers import clips, content, dev, jobs, media, projects, transcript, trim, uploads, worker_internal
+from app.routers import clips, content, dev, jobs, media, projects, speakers, transcript, trim, uploads, worker_internal
 
 
 @asynccontextmanager
@@ -51,6 +51,7 @@ async def global_exception_handler(request, exc):
     return JSONResponse(status_code=500, content={"detail": str(exc)})
 
 app.include_router(projects.router)
+app.include_router(speakers.router)
 app.include_router(media.router)
 app.include_router(jobs.router)
 app.include_router(uploads.router)

@@ -274,6 +274,16 @@ class TrimCompleteBody(BaseModel):
     duration_seconds: float | None = None
 
 
+class YoutubeImportCompleteBody(BaseModel):
+    job_id: str
+    asset_id: str
+    filename: str
+    mime_type: str = "video/mp4"
+    duration_seconds: float | None = None
+    width: int | None = None
+    height: int | None = None
+
+
 @router.post("/trim-complete")
 async def trim_complete(
     body: TrimCompleteBody,
@@ -329,3 +339,45 @@ async def trim_complete(
     await db.flush()
 
     return {"asset_id": sermon_id}
+
+
+@router.post("/youtube-import-complete")
+async def youtube_import_complete(
+    body: YoutubeImportCompleteBody,
+    db: AsyncSession = Depends(get_db),
+):
+    """Worker reports YouTube source import completed; marks source asset ready."""
+    job = await db.get(ProcessingJob, body.job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    asset = await db.get(MediaAsset, body.asset_id)
+    if not asset or asset.project_id != job.project_id:
+        raise HTTPException(status_code=404, detail="Source asset not found")
+
+    asset.filename = body.filename
+    asset.mime_type = body.mime_type
+    asset.duration_seconds = body.duration_seconds
+    asset.width = body.width
+    asset.height = body.height
+    asset.status = "ready"
+
+    await set_job_status(
+        db,
+        body.job_id,
+        "completed",
+        "YouTube source ready",
+        100,
+        step_code="completed",
+    )
+    await append_job_event(
+        db,
+        body.job_id,
+        "status",
+        "YouTube source import completed",
+        progress_percent=100,
+        step_code="completed",
+        payload_json={"asset_id": body.asset_id, "filename": body.filename},
+    )
+    await db.flush()
+    return {"asset_id": asset.id}

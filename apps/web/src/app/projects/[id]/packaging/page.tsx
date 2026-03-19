@@ -1,9 +1,10 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
-import { API_BASE, projects, transcript } from "@/lib/api";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { API_BASE, projects, transcript, uploads } from "@/lib/api";
 import {
   type FacebookDraft,
   loadProjectDraft,
@@ -25,6 +26,7 @@ const DEFAULT_MODEL =
 export default function PackagingPage() {
   const params = useParams();
   const projectId = params.id as string;
+  const queryClient = useQueryClient();
   const [model, setModel] = useState(DEFAULT_MODEL);
   const [host, setHost] = useState("us-east-1");
   const [title, setTitle] = useState("");
@@ -40,6 +42,8 @@ export default function PackagingPage() {
   const [isFacebookStreaming, setIsFacebookStreaming] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [hasHydratedDrafts, setHasHydratedDrafts] = useState(false);
+  const [thumbnailUploadError, setThumbnailUploadError] = useState("");
+  const [thumbnailUploadStatus, setThumbnailUploadStatus] = useState("");
 
   const { data: project } = useQuery({
     queryKey: ["project", projectId],
@@ -71,6 +75,11 @@ export default function PackagingPage() {
     queryFn: () => projects.getDraft<FacebookDraft>(projectId, "facebook"),
   });
 
+  const { data: sermonThumbnailAsset } = useQuery({
+    queryKey: ["sermon-thumbnail-asset", projectId],
+    queryFn: () => projects.getSermonThumbnailAsset(projectId),
+  });
+
   const transcriptText = transcriptData?.raw_text || transcriptData?.cleaned_text || "";
 
   useEffect(() => {
@@ -94,6 +103,23 @@ export default function PackagingPage() {
     () => persistedMetadataDraft?.payload ?? loadProjectDraft<MetadataDraft>(projectId, "metadata"),
     [persistedMetadataDraft, projectId]
   );
+
+  const uploadSermonThumbnailMutation = useMutation({
+    mutationFn: async (file: File) => {
+      setThumbnailUploadError("");
+      setThumbnailUploadStatus("Uploading sermon thumbnail...");
+      return uploads.upload(projectId, file, "sermon_thumbnail");
+    },
+    onSuccess: async () => {
+      setThumbnailUploadStatus("Sermon thumbnail uploaded.");
+      await queryClient.invalidateQueries({ queryKey: ["sermon-thumbnail-asset", projectId] });
+      window.setTimeout(() => setThumbnailUploadStatus(""), 2200);
+    },
+    onError: (error) => {
+      setThumbnailUploadStatus("");
+      setThumbnailUploadError(error instanceof Error ? error.message : "Sermon thumbnail upload failed.");
+    },
+  });
 
   useEffect(() => {
     if (!hasHydratedDrafts) return;
@@ -381,35 +407,86 @@ export default function PackagingPage() {
               eyebrow="Creative"
               title="Thumbnail Prompt Ideas"
             />
-            <div className="mt-6 grid gap-4 lg:grid-cols-3">
-              {["A", "B", "C"].map((label, index) => {
-                const prompt = thumbnailPrompts[index];
-                return (
-                  <div key={label} className="rounded-[1.5rem] border border-border/80 bg-background-alt p-4">
-                    <div className="mb-3 flex items-center justify-between">
-                      <span className="font-semibold text-ink">Thumbnail Prompt {label}</span>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        onClick={() => void copyText(`thumbnail-${label}`, prompt?.prompt || "")}
-                        disabled={!prompt?.prompt?.trim()}
-                      >
-                        {copiedKey === `thumbnail-${label}` ? "Copied" : "Copy"}
-                      </Button>
+            <div className="mt-6 space-y-6">
+              <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+                <div className="grid gap-4 lg:grid-cols-3">
+                  {["A", "B", "C"].map((label, index) => {
+                    const prompt = thumbnailPrompts[index];
+                    return (
+                      <div key={label} className="rounded-[1.5rem] border border-border/80 bg-background-alt p-4">
+                        <div className="mb-3 flex items-center justify-between">
+                          <span className="font-semibold text-ink">Thumbnail Prompt {label}</span>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            onClick={() => void copyText(`thumbnail-${label}`, prompt?.prompt || "")}
+                            disabled={!prompt?.prompt?.trim()}
+                          >
+                            {copiedKey === `thumbnail-${label}` ? "Copied" : "Copy"}
+                          </Button>
+                        </div>
+                        <textarea
+                          value={prompt?.prompt || ""}
+                          onChange={(e) => {
+                            const next = [...thumbnailPrompts];
+                            next[index] = { ...(next[index] || {}), label, prompt: e.target.value };
+                            setThumbnailPrompts(next);
+                          }}
+                          className="min-h-[15rem] w-full rounded-2xl border border-border bg-surface px-4 py-3 text-sm text-ink outline-none transition focus:border-brand"
+                          placeholder={`Variant ${label} prompt will appear here.`}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="rounded-[1.5rem] border border-border/80 bg-background-alt p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-ink">Sermon thumbnail</p>
+                      <p className="mt-1 text-xs text-muted">Upload the image you generated for this sermon.</p>
                     </div>
-                    <textarea
-                      value={prompt?.prompt || ""}
-                      onChange={(e) => {
-                        const next = [...thumbnailPrompts];
-                        next[index] = { ...(next[index] || {}), label, prompt: e.target.value };
-                        setThumbnailPrompts(next);
-                      }}
-                      className="min-h-[15rem] w-full rounded-2xl border border-border bg-surface px-4 py-3 text-sm text-ink outline-none transition focus:border-brand"
-                      placeholder={`Variant ${label} prompt will appear here.`}
-                    />
+                    {sermonThumbnailAsset ? <Badge tone="success">Uploaded</Badge> : <Badge tone="neutral">Missing</Badge>}
                   </div>
-                );
-              })}
+
+                  <div className="mt-4 space-y-3">
+                    {thumbnailUploadError ? <Alert tone="danger">{thumbnailUploadError}</Alert> : null}
+                    {thumbnailUploadStatus ? <Alert tone="info">{thumbnailUploadStatus}</Alert> : null}
+                    <label className="block">
+                      <span className="sr-only">Choose sermon thumbnail</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          if (file) uploadSermonThumbnailMutation.mutate(file);
+                          event.currentTarget.value = "";
+                        }}
+                        className="block w-full rounded-2xl border border-border bg-surface px-4 py-3 text-sm text-ink file:mr-4 file:rounded-full file:border-0 file:bg-brand file:px-4 file:py-2 file:font-semibold file:text-white"
+                      />
+                    </label>
+                    {sermonThumbnailAsset ? (
+                      <div className="space-y-3">
+                        <p className="text-xs text-muted">{sermonThumbnailAsset.filename}</p>
+                        <div className="overflow-hidden rounded-[1.25rem] border border-border bg-surface">
+                          <Image
+                            src={sermonThumbnailAsset.playback_url ?? `${API_BASE}/api/media/asset/${sermonThumbnailAsset.id}`}
+                            alt={sermonThumbnailAsset.filename}
+                            width={640}
+                            height={360}
+                            className="h-auto w-full object-cover"
+                            unoptimized
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex aspect-video items-center justify-center rounded-[1.25rem] border border-dashed border-border bg-surface px-4 text-center text-sm text-muted">
+                        No sermon thumbnail uploaded yet
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           </Card>
         </div>

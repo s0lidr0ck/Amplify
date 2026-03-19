@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -78,6 +79,9 @@ export default function ReelPage() {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState("");
   const [uploadStatus, setUploadStatus] = useState("");
+  const [isDownloadingReel, setIsDownloadingReel] = useState(false);
+  const [thumbnailUploadError, setThumbnailUploadError] = useState("");
+  const [thumbnailUploadStatus, setThumbnailUploadStatus] = useState("");
   const [reelTranscriptJobId, setReelTranscriptJobId] = useState<string | null>(null);
   const [reelTranscriptMessages, setReelTranscriptMessages] = useState<string[]>([]);
   const [generationMessages, setGenerationMessages] = useState<string[]>([]);
@@ -103,6 +107,11 @@ export default function ReelPage() {
   const { data: persistedReelDraft } = useQuery({
     queryKey: ["project-draft", projectId, "reel"],
     queryFn: () => projects.getDraft<ReelDraft>(projectId, "reel"),
+  });
+
+  const { data: reelThumbnailAsset } = useQuery({
+    queryKey: ["reel-thumbnail-asset", projectId],
+    queryFn: () => projects.getReelThumbnailAsset(projectId),
   });
 
   const { data: reelTranscript } = useQuery({
@@ -215,6 +224,23 @@ export default function ReelPage() {
     onError: (error) => {
       setUploadStatus("");
       setUploadError(error instanceof Error ? error.message : "Final reel upload failed.");
+    },
+  });
+
+  const thumbnailUploadMutation = useMutation({
+    mutationFn: async (file: File) => {
+      setThumbnailUploadError("");
+      setThumbnailUploadStatus("Uploading reel thumbnail...");
+      return uploads.upload(projectId, file, "reel_thumbnail");
+    },
+    onSuccess: async () => {
+      setThumbnailUploadStatus("Reel thumbnail uploaded.");
+      await queryClient.invalidateQueries({ queryKey: ["reel-thumbnail-asset", projectId] });
+      window.setTimeout(() => setThumbnailUploadStatus(""), 2200);
+    },
+    onError: (error) => {
+      setThumbnailUploadStatus("");
+      setThumbnailUploadError(error instanceof Error ? error.message : "Reel thumbnail upload failed.");
     },
   });
 
@@ -370,6 +396,32 @@ export default function ReelPage() {
     }));
   }
 
+  async function downloadUploadedReel() {
+    if (!reelAsset) return;
+    setUploadError("");
+    setIsDownloadingReel(true);
+    try {
+      const response = await fetch(getMediaPlaybackUrl(reelAsset.id));
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || `Download failed with status ${response.status}`);
+      }
+      const blob = await response.blob();
+      const objectUrl = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = reelAsset.filename || "final-reel.mp4";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(objectUrl);
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : "Final reel download failed.");
+    } finally {
+      setIsDownloadingReel(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <StepIntro
@@ -438,7 +490,17 @@ export default function ReelPage() {
                     <p className="text-sm font-medium text-ink">Uploaded reel</p>
                     <p className="mt-1 text-sm text-muted">{reelAsset.filename}</p>
                   </div>
-                  <Badge tone="success">Ready</Badge>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={downloadUploadedReel}
+                      disabled={isDownloadingReel}
+                    >
+                      {isDownloadingReel ? "Downloading..." : "Download Reel"}
+                    </Button>
+                    <Badge tone="success">Ready</Badge>
+                  </div>
                 </div>
                 <video
                   src={getMediaPlaybackUrl(reelAsset.id)}
@@ -496,38 +558,87 @@ export default function ReelPage() {
 
       <Card>
         <CardHeader eyebrow="Creative" title="Thumbnail Prompt Ideas" />
-        <div className="mt-6 grid gap-4 lg:grid-cols-3">
-          {["A", "B", "C"].map((label, index) => {
-            const prompt = draft.thumbnail_prompts[index];
-            return (
-              <div key={label} className="rounded-[1.5rem] border border-border/80 bg-background-alt p-4">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div>
-                    <p className="font-semibold text-ink">Prompt {label}</p>
-                    <p className="mt-1 text-xs text-muted">{prompt?.title || "Graphic concept"}</p>
+        <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="grid gap-4 lg:grid-cols-3">
+            {["A", "B", "C"].map((label, index) => {
+              const prompt = draft.thumbnail_prompts[index];
+              return (
+                <div key={label} className="rounded-[1.5rem] border border-border/80 bg-background-alt p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-ink">Prompt {label}</p>
+                      <p className="mt-1 text-xs text-muted">{prompt?.title || "Graphic concept"}</p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => void copyText(`reel-thumbnail-${label}`, prompt?.prompt || "")}
+                      disabled={!prompt?.prompt?.trim()}
+                    >
+                      {copiedKey === `reel-thumbnail-${label}` ? "Copied" : "Copy"}
+                    </Button>
                   </div>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => void copyText(`reel-thumbnail-${label}`, prompt?.prompt || "")}
-                    disabled={!prompt?.prompt?.trim()}
-                  >
-                    {copiedKey === `reel-thumbnail-${label}` ? "Copied" : "Copy"}
-                  </Button>
+                  <textarea
+                    value={prompt?.prompt || ""}
+                    onChange={(event) => {
+                      const next = [...draft.thumbnail_prompts];
+                      next[index] = { ...(next[index] || {}), label, prompt: event.target.value };
+                      setDraft((current) => ({ ...current, thumbnail_prompts: next }));
+                    }}
+                    className="min-h-[18rem] w-full rounded-2xl border border-border bg-surface px-4 py-3 text-sm text-ink outline-none transition focus:border-brand"
+                    placeholder={`Thumbnail prompt ${label} will appear here.`}
+                  />
                 </div>
-                <textarea
-                  value={prompt?.prompt || ""}
-                  onChange={(event) => {
-                    const next = [...draft.thumbnail_prompts];
-                    next[index] = { ...(next[index] || {}), label, prompt: event.target.value };
-                    setDraft((current) => ({ ...current, thumbnail_prompts: next }));
-                  }}
-                  className="min-h-[18rem] w-full rounded-2xl border border-border bg-surface px-4 py-3 text-sm text-ink outline-none transition focus:border-brand"
-                  placeholder={`Thumbnail prompt ${label} will appear here.`}
-                />
+              );
+            })}
+          </div>
+
+          <div className="rounded-[1.5rem] border border-border/80 bg-background-alt p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="font-semibold text-ink">Reel thumbnail</p>
+                <p className="mt-1 text-xs text-muted">Upload the chosen reel cover image here.</p>
               </div>
-            );
-          })}
+              {reelThumbnailAsset ? <Badge tone="success">Uploaded</Badge> : <Badge tone="neutral">Missing</Badge>}
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {thumbnailUploadError ? <Alert tone="danger">{thumbnailUploadError}</Alert> : null}
+              {thumbnailUploadStatus ? <Alert tone="info">{thumbnailUploadStatus}</Alert> : null}
+              <label className="block">
+                <span className="sr-only">Choose reel thumbnail</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) thumbnailUploadMutation.mutate(file);
+                    event.currentTarget.value = "";
+                  }}
+                  className="block w-full rounded-2xl border border-border bg-surface px-4 py-3 text-sm text-ink file:mr-4 file:rounded-full file:border-0 file:bg-brand file:px-4 file:py-2 file:font-semibold file:text-white"
+                />
+              </label>
+              {reelThumbnailAsset ? (
+                <div className="space-y-3">
+                  <p className="text-xs text-muted">{reelThumbnailAsset.filename}</p>
+                  <div className="overflow-hidden rounded-[1.25rem] border border-border bg-surface">
+                    <Image
+                      src={reelThumbnailAsset.playback_url ?? `${API_BASE}/api/media/asset/${reelThumbnailAsset.id}`}
+                      alt={reelThumbnailAsset.filename}
+                      width={640}
+                      height={360}
+                      className="h-auto w-full object-cover"
+                      unoptimized
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="flex aspect-video items-center justify-center rounded-[1.25rem] border border-dashed border-border bg-surface px-4 text-center text-sm text-muted">
+                  No reel thumbnail uploaded yet
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </Card>
 
