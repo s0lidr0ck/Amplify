@@ -23,6 +23,7 @@ export default function BlogPage() {
   const [error, setError] = useState("");
   const [streamStatus, setStreamStatus] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
+  const [hasHydratedDraft, setHasHydratedDraft] = useState(false);
 
   const { data: project } = useQuery({
     queryKey: ["project", projectId],
@@ -34,14 +35,27 @@ export default function BlogPage() {
     queryFn: () => transcript.getForProject(projectId),
   });
 
-  useEffect(() => {
-    const draft = loadProjectDraft<BlogDraft>(projectId, "blog");
-    if (draft?.markdown) setMarkdown(draft.markdown);
-  }, [projectId]);
+  const { data: persistedBlogDraft } = useQuery({
+    queryKey: ["project-draft", projectId, "blog"],
+    queryFn: () => projects.getDraft<BlogDraft>(projectId, "blog"),
+  });
 
   useEffect(() => {
-    saveProjectDraft(projectId, "blog", { markdown });
-  }, [markdown, projectId]);
+    if (hasHydratedDraft) return;
+    const draft = persistedBlogDraft?.payload ?? loadProjectDraft<BlogDraft>(projectId, "blog");
+    if (draft?.markdown) setMarkdown(draft.markdown);
+    setHasHydratedDraft(true);
+  }, [hasHydratedDraft, persistedBlogDraft, projectId]);
+
+  useEffect(() => {
+    if (!hasHydratedDraft) return;
+    const timeoutId = window.setTimeout(() => {
+      const draft = { markdown };
+      saveProjectDraft(projectId, "blog", draft);
+      void projects.saveDraft(projectId, "blog", draft);
+    }, 700);
+    return () => window.clearTimeout(timeoutId);
+  }, [hasHydratedDraft, markdown, projectId]);
 
   const transcriptText = transcriptData?.raw_text || transcriptData?.cleaned_text || "";
 
@@ -80,14 +94,18 @@ export default function BlogPage() {
           finalMarkdown = payload.markdown;
           setMarkdown(payload.markdown);
           setStreamStatus("Done");
-          saveProjectDraft(projectId, "blog", { markdown: payload.markdown });
+          const draft = { markdown: payload.markdown };
+          saveProjectDraft(projectId, "blog", draft);
+          void projects.saveDraft(projectId, "blog", draft);
         } else if (payload.type === "error") {
           throw new Error(payload.message);
         }
       });
 
       if (finalMarkdown.trim()) {
-        saveProjectDraft(projectId, "blog", { markdown: finalMarkdown });
+        const draft = { markdown: finalMarkdown };
+        saveProjectDraft(projectId, "blog", draft);
+        void projects.saveDraft(projectId, "blog", draft);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate blog draft.");

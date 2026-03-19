@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { API_BASE, projects, transcript } from "@/lib/api";
 import {
+  type FacebookDraft,
   loadProjectDraft,
   saveProjectDraft,
   type BlogDraft,
@@ -38,6 +39,7 @@ export default function PackagingPage() {
   const [isPackagingStreaming, setIsPackagingStreaming] = useState(false);
   const [isFacebookStreaming, setIsFacebookStreaming] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [hasHydratedDrafts, setHasHydratedDrafts] = useState(false);
 
   const { data: project } = useQuery({
     queryKey: ["project", projectId],
@@ -49,22 +51,73 @@ export default function PackagingPage() {
     queryFn: () => transcript.getForProject(projectId),
   });
 
+  const { data: persistedMetadataDraft } = useQuery({
+    queryKey: ["project-draft", projectId, "metadata"],
+    queryFn: () => projects.getDraft<MetadataDraft>(projectId, "metadata"),
+  });
+
+  const { data: persistedBlogDraft } = useQuery({
+    queryKey: ["project-draft", projectId, "blog"],
+    queryFn: () => projects.getDraft<BlogDraft>(projectId, "blog"),
+  });
+
+  const { data: persistedPackagingDraft } = useQuery({
+    queryKey: ["project-draft", projectId, "packaging"],
+    queryFn: () => projects.getDraft<PackagingDraft>(projectId, "packaging"),
+  });
+
+  const { data: persistedFacebookDraft } = useQuery({
+    queryKey: ["project-draft", projectId, "facebook"],
+    queryFn: () => projects.getDraft<FacebookDraft>(projectId, "facebook"),
+  });
+
   const transcriptText = transcriptData?.raw_text || transcriptData?.cleaned_text || "";
 
   useEffect(() => {
-    const metadataDraft = loadProjectDraft<MetadataDraft>(projectId, "metadata");
-    const blogDraft = loadProjectDraft<BlogDraft>(projectId, "blog");
-    const packagingDraft = loadProjectDraft<PackagingDraft>(projectId, "packaging");
+    if (hasHydratedDrafts) return;
+    const metadataDraft = persistedMetadataDraft?.payload ?? loadProjectDraft<MetadataDraft>(projectId, "metadata");
+    const blogDraft = persistedBlogDraft?.payload ?? loadProjectDraft<BlogDraft>(projectId, "blog");
+    const packagingDraft = persistedPackagingDraft?.payload ?? loadProjectDraft<PackagingDraft>(projectId, "packaging");
+    const facebookDraft = persistedFacebookDraft?.payload ?? loadProjectDraft<FacebookDraft>(projectId, "facebook");
     if (blogDraft?.markdown) setBlogMarkdown(blogDraft.markdown);
     if (packagingDraft) {
       setTitle(packagingDraft.title || "");
       setDescription(packagingDraft.description || "");
       setThumbnailPrompts(packagingDraft.thumbnail_prompts || []);
     }
+    if (facebookDraft?.post) setFacebookPost(facebookDraft.post);
     if (!metadataDraft) saveProjectDraft(projectId, "metadata", null);
-  }, [projectId]);
+    setHasHydratedDrafts(true);
+  }, [hasHydratedDrafts, persistedBlogDraft, persistedFacebookDraft, persistedMetadataDraft, persistedPackagingDraft, projectId]);
 
-  const storedMetadata = useMemo(() => loadProjectDraft<MetadataDraft>(projectId, "metadata"), [projectId]);
+  const storedMetadata = useMemo(
+    () => persistedMetadataDraft?.payload ?? loadProjectDraft<MetadataDraft>(projectId, "metadata"),
+    [persistedMetadataDraft, projectId]
+  );
+
+  useEffect(() => {
+    if (!hasHydratedDrafts) return;
+    const timeoutId = window.setTimeout(() => {
+      const draft: PackagingDraft = {
+        title,
+        description,
+        thumbnail_prompts: thumbnailPrompts,
+      };
+      saveProjectDraft(projectId, "packaging", draft);
+      void projects.saveDraft(projectId, "packaging", draft);
+    }, 700);
+    return () => window.clearTimeout(timeoutId);
+  }, [description, hasHydratedDrafts, projectId, thumbnailPrompts, title]);
+
+  useEffect(() => {
+    if (!hasHydratedDrafts) return;
+    const timeoutId = window.setTimeout(() => {
+      const draft: FacebookDraft = { post: facebookPost };
+      saveProjectDraft(projectId, "facebook", draft);
+      void projects.saveDraft(projectId, "facebook", draft);
+    }, 700);
+    return () => window.clearTimeout(timeoutId);
+  }, [facebookPost, hasHydratedDrafts, projectId]);
 
   async function generatePackagingStream() {
     setPackagingError("");
@@ -111,6 +164,7 @@ export default function PackagingPage() {
           setDescription(payload.description);
           setThumbnailPrompts(payload.thumbnail_prompts || []);
           saveProjectDraft(projectId, "packaging", payload);
+          void projects.saveDraft(projectId, "packaging", payload);
         } else if (payload.type === "error") {
           throw new Error(payload.message);
         }
@@ -156,14 +210,18 @@ export default function PackagingPage() {
           finalPost = payload.post;
           setFacebookPost(payload.post);
           setFacebookStatus("Done");
-          saveProjectDraft(projectId, "facebook", { post: payload.post });
+          const draft = { post: payload.post };
+          saveProjectDraft(projectId, "facebook", draft);
+          void projects.saveDraft(projectId, "facebook", draft);
         } else if (payload.type === "error") {
           throw new Error(payload.message);
         }
       });
 
       if (finalPost.trim()) {
-        saveProjectDraft(projectId, "facebook", { post: finalPost });
+        const draft = { post: finalPost };
+        saveProjectDraft(projectId, "facebook", draft);
+        void projects.saveDraft(projectId, "facebook", draft);
       }
     } catch (err) {
       setFacebookError(err instanceof Error ? err.message : "Failed to generate Facebook copy.");

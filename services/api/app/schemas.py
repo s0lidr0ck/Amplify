@@ -1,7 +1,7 @@
 """Pydantic schemas."""
 
 from datetime import date, datetime
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict
 
@@ -72,3 +72,18 @@ class SignedUploadResponse(BaseModel):
     upload_url: str
     asset_id: str
     storage_key: str
+
+
+class ProjectDraftWrite(BaseModel):
+    payload: dict[str, Any]
+
+
+class ProjectDraftRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    project_id: str
+    draft_kind: str
+    payload: dict[str, Any]
+    created_at: datetime
+    updated_at: datetime

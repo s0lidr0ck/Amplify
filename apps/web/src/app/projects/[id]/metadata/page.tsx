@@ -25,6 +25,7 @@ export default function MetadataPage() {
   const [error, setError] = useState("");
   const [streamStatus, setStreamStatus] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
+  const [hasHydratedDraft, setHasHydratedDraft] = useState(false);
 
   const { data: project } = useQuery({
     queryKey: ["project", projectId],
@@ -36,13 +37,35 @@ export default function MetadataPage() {
     queryFn: () => transcript.getForProject(projectId),
   });
 
+  const { data: persistedMetadataDraft } = useQuery({
+    queryKey: ["project-draft", projectId, "metadata"],
+    queryFn: () => projects.getDraft<MetadataDraft>(projectId, "metadata"),
+  });
+
   useEffect(() => {
-    const draft = loadProjectDraft<MetadataDraft>(projectId, "metadata");
-    if (draft) {
+    if (hasHydratedDraft) return;
+    const draft = persistedMetadataDraft?.payload ?? loadProjectDraft<MetadataDraft>(projectId, "metadata");
+    if (draft?.metadata) {
       setMetadataText(JSON.stringify(draft.metadata, null, 2));
       setWarnings(draft.warnings ?? []);
     }
-  }, [projectId]);
+    setHasHydratedDraft(true);
+  }, [hasHydratedDraft, persistedMetadataDraft, projectId]);
+
+  useEffect(() => {
+    if (!hasHydratedDraft) return;
+    const timeoutId = window.setTimeout(() => {
+      try {
+        const parsed = metadataText.trim() ? JSON.parse(metadataText) : {};
+        const nextDraft: MetadataDraft = { raw: metadataText, metadata: parsed, warnings };
+        saveProjectDraft(projectId, "metadata", nextDraft);
+        void projects.saveDraft(projectId, "metadata", nextDraft);
+      } catch {
+        // Keep invalid in-progress JSON locally until it is corrected.
+      }
+    }, 700);
+    return () => window.clearTimeout(timeoutId);
+  }, [hasHydratedDraft, metadataText, projectId, warnings]);
 
   const transcriptText = transcriptData?.raw_text || transcriptData?.cleaned_text || "";
 
@@ -166,7 +189,9 @@ export default function MetadataPage() {
                     onClick={() => {
                       try {
                         const parsed = JSON.parse(metadataText);
-                        saveProjectDraft(projectId, "metadata", { raw: metadataText, metadata: parsed, warnings });
+                        const draft = { raw: metadataText, metadata: parsed, warnings };
+                        saveProjectDraft(projectId, "metadata", draft);
+                        void projects.saveDraft(projectId, "metadata", draft);
                         setError("");
                       } catch {
                         setError("Metadata JSON is not valid. Fix it before saving locally.");

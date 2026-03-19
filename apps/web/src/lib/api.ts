@@ -70,6 +70,15 @@ export interface Project {
   updated_at: string;
 }
 
+export interface ProjectDraft<T = Record<string, unknown>> {
+  id: string;
+  project_id: string;
+  draft_kind: string;
+  payload: T;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ProcessingJob {
   id: string;
   project_id: string;
@@ -115,6 +124,17 @@ export interface ArtifactStatus {
 export const projects = {
   list: () => api<Project[]>("/api/projects"),
   get: (id: string) => api<Project>(`/api/projects/${id}`),
+  getDraft: async <T>(projectId: string, draftKind: string): Promise<ProjectDraft<T> | null> => {
+    const res = await fetch(`${API_BASE}/api/projects/${projectId}/drafts/${encodeURIComponent(draftKind)}`);
+    if (!res.ok) return null;
+    if (res.status === 204) return null;
+    return res.json();
+  },
+  saveDraft: <T>(projectId: string, draftKind: string, payload: T) =>
+    api<ProjectDraft<T>>(`/api/projects/${projectId}/drafts/${encodeURIComponent(draftKind)}`, {
+      method: "PUT",
+      body: JSON.stringify({ payload }),
+    }),
   delete: async (id: string) => {
     const res = await fetch(`${API_BASE}/api/projects/${id}`, { method: "DELETE" });
     if (!res.ok) {

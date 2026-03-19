@@ -19,10 +19,11 @@ from app.models import (
     ProcessingJob,
     ProcessingJobEvent,
     Project,
+    ProjectContentDraft,
     Transcript,
     TrimOperation,
 )
-from app.schemas import ProjectCreate, ProjectRead
+from app.schemas import ProjectCreate, ProjectDraftRead, ProjectDraftWrite, ProjectRead
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
@@ -177,6 +178,7 @@ async def delete_project(
     await db.execute(delete(ProcessingJob).where(ProcessingJob.project_id == project_id))
     await db.execute(delete(ClipCandidate).where(ClipCandidate.project_id == project_id))
     await db.execute(delete(ClipAnalysisRun).where(ClipAnalysisRun.project_id == project_id))
+    await db.execute(delete(ProjectContentDraft).where(ProjectContentDraft.project_id == project_id))
     await db.execute(delete(Transcript).where(Transcript.project_id == project_id))
     await db.execute(delete(TrimOperation).where(TrimOperation.project_id == project_id))
     await db.execute(delete(MediaAsset).where(MediaAsset.project_id == project_id))
@@ -191,6 +193,78 @@ async def delete_project(
         shutil.rmtree(project_dir, ignore_errors=True)
 
     return Response(status_code=204)
+
+
+@router.get("/{project_id}/drafts/{draft_kind}", response_model=Optional[ProjectDraftRead])
+async def get_project_draft(
+    project_id: str,
+    draft_kind: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Fetch a persisted content draft for a project."""
+    project = await db.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    result = await db.execute(
+        select(ProjectContentDraft).where(
+            ProjectContentDraft.project_id == project_id,
+            ProjectContentDraft.draft_kind == draft_kind,
+        )
+    )
+    draft = result.scalar_one_or_none()
+    if not draft:
+        return None
+    return ProjectDraftRead(
+        id=draft.id,
+        project_id=draft.project_id,
+        draft_kind=draft.draft_kind,
+        payload=draft.payload_json or {},
+        created_at=draft.created_at,
+        updated_at=draft.updated_at,
+    )
+
+
+@router.put("/{project_id}/drafts/{draft_kind}", response_model=ProjectDraftRead)
+async def save_project_draft(
+    project_id: str,
+    draft_kind: str,
+    body: ProjectDraftWrite,
+    db: AsyncSession = Depends(get_db),
+):
+    """Create or update a persisted content draft for a project."""
+    project = await db.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    result = await db.execute(
+        select(ProjectContentDraft).where(
+            ProjectContentDraft.project_id == project_id,
+            ProjectContentDraft.draft_kind == draft_kind,
+        )
+    )
+    draft = result.scalar_one_or_none()
+    if not draft:
+        draft = ProjectContentDraft(
+            id=str(uuid.uuid4()),
+            project_id=project_id,
+            draft_kind=draft_kind,
+            payload_json=body.payload,
+        )
+        db.add(draft)
+    else:
+        draft.payload_json = body.payload
+
+    await db.flush()
+    await db.refresh(draft)
+    return ProjectDraftRead(
+        id=draft.id,
+        project_id=draft.project_id,
+        draft_kind=draft.draft_kind,
+        payload=draft.payload_json or {},
+        created_at=draft.created_at,
+        updated_at=draft.updated_at,
+    )
 
 
 @router.get("/{project_id}/sermon-asset", response_model=Optional[dict])

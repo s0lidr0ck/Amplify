@@ -14,6 +14,10 @@ export interface PackagingDraft {
   thumbnail_prompts: Array<Record<string, string>>;
 }
 
+export interface FacebookDraft {
+  post: string;
+}
+
 export interface ReelPlatformDraft {
   title: string;
   description: string;

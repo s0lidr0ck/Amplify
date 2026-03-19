@@ -81,6 +81,7 @@ export default function ReelPage() {
   const [reelTranscriptJobId, setReelTranscriptJobId] = useState<string | null>(null);
   const [reelTranscriptMessages, setReelTranscriptMessages] = useState<string[]>([]);
   const [generationMessages, setGenerationMessages] = useState<string[]>([]);
+  const [hasHydratedDraft, setHasHydratedDraft] = useState(false);
   const reelTranscriptLogEndRef = useRef<HTMLDivElement>(null);
   const generationLogEndRef = useRef<HTMLDivElement>(null);
 
@@ -97,6 +98,11 @@ export default function ReelPage() {
   const { data: reelAsset } = useQuery({
     queryKey: ["reel-asset", projectId],
     queryFn: () => projects.getReelAsset(projectId),
+  });
+
+  const { data: persistedReelDraft } = useQuery({
+    queryKey: ["project-draft", projectId, "reel"],
+    queryFn: () => projects.getDraft<ReelDraft>(projectId, "reel"),
   });
 
   const { data: reelTranscript } = useQuery({
@@ -150,15 +156,22 @@ export default function ReelPage() {
   });
 
   useEffect(() => {
-    const stored = loadProjectDraft<ReelDraft>(projectId, "reel");
+    if (hasHydratedDraft) return;
+    const stored = persistedReelDraft?.payload ?? loadProjectDraft<ReelDraft>(projectId, "reel");
     if (stored) {
       setDraft(cloneDraft({ ...EMPTY_REEL_DRAFT, ...stored, platforms: { ...EMPTY_REEL_DRAFT.platforms, ...stored.platforms } }));
     }
-  }, [projectId]);
+    setHasHydratedDraft(true);
+  }, [hasHydratedDraft, persistedReelDraft, projectId]);
 
   useEffect(() => {
-    saveProjectDraft(projectId, "reel", draft);
-  }, [draft, projectId]);
+    if (!hasHydratedDraft) return;
+    const timeoutId = window.setTimeout(() => {
+      saveProjectDraft(projectId, "reel", draft);
+      void projects.saveDraft(projectId, "reel", draft);
+    }, 700);
+    return () => window.clearTimeout(timeoutId);
+  }, [draft, hasHydratedDraft, projectId]);
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
