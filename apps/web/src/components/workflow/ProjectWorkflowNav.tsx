@@ -54,7 +54,7 @@ const stateStyles = {
 export function ProjectWorkflowNav({ projectId }: { projectId: string }) {
   const pathname = usePathname();
   const currentStageHref =
-    workflowStages.find((stage) => pathname?.endsWith(`/${stage.href}`))?.href ?? workflowStages[0].href;
+    workflowStages.find((stage) => pathname?.endsWith(`/${stage.href}`))?.href ?? null;
 
   const [draftSignals, setDraftSignals] = useState({
     blogReady: false,
@@ -155,7 +155,6 @@ export function ProjectWorkflowNav({ projectId }: { projectId: string }) {
                     <span className="text-sm font-semibold text-ink">{stage.label}</span>
                     <Badge tone={stateStyles[state].badge}>{stateStyles[state].label}</Badge>
                   </div>
-                  <p className="mt-2 text-sm leading-6 text-muted">{stage.description}</p>
                 </div>
               </div>
             </>
@@ -166,7 +165,7 @@ export function ProjectWorkflowNav({ projectId }: { projectId: string }) {
               <div
                 key={stage.href}
                 aria-disabled="true"
-                className={classNames("block cursor-not-allowed rounded-2xl border p-4", stateStyles[state].item)}
+                className={classNames("block cursor-not-allowed rounded-2xl border px-4 py-3", stateStyles[state].item)}
               >
                 {content}
               </div>
@@ -178,7 +177,7 @@ export function ProjectWorkflowNav({ projectId }: { projectId: string }) {
               key={stage.href}
               href={href}
               className={classNames(
-                "block rounded-2xl border p-4 transition-transform duration-200 hover:-translate-y-0.5 hover:border-brand/40",
+                "block rounded-2xl border px-4 py-3 transition-transform duration-200 hover:-translate-y-0.5 hover:border-brand/40",
                 stateStyles[state].item
               )}
             >

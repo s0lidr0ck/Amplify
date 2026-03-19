@@ -7,6 +7,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
+import { LinkButton } from "@/components/ui/Button";
 import { ProjectWorkflowNav } from "@/components/workflow/ProjectWorkflowNav";
 import { projects } from "@/lib/api";
 import { workflowStages } from "@/lib/workflow";
@@ -21,8 +22,17 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
     queryFn: () => projects.get(projectId),
   });
 
+  const utilityPage =
+    pathname?.endsWith("/visuals")
+      ? {
+          label: "Visual Assets",
+          shortLabel: "Visuals",
+          description: "Review the sermon master, thumbnails, and final reel assets together in one shared media hub.",
+        }
+      : null;
+
   const currentStage =
-    workflowStages.find((stage) => pathname?.endsWith(`/${stage.href}`)) ?? workflowStages[0];
+    utilityPage ?? workflowStages.find((stage) => pathname?.endsWith(`/${stage.href}`)) ?? workflowStages[0];
 
   return (
     <AppShell
@@ -43,6 +53,9 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
               <>
                 <Badge tone="info">{currentStage.shortLabel}</Badge>
                 <Badge tone="neutral">{project?.speaker_display_name ?? project?.speaker ?? "Speaker pending"}</Badge>
+                <LinkButton href={`/projects/${projectId}/visuals`} variant="secondary" size="sm">
+                  Visual Assets
+                </LinkButton>
               </>
             }
           />
@@ -50,6 +63,18 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
           <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
             <aside className="space-y-6">
               <ProjectWorkflowNav projectId={projectId} />
+              <Card className="p-5">
+                <p className="section-label">Media Hub</p>
+                <h2 className="mt-3 text-lg font-semibold text-ink">Visual Assets</h2>
+                <p className="mt-2 text-sm leading-6 text-muted">
+                  Open one shared view for the sermon master, sermon thumbnail, reel, and reel thumbnail.
+                </p>
+                <div className="mt-5">
+                  <LinkButton href={`/projects/${projectId}/visuals`} variant="secondary" className="w-full">
+                    Open Visual Assets
+                  </LinkButton>
+                </div>
+              </Card>
               <Card className="p-5">
                 <p className="section-label">Current Focus</p>
                 <h2 className="mt-3 text-lg font-semibold text-ink">{currentStage.label}</h2>

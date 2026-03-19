@@ -558,13 +558,13 @@ export default function ReelPage() {
 
       <Card>
         <CardHeader eyebrow="Creative" title="Thumbnail Prompt Ideas" />
-        <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="grid gap-4 lg:grid-cols-3">
+        <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_360px]">
+          <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
             {["A", "B", "C"].map((label, index) => {
               const prompt = draft.thumbnail_prompts[index];
               return (
                 <div key={label} className="rounded-[1.5rem] border border-border/80 bg-background-alt p-4">
-                  <div className="mb-3 flex items-center justify-between gap-3">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <p className="font-semibold text-ink">Prompt {label}</p>
                       <p className="mt-1 text-xs text-muted">{prompt?.title || "Graphic concept"}</p>
@@ -578,14 +578,14 @@ export default function ReelPage() {
                       {copiedKey === `reel-thumbnail-${label}` ? "Copied" : "Copy"}
                     </Button>
                   </div>
-                  <textarea
-                    value={prompt?.prompt || ""}
-                    onChange={(event) => {
-                      const next = [...draft.thumbnail_prompts];
-                      next[index] = { ...(next[index] || {}), label, prompt: event.target.value };
-                      setDraft((current) => ({ ...current, thumbnail_prompts: next }));
-                    }}
-                    className="min-h-[18rem] w-full rounded-2xl border border-border bg-surface px-4 py-3 text-sm text-ink outline-none transition focus:border-brand"
+                    <textarea
+                      value={prompt?.prompt || ""}
+                      onChange={(event) => {
+                        const next = [...draft.thumbnail_prompts];
+                        next[index] = { ...(next[index] || {}), label, prompt: event.target.value };
+                        setDraft((current) => ({ ...current, thumbnail_prompts: next }));
+                      }}
+                      className="min-h-[18rem] w-full rounded-2xl border border-border bg-surface px-4 py-3 text-sm leading-7 text-ink outline-none transition focus:border-brand"
                     placeholder={`Thumbnail prompt ${label} will appear here.`}
                   />
                 </div>
