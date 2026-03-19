@@ -42,7 +42,7 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
             actions={
               <>
                 <Badge tone="info">{currentStage.shortLabel}</Badge>
-                <Badge tone="neutral">{project?.speaker ?? "Speaker pending"}</Badge>
+                <Badge tone="neutral">{project?.speaker_display_name ?? project?.speaker ?? "Speaker pending"}</Badge>
               </>
             }
           />

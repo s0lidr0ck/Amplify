@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict
 class ProjectCreate(BaseModel):
     title: str
     speaker: str
+    speaker_display_name: Optional[str] = None
     sermon_date: date
     source_type: str  # "upload" | "youtube"
     source_url: Optional[str] = None
@@ -21,6 +22,7 @@ class ProjectRead(BaseModel):
     organization_id: str
     title: str
     speaker: str
+    speaker_display_name: Optional[str]
     sermon_date: date
     status: str
     created_at: datetime

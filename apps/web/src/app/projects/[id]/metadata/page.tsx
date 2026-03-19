@@ -82,7 +82,7 @@ export default function MetadataPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           transcript: transcriptText,
-          preacher_name: project?.speaker,
+          preacher_name: project?.speaker_display_name || project?.speaker,
           date_preached: project?.sermon_date,
           model,
           host,
@@ -127,7 +127,7 @@ export default function MetadataPage() {
         title={`Extract structured sermon data for ${project?.title ?? "this message"}.`}
         description="Generate the metadata JSON used downstream for packaging, search, and publishing, then correct it locally if anything needs refinement."
         meta={[
-          project?.speaker ?? "Speaker pending",
+          project?.speaker_display_name ?? project?.speaker ?? "Speaker pending",
           transcriptText ? "Transcript ready" : "Transcript required",
           warnings.length > 0 ? `${warnings.length} warnings` : "No current warnings",
         ]}
@@ -227,7 +227,7 @@ export default function MetadataPage() {
                 </div>
                 <div className="flex items-center justify-between rounded-2xl bg-surface-tint p-4 text-sm">
                   <span className="text-muted">Speaker</span>
-                  <Badge tone={project?.speaker ? "brand" : "warning"}>{project?.speaker ? "Set" : "Missing"}</Badge>
+                  <Badge tone={project?.speaker_display_name || project?.speaker ? "brand" : "warning"}>{project?.speaker_display_name || project?.speaker ? "Set" : "Missing"}</Badge>
                 </div>
                 <div className="flex items-center justify-between rounded-2xl bg-surface-tint p-4 text-sm">
                   <span className="text-muted">Warnings</span>

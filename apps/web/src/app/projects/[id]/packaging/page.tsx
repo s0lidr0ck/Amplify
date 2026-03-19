@@ -133,7 +133,7 @@ export default function PackagingPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           transcript: transcriptText,
-          preacher_name: project?.speaker,
+          preacher_name: project?.speaker_display_name || project?.speaker,
           date_preached: project?.sermon_date,
           model,
           host,

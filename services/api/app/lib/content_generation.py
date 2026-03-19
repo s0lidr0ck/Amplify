@@ -210,12 +210,16 @@ def build_blog_post_prompt(transcript: str, preacher_name: str = "", date_preach
         "STYLE RULES:\n"
         "- Tone: First person, speaking directly to the reader. Use \"you\" and \"your\".\n"
         "- Length: About 3 min read (several hundred words, 4-6 main sections).\n"
-        "- Structure: One clear title line, then body with ## section headings, short paragraphs, bullets or numbered lists where helpful.\n"
+        "- Structure: One plain-text title line first, then body with ## section headings, short paragraphs, bullets or numbered lists where helpful.\n"
         "- Content: Biblical references and stories from the sermon, applied to the reader's life.\n\n"
         "EXAMPLE STYLE (match this tone and format):\n"
         f"---\n{NLC_STYLE_EXCERPT_1}\n\n{NLC_STYLE_EXCERPT_2}\n---\n\n"
         + (f"{context_block}" if context_block else "")
-        + "OUTPUT FORMAT: Output only markdown. First line is the post title. Then a blank line. Then the full post body with ## headings.\n\n"
+        + "OUTPUT FORMAT:\n"
+        + "- Output only markdown.\n"
+        + "- First line must be the post title as plain text only. Do not wrap it in #, ##, **, quotes, or any markdown formatting.\n"
+        + "- Then one blank line.\n"
+        + "- Then the full post body with ## section headings.\n\n"
         f"Sermon transcript:\n---\n{transcript}\n---\n\n"
         "Write the blog post in markdown now."
     )

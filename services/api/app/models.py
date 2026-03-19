@@ -46,6 +46,7 @@ class Project(Base):
     organization_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("organizations.id"), nullable=False)
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     speaker: Mapped[str] = mapped_column(String(255), nullable=False)
+    speaker_display_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     sermon_date: Mapped[date] = mapped_column(Date, nullable=False)
     status: Mapped[str] = mapped_column(String(50), default="draft")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

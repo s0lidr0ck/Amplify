@@ -5,10 +5,19 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { projects } from "@/lib/api";
 
+const SPEAKER_PRESETS = [
+  { key: "custom", label: "Custom speaker", speaker: "", displayName: "" },
+  { key: "chris-tidwell", label: "Chris Tidwell", speaker: "Chris Tidwell", displayName: "Pastor Chris" },
+  { key: "mickey-kelly", label: "Mickey Kelly", speaker: "Mickey Kelly", displayName: "Brother Mickey" },
+  { key: "misty-sanders", label: "Misty Sanders", displayName: "Sister Misty", speaker: "Misty Sanders" },
+] as const;
+
 export default function NewProject() {
   const router = useRouter();
   const [title, setTitle] = useState("");
+  const [speakerPreset, setSpeakerPreset] = useState<(typeof SPEAKER_PRESETS)[number]["key"]>("custom");
   const [speaker, setSpeaker] = useState("");
+  const [speakerDisplayName, setSpeakerDisplayName] = useState("");
   const [sermonDate, setSermonDate] = useState("");
   const [sourceType, setSourceType] = useState<"upload" | "youtube">("upload");
   const [sourceUrl, setSourceUrl] = useState("");
@@ -25,6 +34,7 @@ export default function NewProject() {
     create.mutate({
       title,
       speaker,
+      speaker_display_name: speakerDisplayName || speaker,
       sermon_date: sermonDate,
       source_type: sourceType,
       source_url: sourceType === "youtube" ? sourceUrl : undefined,
@@ -57,6 +67,27 @@ export default function NewProject() {
             />
           </div>
           <div>
+            <label className="block text-sm font-medium text-gray-700">Speaker preset</label>
+            <select
+              value={speakerPreset}
+              onChange={(e) => {
+                const nextKey = e.target.value as (typeof SPEAKER_PRESETS)[number]["key"];
+                setSpeakerPreset(nextKey);
+                const preset = SPEAKER_PRESETS.find((item) => item.key === nextKey);
+                if (!preset) return;
+                setSpeaker(preset.speaker);
+                setSpeakerDisplayName(preset.displayName);
+              }}
+              className="mt-1 w-full rounded border border-gray-300 px-3 py-2"
+            >
+              {SPEAKER_PRESETS.map((preset) => (
+                <option key={preset.key} value={preset.key}>
+                  {preset.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
             <label className="block text-sm font-medium text-gray-700">Speaker</label>
             <input
               type="text"
@@ -64,6 +95,18 @@ export default function NewProject() {
               onChange={(e) => setSpeaker(e.target.value)}
               required
               className="mt-1 w-full rounded border border-gray-300 px-3 py-2"
+              suppressHydrationWarning
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Display name / familiar title</label>
+            <input
+              type="text"
+              value={speakerDisplayName}
+              onChange={(e) => setSpeakerDisplayName(e.target.value)}
+              required
+              className="mt-1 w-full rounded border border-gray-300 px-3 py-2"
+              placeholder="Pastor Chris, Brother Mickey, Sister Misty..."
               suppressHydrationWarning
             />
           </div>

@@ -63,6 +63,18 @@ def _serialize_clip_candidate(c: ClipCandidate) -> dict:
     }
 
 
+def _candidate_sort_key(candidate: ClipCandidate) -> tuple[int, float, datetime]:
+    payload = candidate.analysis_payload_json or {}
+    raw_rank = payload.get("rank")
+    try:
+        rank = int(raw_rank)
+    except (TypeError, ValueError):
+        rank = 10**9
+    score = float(candidate.score or 0.0)
+    created_at = candidate.created_at or datetime.min.replace(tzinfo=timezone.utc)
+    return (rank, -score, created_at)
+
+
 async def _run_clip_analysis(
     job_id: str,
     run_id: str,
@@ -405,9 +417,8 @@ async def list_clip_candidates(
     q = select(ClipCandidate).where(ClipCandidate.project_id == project_id)
     if run_id:
         q = q.where(ClipCandidate.analysis_run_id == run_id)
-    q = q.order_by(ClipCandidate.score.desc(), ClipCandidate.created_at.desc())
     result = await db.execute(q)
-    candidates = result.scalars().all()
+    candidates = sorted(result.scalars().all(), key=_candidate_sort_key)
     return [_serialize_clip_candidate(c) for c in candidates]
 
 

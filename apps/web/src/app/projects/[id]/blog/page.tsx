@@ -14,16 +14,41 @@ import { StepIntro } from "@/components/workflow/StepIntro";
 const DEFAULT_MODEL =
   "arn:aws:bedrock:us-east-1:644190502535:inference-profile/us.anthropic.claude-sonnet-4-6";
 
+function cleanTitleLine(line: string): string {
+  return line.replace(/^\s{0,3}#{1,6}\s*/, "").replace(/\*\*/g, "").trim();
+}
+
+function splitBlogMarkdown(markdown: string): { title: string; body: string } {
+  const normalized = (markdown || "").replace(/\r\n/g, "\n").trim();
+  if (!normalized) return { title: "", body: "" };
+  const [firstLine = "", ...rest] = normalized.split("\n");
+  return {
+    title: cleanTitleLine(firstLine),
+    body: rest.join("\n").replace(/^\s+/, ""),
+  };
+}
+
+function joinBlogMarkdown(title: string, body: string): string {
+  const cleanTitle = title.trim();
+  const cleanBody = body.trim();
+  if (!cleanTitle && !cleanBody) return "";
+  if (!cleanBody) return cleanTitle;
+  if (!cleanTitle) return cleanBody;
+  return `${cleanTitle}\n\n${cleanBody}`;
+}
+
 export default function BlogPage() {
   const params = useParams();
   const projectId = params.id as string;
   const [model, setModel] = useState(DEFAULT_MODEL);
   const [host, setHost] = useState("us-east-1");
-  const [markdown, setMarkdown] = useState("");
+  const [blogTitle, setBlogTitle] = useState("");
+  const [blogBody, setBlogBody] = useState("");
   const [error, setError] = useState("");
   const [streamStatus, setStreamStatus] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [hasHydratedDraft, setHasHydratedDraft] = useState(false);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   const { data: project } = useQuery({
     queryKey: ["project", projectId],
@@ -43,26 +68,40 @@ export default function BlogPage() {
   useEffect(() => {
     if (hasHydratedDraft) return;
     const draft = persistedBlogDraft?.payload ?? loadProjectDraft<BlogDraft>(projectId, "blog");
-    if (draft?.markdown) setMarkdown(draft.markdown);
+    if (draft?.markdown) {
+      const parsed = splitBlogMarkdown(draft.markdown);
+      setBlogTitle(parsed.title);
+      setBlogBody(parsed.body);
+    }
     setHasHydratedDraft(true);
   }, [hasHydratedDraft, persistedBlogDraft, projectId]);
 
   useEffect(() => {
     if (!hasHydratedDraft) return;
     const timeoutId = window.setTimeout(() => {
-      const draft = { markdown };
+      const draft = { markdown: joinBlogMarkdown(blogTitle, blogBody) };
       saveProjectDraft(projectId, "blog", draft);
       void projects.saveDraft(projectId, "blog", draft);
     }, 700);
     return () => window.clearTimeout(timeoutId);
-  }, [hasHydratedDraft, markdown, projectId]);
+  }, [blogBody, blogTitle, hasHydratedDraft, projectId]);
 
   const transcriptText = transcriptData?.raw_text || transcriptData?.cleaned_text || "";
+
+  async function copyText(key: string, value: string) {
+    if (!value.trim()) return;
+    await navigator.clipboard.writeText(value);
+    setCopiedKey(key);
+    window.setTimeout(() => {
+      setCopiedKey((current) => (current === key ? null : current));
+    }, 1800);
+  }
 
   async function generateBlogStream() {
     setError("");
     setStreamStatus("Connecting...");
-    setMarkdown("");
+    setBlogTitle("");
+    setBlogBody("");
     setIsStreaming(true);
 
     try {
@@ -71,7 +110,7 @@ export default function BlogPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           transcript: transcriptText,
-          preacher_name: project?.speaker,
+          preacher_name: project?.speaker_display_name || project?.speaker,
           date_preached: project?.sermon_date,
           model,
           host,
@@ -89,10 +128,14 @@ export default function BlogPage() {
           setStreamStatus(payload.message);
         } else if (payload.type === "chunk") {
           finalMarkdown += payload.delta;
-          setMarkdown((prev) => prev + payload.delta);
+          const parsed = splitBlogMarkdown(finalMarkdown);
+          setBlogTitle(parsed.title);
+          setBlogBody(parsed.body);
         } else if (payload.type === "done") {
           finalMarkdown = payload.markdown;
-          setMarkdown(payload.markdown);
+          const parsed = splitBlogMarkdown(payload.markdown);
+          setBlogTitle(parsed.title);
+          setBlogBody(parsed.body);
           setStreamStatus("Done");
           const draft = { markdown: payload.markdown };
           saveProjectDraft(projectId, "blog", draft);
@@ -129,13 +172,13 @@ export default function BlogPage() {
           },
           {
             label: "Speaker",
-            value: project?.speaker ? "Set" : "Missing",
-            tone: project?.speaker ? "brand" : "warning",
+            value: project?.speaker_display_name || project?.speaker ? "Set" : "Missing",
+            tone: project?.speaker_display_name || project?.speaker ? "brand" : "warning",
           },
           {
             label: "Draft state",
-            value: markdown.trim() ? "Editable" : "Empty",
-            tone: markdown.trim() ? "info" : "neutral",
+            value: joinBlogMarkdown(blogTitle, blogBody).trim() ? "Editable" : "Empty",
+            tone: joinBlogMarkdown(blogTitle, blogBody).trim() ? "info" : "neutral",
           },
         ]}
       />
@@ -148,7 +191,7 @@ export default function BlogPage() {
         <Card>
           <CardHeader
             eyebrow="Blog Draft"
-            title="Editable markdown"
+            title="Editable blog post"
             action={
               <Button onClick={generateBlogStream} disabled={isStreaming}>
                 {isStreaming ? "Streaming..." : "Generate Blog Draft"}
@@ -160,12 +203,45 @@ export default function BlogPage() {
             {error ? <Alert tone="danger">{error}</Alert> : null}
             {streamStatus ? <Alert tone="info">{streamStatus}</Alert> : null}
 
+            <label className="space-y-2 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-medium text-ink">Blog title</span>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => void copyText("blog-title", blogTitle)}
+                  disabled={!blogTitle.trim()}
+                >
+                  {copiedKey === "blog-title" ? "Copied" : "Copy"}
+                </Button>
+              </div>
+              <input
+                value={blogTitle}
+                onChange={(e) => setBlogTitle(e.target.value)}
+                className="w-full rounded-2xl border border-border bg-surface px-4 py-3 text-sm text-ink outline-none transition focus:border-brand"
+                placeholder="Generated title will appear here."
+              />
+            </label>
+
+            <label className="space-y-2 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-medium text-ink">Blog markdown</span>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => void copyText("blog-body", blogBody)}
+                  disabled={!blogBody.trim()}
+                >
+                  {copiedKey === "blog-body" ? "Copied" : "Copy"}
+                </Button>
+              </div>
             <textarea
-              value={markdown}
-              onChange={(e) => setMarkdown(e.target.value)}
+              value={blogBody}
+              onChange={(e) => setBlogBody(e.target.value)}
               className="min-h-[38rem] w-full rounded-[1.75rem] border border-border bg-surface px-5 py-4 font-mono text-sm text-ink outline-none transition focus:border-brand"
               placeholder="Generated markdown will appear here."
             />
+            </label>
           </div>
         </Card>
       )}

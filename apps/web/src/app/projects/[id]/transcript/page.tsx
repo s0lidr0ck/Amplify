@@ -291,7 +291,7 @@ export default function TranscriptPage() {
         title={`Generate and approve the transcript for ${project?.title ?? "this sermon"}.`}
         description="This step produces the text layer that drives clip discovery, packaging, blog creation, and metadata extraction."
         meta={[
-          project?.speaker ?? "Speaker pending",
+          project?.speaker_display_name ?? project?.speaker ?? "Speaker pending",
           transcriptData?.approved_at ? "Approved transcript" : "Approval pending",
           sermonAsset ? "Sermon master ready" : "Trim required first",
         ]}

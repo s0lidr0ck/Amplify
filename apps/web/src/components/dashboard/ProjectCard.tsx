@@ -33,7 +33,7 @@ export function ProjectCard({
                 {project.title}
               </h3>
               <p className="mt-2 text-sm text-muted">
-                {project.speaker} | {formatDate(project.sermon_date)}
+                {project.speaker_display_name || project.speaker} | {formatDate(project.sermon_date)}
               </p>
             </Link>
           </div>

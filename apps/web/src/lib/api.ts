@@ -64,6 +64,7 @@ export interface Project {
   organization_id: string;
   title: string;
   speaker: string;
+  speaker_display_name: string | null;
   sermon_date: string;
   status: string;
   created_at: string;
@@ -148,7 +149,14 @@ export const projects = {
       }
     }
   },
-  create: (data: { title: string; speaker: string; sermon_date: string; source_type: string; source_url?: string }) =>
+  create: (data: {
+    title: string;
+    speaker: string;
+    speaker_display_name?: string;
+    sermon_date: string;
+    source_type: string;
+    source_url?: string;
+  }) =>
     api<Project>("/api/projects", { method: "POST", body: JSON.stringify(data) }),
   getSourceAsset: (projectId: string) =>
     api<

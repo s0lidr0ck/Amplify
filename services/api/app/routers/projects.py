@@ -49,6 +49,7 @@ async def create_project(
         organization_id=DEFAULT_ORG_ID,
         title=body.title,
         speaker=body.speaker,
+        speaker_display_name=body.speaker_display_name or body.speaker,
         sermon_date=body.sermon_date,
         status="draft",
     )

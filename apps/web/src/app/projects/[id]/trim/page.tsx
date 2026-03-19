@@ -113,7 +113,7 @@ export default function TrimPage() {
         title={`Shape the usable sermon for ${project?.title ?? "this project"}.`}
         description="Review the uploaded source, set the sermon boundaries, and generate the clean master asset that the rest of the workflow depends on."
         meta={[
-          project?.speaker ?? "Speaker pending",
+          project?.speaker_display_name ?? project?.speaker ?? "Speaker pending",
           sourceAsset?.filename ?? "Source upload pending",
           useFullFile ? "Using full file" : `${formatTime(selectedDuration)} selected`,
         ]}
