@@ -26,15 +26,16 @@ def _resolve_fastcap_root() -> Path:
 
 
 def _ensure_fastcap_imports() -> None:
-    vendor_str = str(_VENDOR_ROOT)
-    if _VENDOR_ROOT.exists() and vendor_str not in sys.path:
-        sys.path.insert(0, vendor_str)
-    try:
-        user_site = site.getusersitepackages()
-    except Exception:
-        user_site = ""
-    if user_site and user_site not in sys.path:
-        sys.path.append(user_site)
+    if sys.platform == "win32":
+        vendor_str = str(_VENDOR_ROOT)
+        if _VENDOR_ROOT.exists() and vendor_str not in sys.path:
+            sys.path.insert(0, vendor_str)
+        try:
+            user_site = site.getusersitepackages()
+        except Exception:
+            user_site = ""
+        if user_site and user_site not in sys.path:
+            sys.path.append(user_site)
     fastcap_str = str(_resolve_fastcap_root())
     if fastcap_str not in sys.path:
         sys.path.insert(0, fastcap_str)
