@@ -3,13 +3,23 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { jobs, projects, trim, getMediaPlaybackUrl } from "@/lib/api";
+import { clips, content, jobs, projects, transcript, trim, getMediaPlaybackUrl } from "@/lib/api";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { JobStatusPanel } from "@/components/workflow/JobStatusPanel";
 import { StepIntro } from "@/components/workflow/StepIntro";
+
+const DEFAULT_MODEL =
+  "arn:aws:bedrock:us-east-1:644190502535:inference-profile/us.anthropic.claude-sonnet-4-6";
+const DEFAULT_HOST = "us-east-1";
+const DEFAULT_CANDIDATE_LIMIT = 24;
+const DEFAULT_OUTPUT_COUNT = 10;
+
+function sleep(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -34,6 +44,11 @@ export default function TrimPage() {
     queryFn: () => projects.getSourceAsset(projectId),
   });
 
+  const { data: sermonAsset } = useQuery({
+    queryKey: ["sermon-asset", projectId],
+    queryFn: () => projects.getSermonAsset(projectId),
+  });
+
   const [startSeconds, setStartSeconds] = useState(0);
   const [endSeconds, setEndSeconds] = useState(60);
   const [currentTime, setCurrentTime] = useState(0);
@@ -42,6 +57,9 @@ export default function TrimPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [hasSetStart, setHasSetStart] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
+  const [runAllState, setRunAllState] = useState<"idle" | "running" | "completed" | "failed">("idle");
+  const [runAllMessages, setRunAllMessages] = useState<string[]>([]);
+  const [runAllError, setRunAllError] = useState("");
 
   const duration = videoDuration ?? sourceAsset?.duration_seconds ?? 60;
 
@@ -64,6 +82,184 @@ export default function TrimPage() {
       setJobId(data.job_id);
     },
   });
+
+  const appendRunAllMessage = (message: string) => {
+    setRunAllMessages((prev) => (prev[prev.length - 1] === message ? prev : [...prev, message]));
+  };
+
+  async function waitForJob(jobIdToTrack: string, label: string) {
+    let lastStatusKey = "";
+    while (true) {
+      const currentJob = await jobs.get(jobIdToTrack);
+      const statusKey = `${currentJob.status}:${currentJob.progress_percent ?? "x"}:${currentJob.current_message ?? ""}`;
+      if (statusKey !== lastStatusKey) {
+        lastStatusKey = statusKey;
+        appendRunAllMessage(
+          `${label}: ${currentJob.current_message || currentJob.status}${
+            currentJob.progress_percent != null ? ` (${currentJob.progress_percent}%)` : ""
+          }`
+        );
+      }
+
+      if (currentJob.status === "completed") return currentJob;
+      if (currentJob.status === "failed") {
+        throw new Error(currentJob.error_text || `${label} failed.`);
+      }
+      if (currentJob.status === "cancelled") {
+        throw new Error(`${label} was cancelled.`);
+      }
+      await sleep(2000);
+    }
+  }
+
+  async function waitForCurrentSermonAsset() {
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      const currentAsset = await projects.getSermonAsset(projectId);
+      if (currentAsset) return currentAsset;
+      await sleep(1000);
+    }
+    throw new Error("Sermon master was generated, but the new sermon asset did not appear.");
+  }
+
+  async function waitForCurrentTranscript() {
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      const currentTranscript = await transcript.getForProject(projectId);
+      if (currentTranscript) return currentTranscript;
+      await sleep(1000);
+    }
+    throw new Error("Transcript job completed, but the transcript record did not appear.");
+  }
+
+  async function ensureTranscriptArtifacts(transcriptId: string) {
+    const artifactStatus = await transcript.getArtifactStatus(transcriptId);
+    if (artifactStatus.ready) {
+      appendRunAllMessage("Clip artifacts: Ready.");
+      return;
+    }
+
+    appendRunAllMessage("Clip artifacts: Missing pieces detected. Rebuilding artifacts...");
+    const artifactJob = await transcript.generateArtifacts(transcriptId);
+    await waitForJob(artifactJob.job_id, "Clip artifacts");
+  }
+
+  async function runAllProcesses() {
+    if (!project || !sourceAsset) return;
+
+    setRunAllState("running");
+    setRunAllError("");
+    setRunAllMessages(["Run all: Starting full downstream workflow."]);
+
+    try {
+      let activeSermonAsset = sermonAsset;
+
+      if (!activeSermonAsset) {
+        appendRunAllMessage("Sermon master: No existing master found. Generating one first...");
+        const trimResponse = await trimMutation.mutateAsync({
+          project_id: projectId,
+          source_asset_id: sourceAsset.id,
+          start_seconds: useFullFile ? 0 : safeStart,
+          end_seconds: useFullFile ? duration : safeEnd,
+          use_full_file: useFullFile,
+        });
+        setJobId(trimResponse.job_id);
+        await waitForJob(trimResponse.job_id, "Sermon master");
+        activeSermonAsset = await waitForCurrentSermonAsset();
+      } else {
+        appendRunAllMessage("Sermon master: Using the current sermon master asset.");
+      }
+
+      appendRunAllMessage("Transcript: Starting sermon transcription...");
+      const transcriptResponse = await transcript.start({
+        project_id: projectId,
+        sermon_asset_id: activeSermonAsset.id,
+      });
+      await waitForJob(transcriptResponse.job_id, "Transcript");
+      const currentTranscript = await waitForCurrentTranscript();
+      const transcriptText = currentTranscript.raw_text || currentTranscript.cleaned_text || "";
+      if (!transcriptText.trim()) {
+        throw new Error("Transcript finished without any usable text.");
+      }
+
+      await ensureTranscriptArtifacts(currentTranscript.id);
+
+      appendRunAllMessage("Metadata: Generating structured sermon metadata...");
+      const metadataResult = await content.generateMetadata({
+        transcript: transcriptText,
+        preacher_name: project.speaker_display_name || project.speaker,
+        date_preached: project.sermon_date,
+        model: DEFAULT_MODEL,
+        host: DEFAULT_HOST,
+      });
+      await projects.saveDraft(projectId, "metadata", {
+        raw: metadataResult.raw,
+        metadata: metadataResult.metadata,
+        warnings: metadataResult.warnings,
+      });
+      appendRunAllMessage("Metadata: Saved.");
+
+      appendRunAllMessage("Blog: Generating long-form article draft...");
+      const blogResult = await content.generateBlog({
+        transcript: transcriptText,
+        preacher_name: project.speaker_display_name || project.speaker,
+        date_preached: project.sermon_date,
+        model: DEFAULT_MODEL,
+        host: DEFAULT_HOST,
+      });
+      await projects.saveDraft(projectId, "blog", { markdown: blogResult.markdown });
+      appendRunAllMessage("Blog: Saved.");
+
+      appendRunAllMessage("Sermon Thumbnail / Title & Desc: Generating prompts plus YouTube copy...");
+      const packagingResult = await content.generatePackaging({
+        transcript: transcriptText,
+        preacher_name: project.speaker_display_name || project.speaker,
+        date_preached: project.sermon_date,
+        model: DEFAULT_MODEL,
+        host: DEFAULT_HOST,
+        sermon_metadata: metadataResult.metadata,
+      });
+      await projects.saveDraft(projectId, "packaging", packagingResult);
+      appendRunAllMessage("Sermon Thumbnail / Title & Desc: Saved.");
+
+      appendRunAllMessage("Clip Lab: Running clip analysis...");
+      const clipAnalysis = await clips.analyze({
+        project_id: projectId,
+        sermon_asset_id: activeSermonAsset.id,
+        transcript_id: currentTranscript.id,
+        model: DEFAULT_MODEL,
+        host: DEFAULT_HOST,
+        candidate_limit: DEFAULT_CANDIDATE_LIMIT,
+        output_count: DEFAULT_OUTPUT_COUNT,
+      });
+      await waitForJob(clipAnalysis.job_id, "Clip analysis");
+
+      appendRunAllMessage("Text Post: Generating social post from the blog draft...");
+      const facebookResult = await content.generateFacebook({
+        blog_post_markdown: blogResult.markdown,
+        model: DEFAULT_MODEL,
+        host: DEFAULT_HOST,
+      });
+      await projects.saveDraft(projectId, "facebook", { post: facebookResult.post });
+      appendRunAllMessage("Text Post: Saved.");
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["jobs", projectId] }),
+        queryClient.invalidateQueries({ queryKey: ["sermon-asset", projectId] }),
+        queryClient.invalidateQueries({ queryKey: ["transcript", projectId] }),
+        queryClient.invalidateQueries({ queryKey: ["transcript-artifacts"] }),
+        queryClient.invalidateQueries({ queryKey: ["clip-candidates", projectId] }),
+        queryClient.invalidateQueries({ queryKey: ["project-draft", projectId] }),
+        queryClient.invalidateQueries({ queryKey: ["project", projectId] }),
+      ]);
+
+      appendRunAllMessage("Run all: Everything finished successfully.");
+      setRunAllState("completed");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Run all failed.";
+      setRunAllError(message);
+      appendRunAllMessage(`Run all: ERROR: ${message}`);
+      setRunAllState("failed");
+    }
+  }
 
   const { data: job } = useQuery({
     queryKey: ["job", jobId],
@@ -275,25 +471,40 @@ export default function TrimPage() {
                 </div>
 
                 <div className="space-y-3">
-                  <Button
-                    onClick={() =>
-                      trimMutation.mutate({
-                        project_id: projectId,
-                        source_asset_id: sourceAsset.id,
-                        start_seconds: useFullFile ? 0 : safeStart,
-                        end_seconds: useFullFile ? duration : safeEnd,
-                        use_full_file: useFullFile,
-                      })
-                    }
-                    disabled={trimMutation.isPending}
-                    className="w-full"
-                    size="lg"
-                  >
-                    {trimMutation.isPending ? "Starting..." : "Generate Sermon Master"}
-                  </Button>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Button
+                      onClick={() =>
+                        trimMutation.mutate({
+                          project_id: projectId,
+                          source_asset_id: sourceAsset.id,
+                          start_seconds: useFullFile ? 0 : safeStart,
+                          end_seconds: useFullFile ? duration : safeEnd,
+                          use_full_file: useFullFile,
+                        })
+                      }
+                      disabled={trimMutation.isPending || runAllState === "running"}
+                      className="w-full"
+                      size="lg"
+                    >
+                      {trimMutation.isPending ? "Starting..." : "Generate Sermon Master"}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      onClick={() => void runAllProcesses()}
+                      disabled={trimMutation.isPending || runAllState === "running"}
+                      className="w-full"
+                      size="lg"
+                    >
+                      {runAllState === "running" ? "Running Everything..." : "Run All Processes"}
+                    </Button>
+                  </div>
+                  <p className="text-xs leading-6 text-muted">
+                    Run All will use the current sermon master if one already exists. Otherwise it will generate the master first, then run transcript, metadata, blog, sermon thumbnail prompts, title/description, clip analysis, and the text post in sequence.
+                  </p>
                   {trimMutation.isError ? (
                     <Alert tone="danger">{(trimMutation.error as Error).message}</Alert>
                   ) : null}
+                  {runAllError ? <Alert tone="danger">{runAllError}</Alert> : null}
                 </div>
               </div>
             </Card>
@@ -304,6 +515,44 @@ export default function TrimPage() {
                 job={job}
                 runningHint="This step prepares the master asset used by transcript generation and clip analysis. It can take a little while on larger source files."
               />
+            ) : null}
+
+            {runAllMessages.length > 0 ? (
+              <Card>
+                <CardHeader
+                  eyebrow="Automation"
+                  title="Run all processes"
+                  description="This log follows the downstream workflow from sermon master through content generation and clip analysis."
+                  action={
+                    <Badge
+                      tone={
+                        runAllState === "completed"
+                          ? "success"
+                          : runAllState === "failed"
+                            ? "danger"
+                            : runAllState === "running"
+                              ? "info"
+                              : "neutral"
+                      }
+                    >
+                      {runAllState === "completed"
+                        ? "Completed"
+                        : runAllState === "failed"
+                          ? "Failed"
+                          : runAllState === "running"
+                            ? "Running"
+                            : "Idle"}
+                    </Badge>
+                  }
+                />
+                <div className="mt-6 max-h-[24rem] space-y-3 overflow-y-auto rounded-[1.5rem] border border-border/80 bg-surface p-5">
+                  {runAllMessages.map((message, index) => (
+                    <p key={`${index}-${message}`} className="text-sm leading-7 text-ink">
+                      {message}
+                    </p>
+                  ))}
+                </div>
+              </Card>
             ) : null}
           </div>
         </div>

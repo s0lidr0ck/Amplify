@@ -9,8 +9,10 @@ import { clips, projects, transcript } from "@/lib/api";
 import {
   loadProjectDraft,
   type BlogDraft,
+  type FacebookDraft,
   type MetadataDraft,
   type PackagingDraft,
+  type ReelDraft,
 } from "@/lib/projectDrafts";
 import { workflowStages } from "@/lib/workflow";
 
@@ -59,7 +61,11 @@ export function ProjectWorkflowNav({ projectId }: { projectId: string }) {
   const [draftSignals, setDraftSignals] = useState({
     blogReady: false,
     metadataReady: false,
-    packagingReady: false,
+    sermonThumbnailReady: false,
+    titleDescReady: false,
+    textPostReady: false,
+    reelPackageReady: false,
+    reelThumbnailReady: false,
   });
 
   const { data: sourceAsset } = useQuery({
@@ -82,48 +88,104 @@ export function ProjectWorkflowNav({ projectId }: { projectId: string }) {
     queryFn: () => clips.listCandidates(projectId),
   });
 
+  const { data: reelAsset } = useQuery({
+    queryKey: ["reel-asset", projectId],
+    queryFn: () => projects.getReelAsset(projectId),
+  });
+
+  const { data: sermonThumbnailAsset } = useQuery({
+    queryKey: ["sermon-thumbnail-asset", projectId],
+    queryFn: () => projects.getSermonThumbnailAsset(projectId),
+  });
+
+  const { data: reelThumbnailAsset } = useQuery({
+    queryKey: ["reel-thumbnail-asset", projectId],
+    queryFn: () => projects.getReelThumbnailAsset(projectId),
+  });
+
   useEffect(() => {
+    const packagingDraft = loadProjectDraft<PackagingDraft>(projectId, "packaging");
+    const facebookDraft = loadProjectDraft<FacebookDraft>(projectId, "facebook");
+    const reelDraft = loadProjectDraft<ReelDraft>(projectId, "reel");
+
     setDraftSignals({
       blogReady: Boolean(loadProjectDraft<BlogDraft>(projectId, "blog")?.markdown?.trim()),
       metadataReady: Boolean(loadProjectDraft<MetadataDraft>(projectId, "metadata")?.metadata),
-      packagingReady: Boolean(
-        loadProjectDraft<PackagingDraft>(projectId, "packaging")?.title?.trim() ||
-          loadProjectDraft<PackagingDraft>(projectId, "packaging")?.description?.trim() ||
-          loadProjectDraft<PackagingDraft>(projectId, "packaging")?.thumbnail_prompts?.length
+      sermonThumbnailReady: Boolean(packagingDraft?.thumbnail_prompts?.length),
+      titleDescReady: Boolean(packagingDraft?.title?.trim() || packagingDraft?.description?.trim()),
+      textPostReady: Boolean(facebookDraft?.post?.trim()),
+      reelPackageReady: Boolean(
+        reelDraft?.caption?.trim() ||
+          reelDraft?.platforms?.youtube?.title?.trim() ||
+          reelDraft?.platforms?.facebook?.title?.trim() ||
+          reelAsset
       ),
+      reelThumbnailReady: Boolean(reelDraft?.thumbnail_prompts?.length || reelThumbnailAsset),
     });
-  }, [projectId, pathname]);
+  }, [pathname, projectId, reelAsset, reelThumbnailAsset, sermonThumbnailAsset]);
 
   const sourceDone = Boolean(sourceAsset);
   const trimDone = Boolean(sermonAsset);
   const transcriptDone = Boolean(transcriptData?.approved_at);
+  const sermonThumbnailDone = draftSignals.sermonThumbnailReady || Boolean(sermonThumbnailAsset);
   const clipsDone = clipCandidates.length > 0;
+  const reelDone = draftSignals.reelPackageReady;
+  const reelThumbnailDone = draftSignals.reelThumbnailReady;
+  const titleDescDone = draftSignals.titleDescReady;
+  const textPostDone = draftSignals.textPostReady;
   const blogDone = draftSignals.blogReady;
   const metadataDone = draftSignals.metadataReady;
-  const packagingDone = draftSignals.packagingReady;
-  const reelDone = false;
-  const publishingDone = false;
 
   const stageStatus = {
     source: sourceDone ? "done" : currentStageHref === "source" ? "now" : "ready",
     trim: trimDone ? "done" : currentStageHref === "trim" ? "now" : sourceDone ? "ready" : "locked",
     transcript:
       transcriptDone ? "done" : currentStageHref === "transcript" ? "now" : trimDone ? "ready" : "locked",
-    clips: clipsDone ? "done" : currentStageHref === "clips" ? "now" : transcriptDone ? "ready" : "locked",
-    blog: blogDone ? "done" : currentStageHref === "blog" ? "now" : transcriptDone ? "ready" : "locked",
-    packaging:
-      packagingDone ? "done" : currentStageHref === "packaging" ? "now" : transcriptDone ? "ready" : "locked",
-    reel: reelDone ? "done" : currentStageHref === "reel" ? "now" : packagingDone ? "ready" : "locked",
-    metadata:
-      metadataDone ? "done" : currentStageHref === "metadata" ? "now" : transcriptDone ? "ready" : "locked",
-    publishing:
-      publishingDone
+    "sermon-thumbnail":
+      sermonThumbnailDone
         ? "done"
-        : currentStageHref === "publishing"
+        : currentStageHref === "sermon-thumbnail"
           ? "now"
-          : reelDone || packagingDone || metadataDone
+          : transcriptDone
             ? "ready"
             : "locked",
+    clips:
+      clipsDone
+        ? "done"
+        : currentStageHref === "clips"
+          ? "now"
+          : sermonThumbnailDone
+            ? "ready"
+            : "locked",
+    reel: reelDone ? "done" : currentStageHref === "reel" ? "now" : clipsDone ? "ready" : "locked",
+    "reel-thumbnail":
+      reelThumbnailDone
+        ? "done"
+        : currentStageHref === "reel-thumbnail"
+          ? "now"
+          : reelDone
+            ? "ready"
+            : "locked",
+    "title-desc":
+      titleDescDone
+        ? "done"
+        : currentStageHref === "title-desc"
+          ? "now"
+          : reelThumbnailDone
+            ? "ready"
+            : "locked",
+    "text-post":
+      textPostDone
+        ? "done"
+        : currentStageHref === "text-post"
+          ? "now"
+          : titleDescDone
+            ? "ready"
+            : "locked",
+    blog: blogDone ? "done" : currentStageHref === "blog" ? "now" : textPostDone ? "ready" : "locked",
+    metadata:
+      metadataDone ? "done" : currentStageHref === "metadata" ? "now" : blogDone ? "ready" : "locked",
+    publishing: "soon",
   } as const;
 
   return (

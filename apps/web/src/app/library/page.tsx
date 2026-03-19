@@ -246,7 +246,7 @@ export default function LibraryPage() {
           <PageHeader
             eyebrow="Library"
             title="Search the sermon library."
-            description="Browse sermons as a visual catalog and search across titles, speaker metadata, transcript text, captions, blog drafts, packaging, and reel copy."
+          description="Browse sermons as a visual catalog and search across titles, speaker metadata, transcript text, captions, blog posts, thumbnail prompts, text posts, and reel copy."
             actions={
               <>
                 <Badge tone="brand">{summary.sermons} visible</Badge>
@@ -283,7 +283,7 @@ export default function LibraryPage() {
                     type="text"
                     value={searchInput}
                     onChange={(event) => setSearchInput(event.target.value)}
-                    placeholder="Search metadata, captions, blog drafts, transcripts, packaging, reel copy..."
+                placeholder="Search metadata, captions, blog posts, transcripts, titles, text posts, thumbnails, reel copy..."
                     className="mt-2 w-full rounded-2xl border border-gray-300 px-4 py-3 text-sm"
                   />
                 </label>

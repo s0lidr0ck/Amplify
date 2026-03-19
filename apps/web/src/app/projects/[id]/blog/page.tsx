@@ -161,7 +161,7 @@ export default function BlogPage() {
   return (
     <div className="space-y-6">
       <StepIntro
-        eyebrow="Blog Draft"
+        eyebrow="Blog Post"
         title={`Turn ${project?.title ?? "this sermon"} into a long-form article.`}
         description=""
         statusItems={[
@@ -185,16 +185,16 @@ export default function BlogPage() {
 
       {!transcriptText ? (
         <Alert tone="warning" title="Transcript required">
-          Approve or generate a transcript first so Blog can build from the sermon text.
+          Generate a transcript first so Blog can build from the sermon text.
         </Alert>
       ) : (
         <Card>
           <CardHeader
-            eyebrow="Blog Draft"
+                  eyebrow="Blog Post"
             title="Editable blog post"
             action={
               <Button onClick={generateBlogStream} disabled={isStreaming}>
-                {isStreaming ? "Streaming..." : "Generate Blog Draft"}
+                  {isStreaming ? "Streaming..." : "Generate Blog Post"}
               </Button>
             }
           />

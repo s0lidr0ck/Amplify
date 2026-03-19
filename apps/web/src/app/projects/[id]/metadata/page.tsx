@@ -125,7 +125,7 @@ export default function MetadataPage() {
       <StepIntro
         eyebrow="Metadata Studio"
         title={`Extract structured sermon data for ${project?.title ?? "this message"}.`}
-        description="Generate the metadata JSON used downstream for packaging, search, and publishing, then correct it locally if anything needs refinement."
+        description="Generate the metadata JSON used downstream for titles, posts, search, and publishing, then correct it locally if anything needs refinement."
         meta={[
           project?.speaker_display_name ?? project?.speaker ?? "Speaker pending",
           transcriptText ? "Transcript ready" : "Transcript required",
@@ -135,7 +135,7 @@ export default function MetadataPage() {
 
       {!transcriptText ? (
         <Alert tone="warning" title="Transcript required">
-          Approve or generate a transcript first to run metadata extraction.
+          Generate a transcript first to run metadata extraction.
         </Alert>
       ) : (
         <div className="grid gap-6 2xl:grid-cols-[minmax(0,1.25fr)_360px]">

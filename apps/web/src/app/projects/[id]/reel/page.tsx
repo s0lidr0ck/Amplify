@@ -1,6 +1,4 @@
 "use client";
-
-import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -80,8 +78,6 @@ export default function ReelPage() {
   const [uploadError, setUploadError] = useState("");
   const [uploadStatus, setUploadStatus] = useState("");
   const [isDownloadingReel, setIsDownloadingReel] = useState(false);
-  const [thumbnailUploadError, setThumbnailUploadError] = useState("");
-  const [thumbnailUploadStatus, setThumbnailUploadStatus] = useState("");
   const [reelTranscriptJobId, setReelTranscriptJobId] = useState<string | null>(null);
   const [reelTranscriptMessages, setReelTranscriptMessages] = useState<string[]>([]);
   const [generationMessages, setGenerationMessages] = useState<string[]>([]);
@@ -107,11 +103,6 @@ export default function ReelPage() {
   const { data: persistedReelDraft } = useQuery({
     queryKey: ["project-draft", projectId, "reel"],
     queryFn: () => projects.getDraft<ReelDraft>(projectId, "reel"),
-  });
-
-  const { data: reelThumbnailAsset } = useQuery({
-    queryKey: ["reel-thumbnail-asset", projectId],
-    queryFn: () => projects.getReelThumbnailAsset(projectId),
   });
 
   const { data: reelTranscript } = useQuery({
@@ -224,23 +215,6 @@ export default function ReelPage() {
     onError: (error) => {
       setUploadStatus("");
       setUploadError(error instanceof Error ? error.message : "Final reel upload failed.");
-    },
-  });
-
-  const thumbnailUploadMutation = useMutation({
-    mutationFn: async (file: File) => {
-      setThumbnailUploadError("");
-      setThumbnailUploadStatus("Uploading reel thumbnail...");
-      return uploads.upload(projectId, file, "reel_thumbnail");
-    },
-    onSuccess: async () => {
-      setThumbnailUploadStatus("Reel thumbnail uploaded.");
-      await queryClient.invalidateQueries({ queryKey: ["reel-thumbnail-asset", projectId] });
-      window.setTimeout(() => setThumbnailUploadStatus(""), 2200);
-    },
-    onError: (error) => {
-      setThumbnailUploadStatus("");
-      setThumbnailUploadError(error instanceof Error ? error.message : "Reel thumbnail upload failed.");
     },
   });
 
@@ -427,7 +401,7 @@ export default function ReelPage() {
       <StepIntro
         eyebrow="Final Reel"
         title={`Prepare the finished reel package for ${project?.title ?? "this project"}.`}
-        description="Upload the finished reel, finalize the caption text, and generate platform-ready copy plus thumbnail ideas from one workspace."
+        description="Upload the finished reel, finalize the caption text, and generate the platform-ready copy that goes with the finished edit."
         statusItems={[
           {
             label: "Final reel",
@@ -555,92 +529,6 @@ export default function ReelPage() {
           runningHint="Faster Whisper is transcribing the uploaded reel so the caption field can populate automatically."
         />
       ) : null}
-
-      <Card>
-        <CardHeader eyebrow="Creative" title="Thumbnail Prompt Ideas" />
-        <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_360px]">
-          <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
-            {["A", "B", "C"].map((label, index) => {
-              const prompt = draft.thumbnail_prompts[index];
-              return (
-                <div key={label} className="rounded-[1.5rem] border border-border/80 bg-background-alt p-4">
-                  <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="font-semibold text-ink">Prompt {label}</p>
-                      <p className="mt-1 text-xs text-muted">{prompt?.title || "Graphic concept"}</p>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={() => void copyText(`reel-thumbnail-${label}`, prompt?.prompt || "")}
-                      disabled={!prompt?.prompt?.trim()}
-                    >
-                      {copiedKey === `reel-thumbnail-${label}` ? "Copied" : "Copy"}
-                    </Button>
-                  </div>
-                    <textarea
-                      value={prompt?.prompt || ""}
-                      onChange={(event) => {
-                        const next = [...draft.thumbnail_prompts];
-                        next[index] = { ...(next[index] || {}), label, prompt: event.target.value };
-                        setDraft((current) => ({ ...current, thumbnail_prompts: next }));
-                      }}
-                      className="min-h-[18rem] w-full rounded-2xl border border-border bg-surface px-4 py-3 text-sm leading-7 text-ink outline-none transition focus:border-brand"
-                    placeholder={`Thumbnail prompt ${label} will appear here.`}
-                  />
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="rounded-[1.5rem] border border-border/80 bg-background-alt p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="font-semibold text-ink">Reel thumbnail</p>
-                <p className="mt-1 text-xs text-muted">Upload the chosen reel cover image here.</p>
-              </div>
-              {reelThumbnailAsset ? <Badge tone="success">Uploaded</Badge> : <Badge tone="neutral">Missing</Badge>}
-            </div>
-
-            <div className="mt-4 space-y-3">
-              {thumbnailUploadError ? <Alert tone="danger">{thumbnailUploadError}</Alert> : null}
-              {thumbnailUploadStatus ? <Alert tone="info">{thumbnailUploadStatus}</Alert> : null}
-              <label className="block">
-                <span className="sr-only">Choose reel thumbnail</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (file) thumbnailUploadMutation.mutate(file);
-                    event.currentTarget.value = "";
-                  }}
-                  className="block w-full rounded-2xl border border-border bg-surface px-4 py-3 text-sm text-ink file:mr-4 file:rounded-full file:border-0 file:bg-brand file:px-4 file:py-2 file:font-semibold file:text-white"
-                />
-              </label>
-              {reelThumbnailAsset ? (
-                <div className="space-y-3">
-                  <p className="text-xs text-muted">{reelThumbnailAsset.filename}</p>
-                  <div className="overflow-hidden rounded-[1.25rem] border border-border bg-surface">
-                    <Image
-                      src={reelThumbnailAsset.playback_url ?? `${API_BASE}/api/media/asset/${reelThumbnailAsset.id}`}
-                      alt={reelThumbnailAsset.filename}
-                      width={640}
-                      height={360}
-                      className="h-auto w-full object-cover"
-                      unoptimized
-                    />
-                  </div>
-                </div>
-              ) : (
-                <div className="flex aspect-video items-center justify-center rounded-[1.25rem] border border-dashed border-border bg-surface px-4 text-center text-sm text-muted">
-                  No reel thumbnail uploaded yet
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </Card>
 
       <Card>
         <CardHeader eyebrow="Distribution" title="Platform Copy" />

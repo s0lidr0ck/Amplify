@@ -208,11 +208,6 @@ export default function TranscriptPage() {
     },
   });
 
-  const approveTranscribe = useMutation({
-    mutationFn: transcript.approve,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["transcript", projectId] }),
-  });
-
   const cancelTranscription = useMutation({
     mutationFn: (jobId: string) => jobs.cancel(jobId),
     onSuccess: async (_, jobId) => {
@@ -288,11 +283,11 @@ export default function TranscriptPage() {
     <div className="space-y-6">
       <StepIntro
         eyebrow="Transcript Review"
-        title={`Generate and approve the transcript for ${project?.title ?? "this sermon"}.`}
-        description="This step produces the text layer that drives clip discovery, packaging, blog creation, and metadata extraction."
+        title={`Generate and review the transcript for ${project?.title ?? "this sermon"}.`}
+        description="This step produces the text layer that drives sermon thumbnails, clip discovery, titles, posts, blog creation, and metadata extraction. Sermon transcripts are auto-approved after generation."
         meta={[
           project?.speaker_display_name ?? project?.speaker ?? "Speaker pending",
-          transcriptData?.approved_at ? "Approved transcript" : "Approval pending",
+          transcriptData?.approved_at ? "Auto-approved transcript" : "Transcript pending",
           sermonAsset ? "Sermon master ready" : "Trim required first",
         ]}
       />
@@ -355,17 +350,7 @@ export default function TranscriptPage() {
                           {cancelTranscription.isPending ? "Cancelling..." : "Cancel and Restart"}
                         </Button>
                       ) : null}
-                      {transcriptData.approved_at ? (
-                        <Badge tone="success">Approved</Badge>
-                      ) : (
-                        <Button
-                          variant="success"
-                          onClick={() => approveTranscribe.mutate(transcriptData.id)}
-                          disabled={approveTranscribe.isPending}
-                        >
-                          {approveTranscribe.isPending ? "Approving..." : "Approve Transcript"}
-                        </Button>
-                      )}
+                      <Badge tone="success">{transcriptData.approved_at ? "Auto-approved" : "Ready"}</Badge>
                     </div>
                   }
                 />
@@ -429,9 +414,9 @@ export default function TranscriptPage() {
                   </Badge>
                 </div>
                 <div className="flex items-center justify-between rounded-2xl bg-surface-tint p-4 text-sm">
-                  <span className="text-muted">Approval</span>
+                  <span className="text-muted">Review state</span>
                   <Badge tone={transcriptionRequested ? "info" : transcriptData?.approved_at ? "success" : "warning"}>
-                    {transcriptionRequested ? "Re-running" : transcriptData?.approved_at ? "Approved" : "Needs review"}
+                    {transcriptionRequested ? "Re-running" : transcriptData?.approved_at ? "Auto-approved" : "Generating"}
                   </Badge>
                 </div>
                 <div className="flex items-center justify-between rounded-2xl bg-surface-tint p-4 text-sm">

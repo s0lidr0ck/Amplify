@@ -23,7 +23,13 @@ export const workflowStages: WorkflowStage[] = [
     href: "transcript",
     label: "Transcript Review",
     shortLabel: "Transcript",
-    description: "Generate, inspect, and approve the sermon transcript.",
+    description: "Generate, inspect, and review the sermon transcript.",
+  },
+  {
+    href: "sermon-thumbnail",
+    label: "Sermon Thumbnail",
+    shortLabel: "Sermon Thumb",
+    description: "Generate the three sermon thumbnail prompt ideas and upload the chosen artwork.",
   },
   {
     href: "clips",
@@ -32,28 +38,34 @@ export const workflowStages: WorkflowStage[] = [
     description: "Analyze the sermon and shape the short-form clip candidates.",
   },
   {
-    href: "blog",
-    label: "Blog Draft",
-    shortLabel: "Blog",
-    description: "Create the long-form written adaptation of the message.",
-  },
-  {
-    href: "packaging",
-    label: "Posts",
-    shortLabel: "Posts",
-    description: "Generate YouTube packaging, thumbnail prompts, and social copy.",
-  },
-  {
     href: "reel",
     label: "Final Reel",
     shortLabel: "Reel",
     description: "Assemble the final long-form deliverable for distribution.",
   },
   {
-    href: "metadata",
-    label: "Metadata Studio",
-    shortLabel: "Metadata",
-    description: "Extract structured metadata for downstream publishing.",
+    href: "reel-thumbnail",
+    label: "Reel Thumbnail",
+    shortLabel: "Reel Thumb",
+    description: "Review the reel thumbnail prompt ideas and upload the selected cover image.",
+  },
+  {
+    href: "title-desc",
+    label: "Title & Desc",
+    shortLabel: "Title & Desc",
+    description: "Generate and refine the YouTube title and description for the sermon.",
+  },
+  {
+    href: "text-post",
+    label: "Text Post",
+    shortLabel: "Text Post",
+    description: "Generate and edit the text-only social post for the sermon.",
+  },
+  {
+    href: "blog",
+    label: "Blog Post",
+    shortLabel: "Blog",
+    description: "Create the long-form written adaptation of the message.",
   },
   {
     href: "publishing",
@@ -61,6 +73,12 @@ export const workflowStages: WorkflowStage[] = [
     shortLabel: "Publish",
     description: "Coming soon.",
     disabled: true,
+  },
+  {
+    href: "metadata",
+    label: "Metadata Studio",
+    shortLabel: "Metadata",
+    description: "Extract structured metadata for downstream publishing.",
   },
 ];
 
