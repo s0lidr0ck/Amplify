@@ -6,8 +6,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-_PROJECT_ROOT = Path(__file__).resolve().parents[4]
-_PROMPT_OVERRIDE_PATH = _PROJECT_ROOT / "services" / "api" / "data" / "prompt_overrides.json"
+_API_ROOT = Path(__file__).resolve().parents[2]
+_PROMPT_OVERRIDE_PATH = _API_ROOT / "data" / "prompt_overrides.json"
 
 PROMPT_DEFINITIONS: dict[str, dict[str, str]] = {
     "metadata_scribe": {
