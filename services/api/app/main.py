@@ -11,7 +11,7 @@ from app.config import settings
 from app.queue import close_queue, get_queue
 
 logger = logging.getLogger(__name__)
-from app.routers import clips, content, dev, jobs, media, projects, speakers, transcript, trim, uploads, worker_internal
+from app.routers import clips, content, dev, jobs, media, projects, settings as settings_router, speakers, transcript, trim, uploads, worker_internal
 
 
 @asynccontextmanager
@@ -59,6 +59,7 @@ app.include_router(trim.router)
 app.include_router(transcript.router)
 app.include_router(clips.router)
 app.include_router(content.router)
+app.include_router(settings_router.router)
 app.include_router(worker_internal.router)
 app.include_router(dev.router)
 

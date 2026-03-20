@@ -16,6 +16,14 @@ from urllib import error, request
 from session_artifacts import artifact_path, load_session
 
 try:
+    from app.lib.prompt_settings import render_prompt_template
+except Exception:  # noqa: BLE001
+    import sys
+
+    sys.path.append(str(Path(__file__).resolve().parents[2]))
+    from app.lib.prompt_settings import render_prompt_template
+
+try:
     import boto3
 except Exception:  # noqa: BLE001
     boto3 = None
@@ -411,23 +419,12 @@ def _build_pass1_prompt(words: list[dict], candidate_target: int, duration: floa
                 "text": b["text"],
             }
         )
-    return (
-        "You are selecting contextually coherent sermon clips for short-form video.\n"
-        "Task: choose 20-30 candidates from transcript blocks.\n"
-        "Each candidate must be 30-60 seconds, coherent standalone, and have a strong opening line.\n"
-        "Balance across early/mid/late sermon phases.\n"
-        "Output JSON only with this schema:\n"
-        "{\n"
-        '  "candidates": [\n'
-        "    {\n"
-        '      "start_time": "HH:MM:SS.mmm",\n'
-        '      "end_time": "HH:MM:SS.mmm",\n'
-        '      "opening_hook": "string"\n'
-        "    }\n"
-        "  ]\n"
-        "}\n\n"
-        f"Target candidate count: {candidate_target}\n"
-        f"Transcript blocks:\n{json.dumps(payload, ensure_ascii=False, indent=2)}"
+    return render_prompt_template(
+        "clip_candidates_pass1",
+        {
+            "candidate_target": candidate_target,
+            "payload_json": json.dumps(payload, ensure_ascii=False, indent=2),
+        },
     )
 
 
@@ -554,29 +551,11 @@ def _build_hook_score_prompt(candidates: list[CandidateMoment]) -> str:
                 "end_sec": round(float(c.end), 3),
             }
         )
-    return (
-        "You are scoring opening hooks for short-form sermon clips.\n"
-        "Return JSON only. No markdown.\n"
-        "Score only scroll-stopping hook quality of the opening line(s), not theology.\n"
-        "Output schema:\n"
-        "{\n"
-        '  "hook_scores": [\n'
-        "    {\n"
-        '      "candidate_id": 1,\n'
-        '      "llm_hook_score": 0,\n'
-        '      "confidence": "low|medium|high",\n'
-        '      "evidence": ["string"],\n'
-        '      "reason_short": "string"\n'
-        "    }\n"
-        "  ]\n"
-        "}\n\n"
-        "Rules:\n"
-        "- Return every candidate_id in the input exactly once.\n"
-        "- llm_hook_score must be an integer between 0 and 100.\n"
-        "- confidence must be low, medium, or high.\n"
-        "- evidence list must have 1 to 3 short items.\n"
-        "- reason_short should be one sentence <= 180 chars.\n\n"
-        f"Candidates:\n{json.dumps(payload, ensure_ascii=False, indent=2)}"
+    return render_prompt_template(
+        "clip_hook_score",
+        {
+            "payload_json": json.dumps(payload, ensure_ascii=False, indent=2),
+        },
     )
 
 
@@ -695,54 +674,12 @@ def build_prompt(candidates: list[CandidateMoment], output_count: int) -> str:
             }
         )
 
-    return (
-        "You are a short-form sermon video editor. Rank clip candidates by reel potential.\n"
-        "Focus on hook strength, cadence clarity, standalone clarity, conviction impact, and platform performance.\n"
-        "Prioritize spoken rhythm and delivery over abstract theology.\n"
-        f"Return exactly {output_count} clips when possible.\n\n"
-        "Output MUST be valid JSON only, no markdown, no commentary.\n"
-        "Use this exact schema:\n"
-        "{\n"
-        '  "clips": [\n'
-        "    {\n"
-        '      "candidate_id": 1,\n'
-        '      "start_time": "HH:MM:SS.mmm",\n'
-        '      "end_time": "HH:MM:SS.mmm",\n'
-        '      "opening_hook": "string",\n'
-        '      "clip_type": "Teaching|Conviction|Declaration|Encouragement",\n'
-        '      "cadence_marker": "Punch Phrase|Rising Stack|Repetition|Metaphor|Pause Punch",\n'
-        '      "editorial_scores": {\n'
-        '        "editor": 0,\n'
-        '        "hook": 0,\n'
-        '        "cadence": 0,\n'
-        '        "standalone": 0,\n'
-        '        "emotion": 0\n'
-        "      },\n"
-        '      "editor_score": 0,\n'
-        '      "editor_reason": "string",\n'
-        '      "scroll_stopping_strength": "Low|Medium|High",\n'
-        '      "best_platform_fit": "Reels|TikTok|Shorts"\n'
-        "    }\n"
-        "  ]\n"
-        "}\n\n"
-        "Rules:\n"
-        "- Keep clips in chronological order.\n"
-        "- Keep 30-60 second windows.\n"
-        "- editor_score must be between 0 and 100.\n"
-        "- editorial_scores values must each be between 0 and 100.\n"
-        "- Use candidate_id values from input.\n\n"
-        "Reject criteria (do not pick):\n"
-        "- Opening first 5 seconds has weak/no hook.\n"
-        "- Excessive setup with low standalone clarity.\n"
-        "- Flat cadence with no strong delivery marker.\n\n"
-        "Diversity constraints:\n"
-        "- Balance selections across early, mid, and late phases.\n"
-        "- Avoid clustering all clips in one phase unless candidates are clearly weak elsewhere.\n\n"
-        "Reasoning constraints:\n"
-        "- editor_reason must mention at least two concrete signals from persisted metrics/signals.\n"
-        "- Only reference these metrics by name if used: editor, hook, cadence, standalone, emotion, energy, contrast, overall_candidate.\n"
-        "- Prefer clips where short declarative lines stack back-to-back.\n\n"
-        f"Candidate input:\n{json.dumps(candidate_payload, ensure_ascii=False, indent=2)}"
+    return render_prompt_template(
+        "clip_ranker",
+        {
+            "output_count": output_count,
+            "payload_json": json.dumps(candidate_payload, ensure_ascii=False, indent=2),
+        },
     )
 
 

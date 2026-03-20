@@ -84,6 +84,16 @@ export interface Speaker {
   updated_at: string;
 }
 
+export interface PromptSetting {
+  key: string;
+  label: string;
+  category: string;
+  description: string;
+  template: string;
+  default_template: string;
+  is_overridden: string;
+}
+
 export interface LibraryProject {
   id: string;
   title: string;
@@ -399,6 +409,15 @@ export const speakers = {
       }
     }
   },
+};
+
+export const settingsApi = {
+  listPrompts: () => api<{ items: PromptSetting[] }>("/api/settings/prompts"),
+  savePrompts: (overrides: Record<string, string | null>) =>
+    api<{ items: PromptSetting[] }>("/api/settings/prompts", {
+      method: "PUT",
+      body: JSON.stringify({ overrides }),
+    }),
 };
 
 export const transcript = {

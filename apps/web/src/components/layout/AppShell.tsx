@@ -33,8 +33,8 @@ export function AppShell({
             <Link href="/library" className="hidden text-sm font-medium text-muted hover:text-ink sm:inline-flex">
               Library
             </Link>
-            <Link href="/speakers" className="hidden text-sm font-medium text-muted hover:text-ink sm:inline-flex">
-              Speakers
+            <Link href="/settings" className="hidden text-sm font-medium text-muted hover:text-ink sm:inline-flex">
+              Settings
             </Link>
             {action ?? <LinkButton href="/projects/new">New Project</LinkButton>}
           </div>

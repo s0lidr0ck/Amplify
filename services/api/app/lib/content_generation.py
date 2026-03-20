@@ -6,6 +6,8 @@ import json
 import re
 from typing import Any
 
+from app.lib.prompt_settings import render_prompt_template
+
 THUMBNAIL_VARIANT_LABELS = ("A", "B", "C")
 THUMBNAIL_DEFAULT_POSITIONS = ("center", "left", "right")
 THUMBNAIL_ALLOWED_POSITIONS = {"center", "left", "right", "lower_third"}
@@ -129,25 +131,13 @@ def build_scribe_prompt(transcript: str, preacher_name: str = "", date_preached:
             named_context.append(f"- Date preached: {date_preached.strip()}")
         named_context.append("")
     context_block = "\n".join(named_context)
-    return (
-        "You are SCRIBE, a digital assistant trained to analyze Pentecostal sermon transcripts. "
-        "Your task is to read a sermon transcript and output a single JSON object (and nothing else) with the exact keys described below.\n\n"
-        "IMPORTANT: Before producing output, read the ENTIRE transcript. Do not invent scriptures or statements not present. Output ONLY valid JSON.\n\n"
-        + (f"{context_block}" if context_block else "")
-        + "Required JSON shape (use these exact key names):\n"
-        "- title (string)\n"
-        "- description (string)\n"
-        "- scriptures (array of strings)\n"
-        "- mainPoints (array of strings)\n"
-        "- tags (array of strings): 3-10 tags from the tag list below only\n"
-        "- propheticStatements (array of strings)\n"
-        "- keyMoments (array of objects): each { \"timestamp\": \"...\", \"quote\": \"...\", \"explanation\": \"...\" }\n"
-        "- topics (array of strings)\n"
-        "- teachingStatements (array of strings)\n\n"
-        "Tag options (choose only from this list):\n"
-        f"{TAG_OPTIONS}\n\n"
-        f"Transcript:\n---\n{transcript}\n---\n\n"
-        "Respond with only the JSON object, no other text."
+    return render_prompt_template(
+        "metadata_scribe",
+        {
+            "context_block": context_block,
+            "tag_options": TAG_OPTIONS,
+            "transcript": transcript,
+        },
     )
 
 
@@ -204,40 +194,19 @@ def build_blog_post_prompt(transcript: str, preacher_name: str = "", date_preach
             context_lines.append(f"- Date preached: {date_preached.strip()}")
         context_lines.append("")
     context_block = "\n".join(context_lines)
-    return (
-        "You are writing a blog post for a church (NLC). Your post must match the tone, structure, and length of the example style below. "
-        "Use the ENTIRE sermon transcript as your only source; do not invent content.\n\n"
-        "STYLE RULES:\n"
-        "- Tone: First person, speaking directly to the reader. Use \"you\" and \"your\".\n"
-        "- Length: About 3 min read (several hundred words, 4-6 main sections).\n"
-        "- Structure: One plain-text title line first, then body with ## section headings, short paragraphs, bullets or numbered lists where helpful.\n"
-        "- Content: Biblical references and stories from the sermon, applied to the reader's life.\n\n"
-        "EXAMPLE STYLE (match this tone and format):\n"
-        f"---\n{NLC_STYLE_EXCERPT_1}\n\n{NLC_STYLE_EXCERPT_2}\n---\n\n"
-        + (f"{context_block}" if context_block else "")
-        + "OUTPUT FORMAT:\n"
-        + "- Output only markdown.\n"
-        + "- First line must be the post title as plain text only. Do not wrap it in #, ##, **, quotes, or any markdown formatting.\n"
-        + "- Then one blank line.\n"
-        + "- Then the full post body with ## section headings.\n\n"
-        f"Sermon transcript:\n---\n{transcript}\n---\n\n"
-        "Write the blog post in markdown now."
+    return render_prompt_template(
+        "blog_post",
+        {
+            "context_block": context_block,
+            "style_excerpt_1": NLC_STYLE_EXCERPT_1,
+            "style_excerpt_2": NLC_STYLE_EXCERPT_2,
+            "transcript": transcript,
+        },
     )
 
 
 def build_facebook_post_prompt(blog_post_markdown: str) -> str:
-    return (
-        "You are writing a Facebook post for a church. The post is based on the blog post below, which was adapted from a sermon. "
-        "Write a SHORTER version that feels fresh.\n\n"
-        "RULES:\n"
-        "- Length: About half the length of the blog post.\n"
-        "- Tone: Direct, warm, conversational.\n"
-        "- Do NOT say things like 'In this sermon...' or 'The blog post above...'.\n"
-        "- End with a short line that invites engagement.\n\n"
-        "OUTPUT FORMAT: Output only the Facebook post text. No title and no markdown.\n\n"
-        f"Blog post (markdown):\n---\n{blog_post_markdown}\n---\n\n"
-        "Write the Facebook post now."
-    )
+    return render_prompt_template("facebook_post", {"blog_post_markdown": blog_post_markdown})
 
 
 def _srt_time_to_seconds(time_str: str) -> float | None:
@@ -311,16 +280,12 @@ def srt_to_plain_text(srt_text: str) -> str:
 
 
 def build_youtube_prompt(transcript: str, preacher_name: str = "", date_preached: str = "") -> str:
-    return (
-        "You are writing a YouTube video title and description for a church sermon. Use the sermon transcript below as your only source.\n\n"
-        "RULES:\n"
-        "- Title: One line, under 100 characters. Catchy, clear, and search-friendly. No clickbait.\n"
-        "- Description: 2-4 short paragraphs. End with a line inviting viewers to engage.\n"
-        "- Do NOT include timestamps or a chapter list in the description.\n\n"
-        + _context_block(preacher_name, date_preached)
-        + "OUTPUT FORMAT: First line is the title. Then a blank line. Then the full description.\n\n"
-        f"Sermon transcript:\n---\n{transcript}\n---\n\n"
-        "Write the YouTube title and description now."
+    return render_prompt_template(
+        "youtube_packaging",
+        {
+            "context_block": _context_block(preacher_name, date_preached),
+            "transcript": transcript,
+        },
     )
 
 
@@ -334,22 +299,13 @@ def build_youtube_prompt_with_chapters(
         f"Segment {index} (~5 min):\n{_safe_excerpt(text, 1500)}\n\n"
         for index, (_, text) in enumerate(segments, start=1)
     )
-    return (
-        "You are writing a YouTube video title, description, and chapter titles for a church sermon. "
-        "Use the sermon content below as your only source.\n\n"
-        "RULES:\n"
-        "- Title: One line, under 100 characters.\n"
-        "- Description: 2-4 short paragraphs after the title.\n"
-        f"- Chapter titles: output exactly {len(segments)} short chapter titles in the same order.\n\n"
-        + _context_block(preacher_name, date_preached)
-        + "OUTPUT FORMAT:\n"
-        "1. First line: title.\n"
-        "2. Blank line.\n"
-        "3. Description.\n"
-        "4. A line that says exactly: ---CHAPTERS---\n"
-        f"5. Then exactly {len(segments)} chapter-title lines.\n\n"
-        f"Sermon segments:\n---\n{segment_block}---\n\n"
-        "Write the full response now."
+    return render_prompt_template(
+        "youtube_packaging_with_chapters",
+        {
+            "context_block": _context_block(preacher_name, date_preached),
+            "segment_count": len(segments),
+            "segment_block": segment_block,
+        },
     )
 
 
@@ -610,35 +566,16 @@ def build_thumbnail_prompt_planner(
         ensure_ascii=False,
         indent=2,
     )
-    return (
-        "You are a VISUAL CREATIVE DIRECTOR planning 3 YouTube thumbnail prompt variants for a church sermon video.\n\n"
-        "HARD RULES:\n"
-        "- The composition must be layered as subject in foreground, text in middle layer, environment in background.\n"
-        "- The foreground subject must partially overlap the text.\n"
-        "- Use metaphorical imagery, not a literal church service scene.\n"
-        "- The thumbnail phrase must be 1-3 words.\n"
-        "- Create exactly 3 variants.\n"
-        "- Use these text positions in order: A=center, B=left, C=right.\n"
-        "- Choose lighting from this list only: " + ", ".join(THUMBNAIL_ALLOWED_LIGHTING) + ".\n\n"
-        "CREATIVE STRATEGY RULES:\n"
-        "- Think like a premium YouTube thumbnail designer, not a metadata formatter.\n"
-        "- Favor a strong emotional image, bold hook phrase, and instantly readable concept.\n"
-        "- Each variant should feel visually distinct, not like tiny edits of the same scene.\n"
-        "- Use color, mood, layout, and typography direction that reinforce the message.\n"
-        "- Avoid generic sunrise-placeholder ideas unless the sermon genuinely points there.\n"
-        "- The best concepts usually feel like a visual metaphor, not a summary sentence.\n"
-        "- At least one variant should be object-led or symbolic close-up, at least one should be a tight portrait, and at most one should lean environmental.\n"
-        "- Avoid generic dramatic field, ruins, or spotlight imagery unless the sermon clearly demands it.\n"
-        "- Design each concept so the main subject and text survive both horizontal and vertical crops.\n"
-        "- Wide concepts are allowed, but never let the person become a tiny figure floating in empty scenery.\n\n"
-        'OUTPUT FORMAT: Return only valid JSON with a "variants" array.\n\n'
-        + _context_block(preacher_name, date_preached)
-        + f"YouTube title:\n{youtube_title.strip()}\n\n"
-        + f"YouTube description:\n{_safe_excerpt(youtube_description, 500)}\n\n"
-        + f"Sermon metadata:\n{metadata_block}\n\n"
-        + f"Transcript excerpt:\n{_safe_excerpt(transcript, 2200)}\n\n"
-        "Return exactly 3 variants in JSON now.\n"
-        'Each variant should include these keys: label, title, sermon_theme, sermon_summary, thumbnail_phrase, scene_concept, text_position, lighting_description, mood_color_direction, layout_style, background_style, typography_feel, shot_preference, framing_guidance, editor_notes.'
+    return render_prompt_template(
+        "thumbnail_planner",
+        {
+            "allowed_lighting": ", ".join(THUMBNAIL_ALLOWED_LIGHTING),
+            "context_block": _context_block(preacher_name, date_preached),
+            "youtube_title": youtube_title.strip(),
+            "youtube_description": _safe_excerpt(youtube_description, 500),
+            "metadata_block": metadata_block,
+            "transcript_excerpt": _safe_excerpt(transcript, 2200),
+        },
     )
 
 
@@ -691,40 +628,12 @@ REEL_PLATFORM_KEYS = ("instagram", "tiktok", "youtube", "facebook")
 
 
 def build_reel_social_prompt(transcript_excerpt: str, preacher_name: str = "", date_preached: str = "") -> str:
-    return (
-        "You are now acting as a SHORT-FORM CONTENT STRATEGIST.\n"
-        "INPUT:\n"
-        "You will receive a transcript excerpt from a sermon clip that was previously extracted using Editor Brain + Cadence Mapping Mode.\n\n"
-        "GOAL:\n"
-        "Create PLATFORM-SPECIFIC titles, descriptions, and tags for Instagram Reels, TikTok, YouTube Shorts, and Facebook Reels.\n\n"
-        "CONTENT STYLE RULES:\n"
-        "- Maintain the original sermon message tone.\n"
-        "- Titles must be strong, curiosity-driven, and scroll-stopping.\n"
-        "- Keep titles clear and keyword-rich (40-70 characters is ideal when the platform allows it).\n"
-        "- Descriptions must be benefit-focused and include a natural call-to-action.\n"
-        "- Avoid generic church language; write in a way that connects with both church and non-church viewers.\n\n"
-        "PLATFORM OPTIMIZATION:\n"
-        "- INSTAGRAM REELS: short punchy title, caption around 120-180 characters, 5-10 targeted hashtags focused on saves and shares.\n"
-        "- TIKTOK: title/hook line, caption around 150-300 characters, 3-5 strong hashtags, end with a question or engagement prompt.\n"
-        "- YOUTUBE SHORTS: title 40-70 characters, description 100-200 words with CTA, 10-15 SEO tags, include 3 hashtags at the bottom.\n"
-        "- FACEBOOK REELS: clear statement title 40-80 characters, short encouragement paragraph, minimal hashtags (2-5 max).\n\n"
-        "IMPORTANT STRATEGY RULES:\n"
-        "- The first line of every description must reinforce the spoken hook.\n"
-        "- Each platform version should feel native, not copy/paste.\n"
-        "- Keep clarity higher than cleverness.\n"
-        "- Titles should front-load the benefit or bold statement.\n\n"
-        "Return only valid JSON using this exact shape:\n"
-        "{\n"
-        '  "platforms": {\n'
-        '    "instagram": { "title": "...", "description": "...", "tags": ["#...", "#..."] },\n'
-        '    "tiktok": { "title": "...", "description": "...", "tags": ["#...", "#..."] },\n'
-        '    "youtube": { "title": "...", "description": "...", "tags": ["tag one", "tag two"] },\n'
-        '    "facebook": { "title": "...", "description": "...", "tags": ["#...", "#..."] }\n'
-        "  }\n"
-        "}\n\n"
-        + _context_block(preacher_name, date_preached)
-        + f"TRANSCRIPT EXCERPT:\n---\n{transcript_excerpt.strip()}\n---\n\n"
-        "Return the JSON now."
+    return render_prompt_template(
+        "reel_social",
+        {
+            "context_block": _context_block(preacher_name, date_preached),
+            "transcript_excerpt": transcript_excerpt.strip(),
+        },
     )
 
 
@@ -747,43 +656,7 @@ def parse_reel_social_response(raw: str) -> dict[str, dict[str, Any]]:
 
 
 def build_reel_graphics_prompt(transcript_excerpt: str) -> str:
-    return (
-        "You are now acting as a VISUAL CREATIVE DIRECTOR designing graphics for short-form sermon content.\n"
-        "INPUT:\n"
-        "At the bottom of this prompt you will receive a transcript excerpt from a sermon clip.\n\n"
-        "PRIMARY GOAL:\n"
-        "Create GRAPHIC CONCEPTS that visually reinforce the message, emotion, and cadence of the spoken words.\n\n"
-        "IMPORTANT:\n"
-        "- Do NOT summarize the sermon.\n"
-        "- Extract strong VISUAL THEMES, METAPHORS, and TEXT OVERLAYS from the transcript.\n"
-        "- Design graphics that would work for Instagram Reels covers, YouTube Shorts visuals, Canva posts, or motion graphics backgrounds.\n\n"
-        "VISUAL ANALYSIS RULES:\n"
-        "- Identify strong metaphors that translate visually.\n"
-        "- Identify short punch phrases suitable for on-screen text.\n"
-        "- Identify emotional tone (conviction, encouragement, declaration, teaching).\n"
-        "- Identify imagery suggested by the language (light, movement, weight, storms, seasons, doors, etc.).\n\n"
-        "Return only valid JSON with this exact shape:\n"
-        "{\n"
-        '  "concepts": [\n'
-        '    {\n'
-        '      "title": "...",\n'
-        '      "visual_theme": "...",\n'
-        '      "mood_color_direction": "...",\n'
-        '      "layout_style": "...",\n'
-        '      "main_hook_line": "...",\n'
-        '      "supporting_line": "...",\n'
-        '      "subtitle_emphasis_words": ["...", "..."],\n'
-        '      "background_style": "...",\n'
-        '      "typography_feel": "...",\n'
-        '      "motion_suggestions": ["...", "..."],\n'
-        '      "editor_notes": "..."\n'
-        "    }\n"
-        "  ]\n"
-        "}\n\n"
-        "Create exactly 3 concepts.\n\n"
-        f"TRANSCRIPT EXCERPT:\n---\n{transcript_excerpt.strip()}\n---\n\n"
-        "Return the JSON now."
-    )
+    return render_prompt_template("reel_graphics", {"transcript_excerpt": transcript_excerpt.strip()})
 
 
 def parse_reel_graphics_response(raw: str) -> list[dict[str, Any]]:

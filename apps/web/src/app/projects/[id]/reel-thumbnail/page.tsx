@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { API_BASE, projects, uploads } from "@/lib/api";
 import { loadProjectDraft, saveProjectDraft, type ReelDraft } from "@/lib/projectDrafts";
+import { streamNdjson } from "@/lib/streaming";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -47,6 +48,9 @@ export default function ReelThumbnailPage() {
   const [hasHydratedDraft, setHasHydratedDraft] = useState(false);
   const [thumbnailUploadError, setThumbnailUploadError] = useState("");
   const [thumbnailUploadStatus, setThumbnailUploadStatus] = useState("");
+  const [generateError, setGenerateError] = useState("");
+  const [generateStatus, setGenerateStatus] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const { data: project } = useQuery({
     queryKey: ["project", projectId],
@@ -109,6 +113,52 @@ export default function ReelThumbnailPage() {
     }, 1800);
   }
 
+  async function generateReelThumbnailPrompts() {
+    if (!draft.caption.trim()) {
+      setGenerateError("Add or generate the reel caption first so the thumbnail prompts have source material.");
+      return;
+    }
+
+    setGenerateError("");
+    setGenerateStatus("Connecting...");
+    setIsGenerating(true);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/content/reel/generate-stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          transcript_excerpt: draft.caption,
+          preacher_name: project?.speaker_display_name || project?.speaker,
+          date_preached: project?.sermon_date,
+          model: "arn:aws:bedrock:us-east-1:644190502535:inference-profile/us.anthropic.claude-sonnet-4-6",
+          host: "us-east-1",
+        }),
+      });
+
+      await streamNdjson<
+        | { type: "status"; message: string }
+        | { type: "chunk"; target: "social" | "graphics"; delta: string }
+        | { type: "done"; thumbnail_prompts: Array<Record<string, string>> }
+        | { type: "error"; message: string }
+      >(res, (payload) => {
+        if (payload.type === "status") {
+          setGenerateStatus(payload.message);
+        } else if (payload.type === "done") {
+          setGenerateStatus("Done");
+          setDraft((current) => ({ ...current, thumbnail_prompts: payload.thumbnail_prompts || [] }));
+        } else if (payload.type === "error") {
+          throw new Error(payload.message);
+        }
+      });
+    } catch (error) {
+      setGenerateError(error instanceof Error ? error.message : "Failed to generate reel thumbnail prompts.");
+      setGenerateStatus("");
+    } finally {
+      setIsGenerating(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <StepIntro
@@ -130,8 +180,23 @@ export default function ReelThumbnailPage() {
       />
 
       <Card>
-        <CardHeader eyebrow="Creative" title="Reel Thumbnail Prompt Ideas" />
+        <CardHeader
+          eyebrow="Creative"
+          title="Reel Thumbnail Prompt Ideas"
+          action={
+            <Button onClick={generateReelThumbnailPrompts} disabled={isGenerating}>
+              {isGenerating ? "Generating..." : "Generate 3 Prompt Ideas"}
+            </Button>
+          }
+        />
         <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_360px]">
+          <div className="xl:col-span-2 space-y-3">
+            {!draft.caption.trim() ? (
+              <Alert tone="warning">Generate the reel package or add caption text first so thumbnail prompts have source material.</Alert>
+            ) : null}
+            {generateError ? <Alert tone="danger">{generateError}</Alert> : null}
+            {generateStatus ? <Alert tone="info">{generateStatus}</Alert> : null}
+          </div>
           <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
             {["A", "B", "C"].map((label, index) => {
               const prompt = draft.thumbnail_prompts[index];

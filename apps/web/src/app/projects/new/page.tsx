@@ -81,8 +81,8 @@ export default function NewProject() {
           <div>
             <div className="flex items-center justify-between gap-3">
               <label className="block text-sm font-medium text-gray-700">Speaker</label>
-              <Link href="/speakers" className="text-sm font-medium text-indigo-600 hover:text-indigo-700">
-                Manage speakers
+              <Link href="/settings" className="text-sm font-medium text-indigo-600 hover:text-indigo-700">
+                Open settings
               </Link>
             </div>
             <select
