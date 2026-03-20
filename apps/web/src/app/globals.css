@@ -56,11 +56,11 @@
 
 @layer components {
   .surface-card {
-    @apply rounded-3xl border border-border/80 bg-surface shadow-card;
+    @apply rounded-[1.5rem] border border-border/80 bg-surface shadow-card sm:rounded-3xl;
   }
 
   .surface-panel {
-    @apply rounded-2xl border border-border/80 bg-surface backdrop-blur;
+    @apply rounded-[1.25rem] border border-border/80 bg-surface backdrop-blur sm:rounded-2xl;
   }
 
   .section-label {
@@ -74,7 +74,7 @@
   }
 
   .page-stack {
-    @apply space-y-8 lg:space-y-10;
+    @apply space-y-6 sm:space-y-8 lg:space-y-10;
   }
 
   .text-balance {

@@ -198,7 +198,7 @@ export function ProjectWorkflowNav({ projectId }: { projectId: string }) {
         <Badge tone="info">{workflowStages.length} stages</Badge>
       </div>
 
-      <nav className="space-y-3">
+      <nav className="space-y-2 sm:space-y-3">
         {workflowStages.map((stage, index) => {
           const state = stage.disabled ? "soon" : stageStatus[stage.href as keyof typeof stageStatus];
           const href = `/projects/${projectId}/${stage.href}`;
@@ -227,7 +227,7 @@ export function ProjectWorkflowNav({ projectId }: { projectId: string }) {
               <div
                 key={stage.href}
                 aria-disabled="true"
-                className={classNames("block cursor-not-allowed rounded-2xl border px-4 py-3", stateStyles[state].item)}
+                className={classNames("block cursor-not-allowed rounded-2xl border px-3 py-3 sm:px-4", stateStyles[state].item)}
               >
                 {content}
               </div>
@@ -239,7 +239,7 @@ export function ProjectWorkflowNav({ projectId }: { projectId: string }) {
               key={stage.href}
               href={href}
               className={classNames(
-                "block rounded-2xl border px-4 py-3 transition-transform duration-200 hover:-translate-y-0.5 hover:border-brand/40",
+                "block rounded-2xl border px-3 py-3 transition-transform duration-200 hover:-translate-y-0.5 hover:border-brand/40 sm:px-4",
                 stateStyles[state].item
               )}
             >
