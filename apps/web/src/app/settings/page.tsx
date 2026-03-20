@@ -21,7 +21,12 @@ export default function SettingsPage() {
     queryFn: () => speakers.list(true),
   });
 
-  const { data: promptResponse, isLoading: promptsLoading } = useQuery({
+  const {
+    data: promptResponse,
+    isLoading: promptsLoading,
+    isError: promptsError,
+    error: promptsErrorDetail,
+  } = useQuery({
     queryKey: ["settings-prompts"],
     queryFn: () => settingsApi.listPrompts(),
   });
@@ -114,6 +119,13 @@ export default function SettingsPage() {
             />
             <div className="mt-6 space-y-4">
               {promptsLoading ? <Alert tone="info">Loading prompt templates.</Alert> : null}
+              {promptsError ? (
+                <Alert tone="danger">
+                  {promptsErrorDetail instanceof Error
+                    ? promptsErrorDetail.message
+                    : "Unable to load prompt templates. If the API was just updated, restart the API service and refresh this page."}
+                </Alert>
+              ) : null}
               {savePrompts.isError ? (
                 <Alert tone="danger">
                   {savePrompts.error instanceof Error ? savePrompts.error.message : "Unable to save prompt templates."}
@@ -121,6 +133,12 @@ export default function SettingsPage() {
               ) : null}
               {savePrompts.isSuccess && !hasPromptChanges ? (
                 <Alert tone="success">Prompt template changes saved.</Alert>
+              ) : null}
+              {!promptsLoading && !promptsError && promptItems.length === 0 ? (
+                <Alert tone="info">
+                  No prompt templates were returned by the API. If the backend was just changed, restart it and refresh
+                  this page.
+                </Alert>
               ) : null}
 
               {promptsByCategory.map(([category, items]) => (

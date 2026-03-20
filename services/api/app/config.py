@@ -1,8 +1,11 @@
 """Application configuration."""
 
+import json
 from pathlib import Path
+from typing import Any
 
 from dotenv import load_dotenv
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 # Load .env from project root (parent of services/api)
@@ -41,6 +44,25 @@ class Settings(BaseSettings):
     sync_trim_dev: bool = False  # When True, create placeholder sermon_master immediately (no worker)
     clip_analysis_model: str = "arn:aws:bedrock:us-east-1:644190502535:inference-profile/us.anthropic.claude-sonnet-4-6"
     clip_analysis_host: str = "us-east-1"
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, value: Any) -> Any:
+        """Accept JSON arrays or simple comma/newline-separated origin strings."""
+        if isinstance(value, str):
+            text = value.strip()
+            if not text:
+                return []
+            if text.startswith("["):
+                try:
+                    parsed = json.loads(text)
+                except json.JSONDecodeError:
+                    parsed = None
+                if isinstance(parsed, list):
+                    return [str(item).strip() for item in parsed if str(item).strip()]
+            parts = [part.strip() for part in text.replace("\n", ",").split(",")]
+            return [part for part in parts if part]
+        return value
 
     def database_url_clean(self) -> str:
         """URL without ssl params (asyncpg needs ssl via connect_args, not URL)."""
