@@ -2,10 +2,13 @@
 
 import json
 from pathlib import Path
+import re
 from typing import Any
 
 from dotenv import load_dotenv
 from pydantic import field_validator
+from pydantic.aliases import AliasChoices
+from pydantic.fields import Field
 from pydantic_settings import BaseSettings
 
 # Load .env from project root (parent of services/api)
@@ -24,12 +27,16 @@ class Settings(BaseSettings):
 
     app_url: str = "http://localhost:3000"
     api_url: str = "http://localhost:8000"
-    cors_origins: list[str] = [
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:3001",
-    ]
+    cors_origins: list[str] = Field(
+        default=[
+            "http://localhost:3000",
+            "http://localhost:3001",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:3001",
+        ],
+        validation_alias=AliasChoices("CORS_ORIGINS", "CORS_ORIGIN"),
+    )
+    cors_origin_regex: str = r"http://(localhost|127\.0\.0\.1)(:\d+)?$"
     database_url: str = "postgresql+asyncpg://amplify:amplify@localhost:5432/amplify"
     redis_url: str = "redis://localhost:6379/0"
     s3_bucket: str = "amplify"
@@ -63,6 +70,14 @@ class Settings(BaseSettings):
             parts = [part.strip() for part in text.replace("\n", ",").split(",")]
             return [part for part in parts if part]
         return value
+
+    def is_allowed_origin(self, origin: str | None) -> bool:
+        """Return True when the given request Origin should receive CORS headers."""
+        if not origin:
+            return False
+        if origin in self.cors_origins:
+            return True
+        return re.match(self.cors_origin_regex, origin) is not None
 
     def database_url_clean(self) -> str:
         """URL without ssl params (asyncpg needs ssl via connect_args, not URL)."""

@@ -31,7 +31,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
-    allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?$",
+    allow_origin_regex=settings.cors_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -43,7 +43,7 @@ async def global_exception_handler(request, exc):
     """Ensure 500 errors include CORS headers so the browser can read the response."""
     logger.exception("Unhandled exception: %s", exc)
     origin = request.headers.get("origin")
-    if origin and origin in settings.cors_origins:
+    if settings.is_allowed_origin(origin):
         response = JSONResponse(status_code=500, content={"detail": str(exc)})
         response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Access-Control-Allow-Credentials"] = "true"
