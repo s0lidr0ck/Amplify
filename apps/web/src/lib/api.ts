@@ -288,6 +288,42 @@ export const jobs = {
   },
 };
 
+const LOCAL_UPLOAD_CHUNK_SIZE = 5 * 1024 * 1024;
+const LOCAL_UPLOAD_MAX_RETRIES = 3;
+
+async function uploadChunkWithRetry(uploadId: string, partNumber: number, blob: Blob): Promise<void> {
+  let lastError: Error | null = null;
+  for (let attempt = 1; attempt <= LOCAL_UPLOAD_MAX_RETRIES; attempt += 1) {
+    const formData = new FormData();
+    formData.append("chunk", blob, `part-${partNumber}`);
+    try {
+      const res = await fetch(`${API_BASE}/api/uploads/local/${uploadId}/parts/${partNumber}`, {
+        method: "PUT",
+        body: formData,
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        try {
+          const json = JSON.parse(text) as { detail?: string };
+          throw new Error(json.detail ?? `Chunk upload failed: ${res.status}`);
+        } catch (e) {
+          if (e instanceof SyntaxError) {
+            throw new Error(`Chunk upload failed: ${res.status}`);
+          }
+          throw e;
+        }
+      }
+      return;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error("Chunk upload failed");
+      if (attempt < LOCAL_UPLOAD_MAX_RETRIES) {
+        await new Promise((resolve) => window.setTimeout(resolve, attempt * 500));
+      }
+    }
+  }
+  throw lastError ?? new Error("Chunk upload failed");
+}
+
 export const uploads = {
   request: (data: { project_id: string; filename: string; content_type: string; file_size_bytes: number }) =>
     api<{ upload_url: string; asset_id: string; storage_key: string }>("/api/uploads/request", {
@@ -297,26 +333,44 @@ export const uploads = {
   upload: async (
     projectId: string,
     file: File,
-    assetKind = "source_video"
+    assetKind = "source_video",
+    onProgress?: (percent: number) => void
   ): Promise<{ asset_id: string; filename: string }> => {
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("asset_kind", assetKind);
-    const res = await fetch(`${API_BASE}/api/projects/${projectId}/upload`, {
-      method: "POST",
-      body: formData,
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      try {
-        const json = JSON.parse(text) as { detail?: string };
-        throw new Error(json.detail ?? `Upload failed: ${res.status}`);
-      } catch (e) {
-        if (e instanceof SyntaxError) throw new Error(`Upload failed: ${res.status}`);
-        throw e;
+    const totalParts = Math.ceil(file.size / LOCAL_UPLOAD_CHUNK_SIZE);
+    onProgress?.(0);
+    const start = await api<{ upload_id: string; chunk_size_bytes: number; total_parts: number }>(
+      "/api/uploads/local/start",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          project_id: projectId,
+          filename: file.name,
+          content_type: file.type || "application/octet-stream",
+          file_size_bytes: file.size,
+          chunk_size_bytes: LOCAL_UPLOAD_CHUNK_SIZE,
+          total_parts: totalParts,
+          asset_kind: assetKind,
+        }),
       }
+    );
+
+    for (let partIndex = 0; partIndex < totalParts; partIndex += 1) {
+      const startByte = partIndex * LOCAL_UPLOAD_CHUNK_SIZE;
+      const endByte = Math.min(startByte + LOCAL_UPLOAD_CHUNK_SIZE, file.size);
+      const chunk = file.slice(startByte, endByte);
+      await uploadChunkWithRetry(start.upload_id, partIndex + 1, chunk);
+      onProgress?.(Math.round(((partIndex + 1) / totalParts) * 100));
     }
-    return res.json();
+
+    const completed = await api<{ asset_id: string; filename: string }>(`/api/uploads/local/${start.upload_id}/complete`, {
+      method: "POST",
+      body: JSON.stringify({
+        project_id: projectId,
+        asset_kind: assetKind,
+      }),
+    });
+    onProgress?.(100);
+    return completed;
   },
 };
 

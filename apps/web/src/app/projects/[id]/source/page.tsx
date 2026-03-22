@@ -6,12 +6,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, jobs, projects, uploads } from "@/lib/api";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
+import { ProgressBar } from "@/components/ui/ProgressBar";
 
 export default function SourcePage() {
   const params = useParams();
   const projectId = params.id as string;
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [uploadFilename, setUploadFilename] = useState<string>("");
 
   const { data: project } = useQuery({
     queryKey: ["project", projectId],
@@ -43,10 +46,20 @@ export default function SourcePage() {
   });
 
   const uploadMutation = useMutation({
-    mutationFn: (file: File) => uploads.upload(projectId, file),
+    mutationFn: (file: File) => {
+      setUploadFilename(file.name);
+      return uploads.upload(projectId, file, "source_video", setUploadProgress);
+    },
     onSuccess: () => {
+      setUploadProgress(100);
       queryClient.invalidateQueries({ queryKey: ["source-asset", projectId] });
       queryClient.invalidateQueries({ queryKey: ["jobs", projectId] });
+    },
+    onSettled: () => {
+      window.setTimeout(() => {
+        setUploadProgress(null);
+        setUploadFilename("");
+      }, 600);
     },
   });
   const sourceReady = sourceAsset?.status === "ready";
@@ -110,9 +123,20 @@ export default function SourcePage() {
               }}
             />
 
+            {uploadMutation.isPending && uploadProgress != null ? (
+              <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="font-medium text-slate-800">Uploading {uploadFilename || "source file"}</span>
+                  <span className="text-slate-500">{uploadProgress}%</span>
+                </div>
+                <ProgressBar value={uploadProgress} className="mt-3" />
+                <p className="mt-2 text-xs text-slate-500">Large files upload in chunks now, so slow connections only retry the current chunk.</p>
+              </div>
+            ) : null}
+
             <div className="mt-4 flex flex-wrap gap-2">
               <Button onClick={() => fileInputRef.current?.click()} disabled={uploadMutation.isPending}>
-                {uploadMutation.isPending ? "Uploading..." : sourceAsset ? "Replace with Upload" : "Upload Video"}
+                {uploadMutation.isPending ? `Uploading ${uploadProgress ?? 0}%` : sourceAsset ? "Replace with Upload" : "Upload Video"}
               </Button>
               <Button variant="secondary" onClick={() => seedMutation.mutate()} disabled={seedMutation.isPending}>
                 {seedMutation.isPending ? "Seeding..." : "Seed Source (Dev)"}
