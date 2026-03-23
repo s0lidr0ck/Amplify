@@ -6,12 +6,17 @@ export function getMediaPlaybackUrl(assetId: string): string {
 }
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const isFormData = typeof FormData !== "undefined" && init?.body instanceof FormData;
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...init?.headers,
-    },
+    headers: isFormData
+      ? {
+          ...init?.headers,
+        }
+      : {
+          "Content-Type": "application/json",
+          ...init?.headers,
+        },
   });
   if (!res.ok) {
     const text = await res.text();
@@ -173,6 +178,33 @@ export interface TranscriptData {
   created_at: string;
 }
 
+export interface WixImageAsset {
+  id: string;
+  url: string;
+  altText: string;
+  filename: string;
+}
+
+export interface WixPublishResult {
+  draft_post_id: string;
+  post_id: string;
+  status: string;
+  title: string;
+  preview_url: string;
+  published_at: string;
+  raw?: {
+    draft?: Record<string, unknown>;
+    published?: Record<string, unknown>;
+    hero_image?: WixImageAsset;
+  };
+}
+
+export interface WixConfig {
+  configured: boolean;
+  api_base: string;
+  site_id: string;
+  default_writer_member_id: string;
+}
 export interface ArtifactStatus {
   transcript_id: string;
   project_id: string;
@@ -542,3 +574,39 @@ export const content = {
       body: JSON.stringify(data),
     }),
 };
+
+export const publishing = {
+  getWixConfig: () => api<WixConfig>("/api/publishing/wix/config"),
+  uploadWixImage: async (projectId: string, file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return api<WixImageAsset>(`/api/publishing/projects/${projectId}/wix-image`, {
+      method: "POST",
+      body: formData,
+    });
+  },
+  publishWixBlog: (
+    projectId: string,
+    data: {
+      blog_title: string;
+      blog_markdown: string;
+      featured_image_source?: string;
+      featured_image_id?: string;
+      featured_image_url?: string;
+      publish_date?: string;
+      writer_member_id?: string;
+      excerpt: string;
+      title_tag: string;
+      meta_description: string;
+      og_title: string;
+      og_description: string;
+    }
+  ) =>
+    api<WixPublishResult>(`/api/publishing/projects/${projectId}/wix-blog`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+};
+
+
+

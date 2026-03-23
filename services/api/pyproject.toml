@@ -25,6 +25,7 @@ dependencies = [
     "passlib[bcrypt]>=1.7.4",
     "faster-whisper>=1.0.0",
     "numpy>=1.26.0",
+    "httpx>=0.26.0",
 ]
 
 [project.optional-dependencies]

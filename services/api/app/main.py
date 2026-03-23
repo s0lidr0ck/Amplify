@@ -8,10 +8,24 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings
-from app.queue import close_queue, get_queue
+from app.queue import close_queue
+from app.routers import (
+    clips,
+    content,
+    dev,
+    jobs,
+    media,
+    projects,
+    publishing,
+    settings as settings_router,
+    speakers,
+    transcript,
+    trim,
+    uploads,
+    worker_internal,
+)
 
 logger = logging.getLogger(__name__)
-from app.routers import clips, content, dev, jobs, media, projects, settings as settings_router, speakers, transcript, trim, uploads, worker_internal
 
 
 @asynccontextmanager
@@ -38,6 +52,7 @@ app.add_middleware(
     expose_headers=["Content-Disposition"],
 )
 
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
     """Ensure 500 errors include CORS headers so the browser can read the response."""
@@ -50,6 +65,7 @@ async def global_exception_handler(request, exc):
         return response
     return JSONResponse(status_code=500, content={"detail": str(exc)})
 
+
 app.include_router(projects.router)
 app.include_router(speakers.router)
 app.include_router(media.router)
@@ -59,6 +75,7 @@ app.include_router(trim.router)
 app.include_router(transcript.router)
 app.include_router(clips.router)
 app.include_router(content.router)
+app.include_router(publishing.router)
 app.include_router(settings_router.router)
 app.include_router(worker_internal.router)
 app.include_router(dev.router)

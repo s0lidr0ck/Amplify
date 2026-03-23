@@ -1,8 +1,8 @@
 """Application configuration."""
 
 import json
-from pathlib import Path
 import re
+from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
@@ -11,12 +11,21 @@ from pydantic.aliases import AliasChoices
 from pydantic.fields import Field
 from pydantic_settings import BaseSettings
 
-# Load .env from project root (parent of services/api)
+# Load environment files from project root (parent of services/api)
 _ROOT = Path(__file__).resolve().parent.parent.parent
 _ENV_FILE = _ROOT / ".env"
+_ENV_TXT_FILE = _ROOT / ".env.txt"
 
-# Load from project root; fallback to cwd.parent.parent when run from services/api
-for candidate in (_ENV_FILE, Path.cwd() / ".env", Path.cwd().parent.parent / ".env"):
+# Load from project root; fallback to cwd.parent.parent when run from services/api.
+# Support `.env.txt` as well to match the current local workspace setup.
+for candidate in (
+    _ENV_FILE,
+    _ENV_TXT_FILE,
+    Path.cwd() / ".env",
+    Path.cwd() / ".env.txt",
+    Path.cwd().parent.parent / ".env",
+    Path.cwd().parent.parent / ".env.txt",
+):
     if candidate.exists():
         load_dotenv(candidate, override=True)
         break
@@ -51,6 +60,10 @@ class Settings(BaseSettings):
     sync_trim_dev: bool = False  # When True, create placeholder sermon_master immediately (no worker)
     clip_analysis_model: str = "arn:aws:bedrock:us-east-1:644190502535:inference-profile/us.anthropic.claude-sonnet-4-6"
     clip_analysis_host: str = "us-east-1"
+    wix_api_base: str = "https://www.wixapis.com"
+    wix_site_id: str = ""
+    wix_blog_member_id: str = ""
+    wix_bearer_token: str = ""
 
     @field_validator("cors_origins", mode="before")
     @classmethod
@@ -84,12 +97,13 @@ class Settings(BaseSettings):
         url = self.database_url
         for param in ("sslmode", "ssl"):
             if f"{param}=" in url:
-                from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
-                p = urlparse(url)
-                qs = parse_qs(p.query)
-                qs.pop(param, None)
-                new_query = urlencode(qs, doseq=True)
-                url = urlunparse(p._replace(query=new_query))
+                from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
+
+                parsed_url = urlparse(url)
+                query = parse_qs(parsed_url.query)
+                query.pop(param, None)
+                new_query = urlencode(query, doseq=True)
+                url = urlunparse(parsed_url._replace(query=new_query))
         return url
 
     def database_connect_args(self) -> dict:
@@ -100,7 +114,7 @@ class Settings(BaseSettings):
         return {}
 
     class Config:
-        env_file = str(_ENV_FILE) if _ENV_FILE.exists() else ".env"
+        env_file = str(_ENV_FILE if _ENV_FILE.exists() else (_ENV_TXT_FILE if _ENV_TXT_FILE.exists() else ".env"))
         env_file_encoding = "utf-8"
         extra = "ignore"  # Ignore extra env vars (e.g. CORS_ORIGIN, AWS_BEARER_TOKEN_BEDROCK)
 

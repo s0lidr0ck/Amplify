@@ -12,6 +12,7 @@ import {
   type FacebookDraft,
   type MetadataDraft,
   type PackagingDraft,
+  type PublishingDraft,
   type ReelDraft,
 } from "@/lib/projectDrafts";
 import { workflowStages } from "@/lib/workflow";
@@ -66,6 +67,8 @@ export function ProjectWorkflowNav({ projectId }: { projectId: string }) {
     textPostReady: false,
     reelPackageReady: false,
     reelThumbnailReady: false,
+    publishingReady: false,
+    publishingDone: false,
   });
 
   const { data: sourceAsset } = useQuery({
@@ -107,6 +110,7 @@ export function ProjectWorkflowNav({ projectId }: { projectId: string }) {
     const packagingDraft = loadProjectDraft<PackagingDraft>(projectId, "packaging");
     const facebookDraft = loadProjectDraft<FacebookDraft>(projectId, "facebook");
     const reelDraft = loadProjectDraft<ReelDraft>(projectId, "reel");
+    const publishingDraft = loadProjectDraft<PublishingDraft>(projectId, "publishing");
 
     setDraftSignals({
       blogReady: Boolean(loadProjectDraft<BlogDraft>(projectId, "blog")?.markdown?.trim()),
@@ -121,6 +125,13 @@ export function ProjectWorkflowNav({ projectId }: { projectId: string }) {
           reelAsset
       ),
       reelThumbnailReady: Boolean(reelDraft?.thumbnail_prompts?.length || reelThumbnailAsset),
+      publishingReady: Boolean(
+        publishingDraft?.excerpt?.trim() &&
+          publishingDraft?.title_tag?.trim() &&
+          publishingDraft?.meta_description?.trim() &&
+          publishingDraft?.featured_image_url?.trim()
+      ),
+      publishingDone: Boolean(publishingDraft?.wix_result?.post_id?.trim()),
     });
   }, [pathname, projectId, reelAsset, reelThumbnailAsset, sermonThumbnailAsset]);
 
@@ -132,6 +143,7 @@ export function ProjectWorkflowNav({ projectId }: { projectId: string }) {
   const reelDone = draftSignals.reelPackageReady;
   const reelThumbnailDone = draftSignals.reelThumbnailReady;
   const titleDescDone = draftSignals.titleDescReady;
+  const publishingDone = draftSignals.publishingDone;
   const textPostDone = draftSignals.textPostReady;
   const blogDone = draftSignals.blogReady;
   const metadataDone = draftSignals.metadataReady;
@@ -185,7 +197,14 @@ export function ProjectWorkflowNav({ projectId }: { projectId: string }) {
     blog: blogDone ? "done" : currentStageHref === "blog" ? "now" : textPostDone ? "ready" : "locked",
     metadata:
       metadataDone ? "done" : currentStageHref === "metadata" ? "now" : blogDone ? "ready" : "locked",
-    publishing: "soon",
+    publishing:
+      publishingDone
+        ? "done"
+        : currentStageHref === "publishing"
+          ? "now"
+          : metadataDone || draftSignals.publishingReady
+            ? "ready"
+            : "locked",
   } as const;
 
   return (
@@ -251,3 +270,4 @@ export function ProjectWorkflowNav({ projectId }: { projectId: string }) {
     </div>
   );
 }
+

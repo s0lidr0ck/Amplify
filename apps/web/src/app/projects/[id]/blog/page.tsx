@@ -7,7 +7,7 @@ import { API_BASE, projects, transcript } from "@/lib/api";
 import { loadProjectDraft, saveProjectDraft, type BlogDraft } from "@/lib/projectDrafts";
 import { streamNdjson } from "@/lib/streaming";
 import { Alert } from "@/components/ui/Alert";
-import { Button } from "@/components/ui/Button";
+import { Button, LinkButton } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { StepIntro } from "@/components/workflow/StepIntro";
 
@@ -87,6 +87,7 @@ export default function BlogPage() {
   }, [blogBody, blogTitle, hasHydratedDraft, projectId]);
 
   const transcriptText = transcriptData?.raw_text || transcriptData?.cleaned_text || "";
+  const hasDraft = Boolean(joinBlogMarkdown(blogTitle, blogBody).trim());
 
   async function copyText(key: string, value: string) {
     if (!value.trim()) return;
@@ -177,10 +178,17 @@ export default function BlogPage() {
           },
           {
             label: "Draft state",
-            value: joinBlogMarkdown(blogTitle, blogBody).trim() ? "Editable" : "Empty",
-            tone: joinBlogMarkdown(blogTitle, blogBody).trim() ? "info" : "neutral",
+            value: hasDraft ? "Editable" : "Empty",
+            tone: hasDraft ? "info" : "neutral",
           },
         ]}
+        action={
+          hasDraft ? (
+            <LinkButton href={`/projects/${projectId}/publishing`} variant="secondary">
+              Continue to Publishing
+            </LinkButton>
+          ) : null
+        }
       />
 
       {!transcriptText ? (
@@ -202,6 +210,12 @@ export default function BlogPage() {
           <div className="mt-6 space-y-4">
             {error ? <Alert tone="danger">{error}</Alert> : null}
             {streamStatus ? <Alert tone="info">{streamStatus}</Alert> : null}
+            {hasDraft ? (
+              <Alert tone="success" title="Draft ready for publishing">
+                When the article looks right, continue to Publishing to review the Wix featured image,
+                writer, publish date, and SEO fields before it goes live.
+              </Alert>
+            ) : null}
 
             <label className="space-y-2 text-sm">
               <div className="flex items-center justify-between gap-3">

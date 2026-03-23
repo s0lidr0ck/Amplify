@@ -24,6 +24,28 @@ export interface ReelPlatformDraft {
   tags: string[];
 }
 
+export interface PublishingDraft {
+  featured_image_source: string;
+  featured_image_id: string;
+  featured_image_url: string;
+  featured_image_filename: string;
+  publish_date: string;
+  writer_member_id: string;
+  excerpt: string;
+  title_tag: string;
+  meta_description: string;
+  og_title: string;
+  og_description: string;
+  wix_result?: {
+    draft_post_id: string;
+    post_id: string;
+    status: string;
+    title: string;
+    preview_url: string;
+    published_at: string;
+  } | null;
+}
+
 export interface ReelDraft {
   caption: string;
   thumbnail_prompts: Array<Record<string, string>>;

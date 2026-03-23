@@ -71,8 +71,7 @@ export const workflowStages: WorkflowStage[] = [
     href: "publishing",
     label: "Publishing",
     shortLabel: "Publish",
-    description: "Coming soon.",
-    disabled: true,
+    description: "Review the Wix publishing package, confirm SEO fields, and publish the post live.",
   },
   {
     href: "metadata",
