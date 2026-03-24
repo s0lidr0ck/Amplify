@@ -7,10 +7,9 @@ import { API_BASE, projects, transcript } from "@/lib/api";
 import { loadProjectDraft, saveProjectDraft, type MetadataDraft } from "@/lib/projectDrafts";
 import { streamNdjson } from "@/lib/streaming";
 import { Alert } from "@/components/ui/Alert";
-import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
-import { StepIntro } from "@/components/workflow/StepIntro";
+import { GenerateStudioFrame } from "@/components/generate/GenerateStudioFrame";
 
 const DEFAULT_MODEL =
   "arn:aws:bedrock:us-east-1:644190502535:inference-profile/us.anthropic.claude-sonnet-4-6";
@@ -121,123 +120,129 @@ export default function MetadataPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <StepIntro
-        eyebrow="Metadata Studio"
-        title={`Extract structured sermon data for ${project?.title ?? "this message"}.`}
-        description="Generate the metadata JSON used downstream for titles, posts, search, and publishing, then correct it locally if anything needs refinement."
-        meta={[
-          project?.speaker_display_name ?? project?.speaker ?? "Speaker pending",
-          transcriptText ? "Transcript ready" : "Transcript required",
-          warnings.length > 0 ? `${warnings.length} warnings` : "No current warnings",
-        ]}
-      />
-
+    <GenerateStudioFrame
+      eyebrow="Metadata Studio"
+      title={`Extract structured sermon data for ${project?.title ?? "this message"}.`}
+      description="Generate the metadata JSON used downstream for titles, posts, search, and publishing, then correct it locally if anything needs refinement."
+      mode={{
+        label: "Deliverables Mode",
+        title: "Metadata turns Studio work into structured release inputs.",
+        description:
+          "Keep this page close to Blog and Reel so the publishable package can be validated together before the release handoff.",
+      }}
+      statusItems={[
+        {
+          label: "Transcript",
+          value: transcriptText ? "Ready" : "Required",
+          tone: transcriptText ? "success" : "warning",
+        },
+        {
+          label: "Speaker",
+          value: project?.speaker_display_name ?? project?.speaker ?? "Pending",
+          tone: project?.speaker_display_name || project?.speaker ? "brand" : "warning",
+        },
+        {
+          label: "Warnings",
+          value: warnings.length > 0 ? `${warnings.length}` : "Clear",
+          tone: warnings.length > 0 ? "warning" : "success",
+        },
+      ]}
+      actions={transcriptText ? <Button onClick={generateMetadataStream} disabled={isStreaming}>{isStreaming ? "Streaming..." : "Generate Metadata"}</Button> : null}
+      snapshotItems={[
+        { label: "Transcript", value: transcriptText ? "Ready" : "Missing", tone: transcriptText ? "success" : "warning" },
+        {
+          label: "Speaker",
+          value: project?.speaker_display_name || project?.speaker ? "Set" : "Missing",
+          tone: project?.speaker_display_name || project?.speaker ? "brand" : "warning",
+        },
+        {
+          label: "Warnings",
+          value: warnings.length ? `${warnings.length}` : "Clear",
+          tone: warnings.length ? "warning" : "success",
+        },
+      ]}
+      sections={[
+        { label: "Generation", detail: "Run extraction and watch the JSON stream in real time.", href: "#metadata-generation" },
+        { label: "Editor", detail: "Fix the structured data before saving the local draft.", href: "#metadata-editor" },
+        { label: "Blog", detail: "Refine the article that will use these fields downstream.", href: `/projects/${projectId}/blog` },
+        { label: "Publishing", detail: "Move into release prep after metadata is clean.", href: `/projects/${projectId}/publishing` },
+      ]}
+      sectionsTitle="Deliverable Links"
+    >
       {!transcriptText ? (
         <Alert tone="warning" title="Transcript required">
           Generate a transcript first to run metadata extraction.
         </Alert>
       ) : (
-        <div className="grid gap-6 2xl:grid-cols-[minmax(0,1.25fr)_360px]">
-          <div className="space-y-6">
-            <Card>
-              <CardHeader
-                eyebrow="Generation"
-                title="Create structured metadata"
-                description="Run the metadata extractor on the sermon transcript, then inspect the JSON before saving it locally."
-                action={
-                  <Button onClick={generateMetadataStream} disabled={isStreaming}>
-                    {isStreaming ? "Streaming..." : "Generate Metadata"}
-                  </Button>
-                }
-              />
+        <>
+          <Card id="metadata-generation">
+            <CardHeader
+              eyebrow="Generation"
+              title="Create structured metadata"
+              description="Run the metadata extractor on the sermon transcript, then inspect the JSON before saving it locally."
+            />
 
-              <div className="mt-6 grid gap-4 md:grid-cols-2">
-                <label className="space-y-2 text-sm">
-                  <span className="font-medium text-ink">Model</span>
-                  <input
-                    value={model}
-                    onChange={(e) => setModel(e.target.value)}
-                    className="w-full rounded-2xl border border-border bg-surface px-4 py-3 text-sm text-ink outline-none transition focus:border-brand"
-                  />
-                </label>
-                <label className="space-y-2 text-sm">
-                  <span className="font-medium text-ink">Host or region</span>
-                  <input
-                    value={host}
-                    onChange={(e) => setHost(e.target.value)}
-                    className="w-full rounded-2xl border border-border bg-surface px-4 py-3 text-sm text-ink outline-none transition focus:border-brand"
-                  />
-                </label>
-              </div>
+            <div className="mt-6 grid gap-4 md:grid-cols-2">
+              <label className="space-y-2 text-sm">
+                <span className="font-medium text-ink">Model</span>
+                <input
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  className="w-full rounded-2xl border border-border bg-surface px-4 py-3 text-sm text-ink outline-none transition focus:border-brand"
+                />
+              </label>
+              <label className="space-y-2 text-sm">
+                <span className="font-medium text-ink">Host or region</span>
+                <input
+                  value={host}
+                  onChange={(e) => setHost(e.target.value)}
+                  className="w-full rounded-2xl border border-border bg-surface px-4 py-3 text-sm text-ink outline-none transition focus:border-brand"
+                />
+              </label>
+            </div>
 
-              <div className="mt-6 space-y-3">
-                {error ? <Alert tone="danger">{error}</Alert> : null}
-                {streamStatus ? <Alert tone="info">{streamStatus}</Alert> : null}
-                {warnings.length > 0 ? <Alert tone="warning">{warnings.join(" ")}</Alert> : null}
-              </div>
-            </Card>
+            <div className="mt-6 space-y-3">
+              {error ? <Alert tone="danger">{error}</Alert> : null}
+              {streamStatus ? <Alert tone="info">{streamStatus}</Alert> : null}
+              {warnings.length > 0 ? <Alert tone="warning">{warnings.join(" ")}</Alert> : null}
+            </div>
+          </Card>
 
-            <Card>
-              <CardHeader
-                eyebrow="Editor"
-                title="Editable JSON"
-                description="Validate and store the metadata draft locally once it matches the sermon."
-                action={
-                  <Button
-                    variant="secondary"
-                    onClick={() => {
-                      try {
-                        const parsed = JSON.parse(metadataText);
-                        const draft = { raw: metadataText, metadata: parsed, warnings };
-                        saveProjectDraft(projectId, "metadata", draft);
-                        void projects.saveDraft(projectId, "metadata", draft);
-                        setError("");
-                      } catch {
-                        setError("Metadata JSON is not valid. Fix it before saving locally.");
-                      }
-                    }}
-                  >
-                    Save Local Draft
-                  </Button>
-                }
-              />
-              <div className="mt-6">
-                <textarea
-                  value={metadataText}
-                  onChange={(e) => setMetadataText(e.target.value)}
-                  className="min-h-[34rem] w-full rounded-[1.75rem] border border-border bg-surface px-5 py-4 font-mono text-sm text-ink outline-none transition focus:border-brand"
-                  placeholder="Generated metadata JSON will appear here."
+          <Card id="metadata-editor">
+            <CardHeader
+              eyebrow="Editor"
+              title="Editable JSON"
+              description="Validate and store the metadata draft locally once it matches the sermon."
+              action={
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    try {
+                      const parsed = JSON.parse(metadataText);
+                      const draft = { raw: metadataText, metadata: parsed, warnings };
+                      saveProjectDraft(projectId, "metadata", draft);
+                      void projects.saveDraft(projectId, "metadata", draft);
+                      setError("");
+                    } catch {
+                      setError("Metadata JSON is not valid. Fix it before saving locally.");
+                    }
+                  }}
+                >
+                  Save Local Draft
+                </Button>
+              }
+            />
+            <div className="mt-6">
+              <textarea
+                value={metadataText}
+                onChange={(e) => setMetadataText(e.target.value)}
+                className="min-h-[30rem] w-full rounded-[1.75rem] border border-border bg-surface px-5 py-4 font-mono text-sm text-ink outline-none transition focus:border-brand"
+                placeholder="Generated metadata JSON will appear here."
                 />
               </div>
             </Card>
-          </div>
-
-          <div className="space-y-6">
-            <Card>
-              <CardHeader
-                eyebrow="Context"
-                title="Extraction inputs"
-                description="The metadata run uses the sermon transcript plus the project details already stored on the project."
-              />
-              <div className="mt-6 space-y-3">
-                <div className="flex items-center justify-between rounded-2xl bg-surface-tint p-4 text-sm">
-                  <span className="text-muted">Transcript</span>
-                  <Badge tone={transcriptText ? "success" : "warning"}>{transcriptText ? "Ready" : "Missing"}</Badge>
-                </div>
-                <div className="flex items-center justify-between rounded-2xl bg-surface-tint p-4 text-sm">
-                  <span className="text-muted">Speaker</span>
-                  <Badge tone={project?.speaker_display_name || project?.speaker ? "brand" : "warning"}>{project?.speaker_display_name || project?.speaker ? "Set" : "Missing"}</Badge>
-                </div>
-                <div className="flex items-center justify-between rounded-2xl bg-surface-tint p-4 text-sm">
-                  <span className="text-muted">Warnings</span>
-                  <Badge tone={warnings.length ? "warning" : "success"}>{warnings.length ? "Review needed" : "Clear"}</Badge>
-                </div>
-              </div>
-            </Card>
-          </div>
-        </div>
+        </>
       )}
-    </div>
+    </GenerateStudioFrame>
   );
 }

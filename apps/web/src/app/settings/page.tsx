@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { PublishingConnectionsSummary } from "@/components/settings/PublishingConnectionsSummary";
 import { AppShell } from "@/components/layout/AppShell";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Alert } from "@/components/ui/Alert";
-import { Button } from "@/components/ui/Button";
+import { Button, LinkButton } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { settingsApi, speakers, type PromptSetting } from "@/lib/api";
 
@@ -105,6 +106,28 @@ export default function SettingsPage() {
             title="Manage speakers and prompt templates."
             description="Update the speaker directory and review the prompts that power each workflow stage."
           />
+
+          <Card>
+            <CardHeader
+              eyebrow="Publishing"
+              title="App-level publishing settings"
+              description="Keep shared publish credentials, destination rules, and defaults separate from project release work."
+            />
+            <div className="mt-6 flex flex-wrap gap-3">
+              <LinkButton href="/settings/publishing">Open publishing settings</LinkButton>
+              <LinkButton href="/settings/publishing/accounts" variant="secondary">
+                Accounts
+              </LinkButton>
+              <LinkButton href="/settings/publishing/destinations" variant="secondary">
+                Destinations
+              </LinkButton>
+              <LinkButton href="/settings/publishing/defaults" variant="secondary">
+                Defaults
+              </LinkButton>
+            </div>
+          </Card>
+
+          <PublishingConnectionsSummary mode="compact" />
 
           <Card>
             <CardHeader

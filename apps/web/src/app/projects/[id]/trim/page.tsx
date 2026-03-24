@@ -8,8 +8,8 @@ import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
-import { JobStatusPanel } from "@/components/workflow/JobStatusPanel";
 import { StepIntro } from "@/components/workflow/StepIntro";
+import { IngestActivityDock } from "@/components/ingest/IngestActivityDock";
 
 const DEFAULT_MODEL =
   "arn:aws:bedrock:us-east-1:644190502535:inference-profile/us.anthropic.claude-sonnet-4-6";
@@ -49,6 +49,11 @@ export default function TrimPage() {
     queryFn: () => projects.getSermonAsset(projectId),
   });
 
+  const { data: transcriptData } = useQuery({
+    queryKey: ["transcript", projectId],
+    queryFn: () => transcript.getForProject(projectId),
+  });
+
   const [startSeconds, setStartSeconds] = useState(0);
   const [endSeconds, setEndSeconds] = useState(60);
   const [currentTime, setCurrentTime] = useState(0);
@@ -62,6 +67,7 @@ export default function TrimPage() {
   const [runAllError, setRunAllError] = useState("");
 
   const duration = videoDuration ?? sourceAsset?.duration_seconds ?? 60;
+  const sourceReady = sourceAsset?.status === "ready";
 
   useEffect(() => {
     if (sourceAsset?.duration_seconds != null && videoDuration == null) {
@@ -313,6 +319,50 @@ export default function TrimPage() {
           sourceAsset?.filename ?? "Source upload pending",
           useFullFile ? "Using full file" : `${formatTime(selectedDuration)} selected`,
         ]}
+        statusItems={[
+          {
+            label: "Source",
+            value: sourceReady ? "Ready" : sourceAsset ? "Processing" : "Missing",
+            tone: sourceReady ? "success" : sourceAsset ? "info" : "warning",
+          },
+          {
+            label: "Range",
+            value: useFullFile ? "Full file" : `${formatTime(safeStart)} - ${formatTime(safeEnd)}`,
+            tone: "brand",
+          },
+          {
+            label: "Selection",
+            value: sourceReady ? (useFullFile ? "Locked" : "Editable") : "Blocked",
+            tone: sourceReady ? (useFullFile ? "neutral" : "info") : "warning",
+          },
+        ]}
+        action={
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              onClick={() =>
+                trimMutation.mutate({
+                  project_id: projectId,
+                  source_asset_id: sourceAsset!.id,
+                  start_seconds: useFullFile ? 0 : safeStart,
+                  end_seconds: useFullFile ? duration : safeEnd,
+                  use_full_file: useFullFile,
+                })
+              }
+              disabled={trimMutation.isPending || runAllState === "running" || !sourceReady}
+              size="lg"
+            >
+              {trimMutation.isPending ? "Starting..." : "Generate Sermon Master"}
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => void runAllProcesses()}
+              disabled={trimMutation.isPending || runAllState === "running" || !sourceReady}
+              size="lg"
+            >
+              {runAllState === "running" ? "Running everything..." : "Run all processes"}
+            </Button>
+          </div>
+        }
       />
 
       {!sourceAsset ? (
@@ -398,7 +448,7 @@ export default function TrimPage() {
             </Card>
           </div>
 
-          <div className="space-y-6">
+        <div className="space-y-6">
             <Card>
               <CardHeader
                 eyebrow="Selection"
@@ -471,33 +521,6 @@ export default function TrimPage() {
                 </div>
 
                 <div className="space-y-3">
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <Button
-                      onClick={() =>
-                        trimMutation.mutate({
-                          project_id: projectId,
-                          source_asset_id: sourceAsset.id,
-                          start_seconds: useFullFile ? 0 : safeStart,
-                          end_seconds: useFullFile ? duration : safeEnd,
-                          use_full_file: useFullFile,
-                        })
-                      }
-                      disabled={trimMutation.isPending || runAllState === "running"}
-                      className="w-full"
-                      size="lg"
-                    >
-                      {trimMutation.isPending ? "Starting..." : "Generate Sermon Master"}
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      onClick={() => void runAllProcesses()}
-                      disabled={trimMutation.isPending || runAllState === "running"}
-                      className="w-full"
-                      size="lg"
-                    >
-                      {runAllState === "running" ? "Running Everything..." : "Run All Processes"}
-                    </Button>
-                  </div>
                   <p className="text-xs leading-6 text-muted">
                     Run All will use the current sermon master if one already exists. Otherwise it will generate the master first, then run transcript, metadata, blog, sermon thumbnail prompts, title/description, clip analysis, and the text post in sequence.
                   </p>
@@ -509,51 +532,90 @@ export default function TrimPage() {
               </div>
             </Card>
 
-            {job ? (
-              <JobStatusPanel
-                title="Trim and sermon-master generation"
-                job={job}
-                runningHint="This step prepares the master asset used by transcript generation and clip analysis. It can take a little while on larger source files."
-              />
-            ) : null}
-
-            {runAllMessages.length > 0 ? (
-              <Card>
-                <CardHeader
-                  eyebrow="Automation"
-                  title="Run all processes"
-                  description="This log follows the downstream workflow from sermon master through content generation and clip analysis."
-                  action={
-                    <Badge
-                      tone={
-                        runAllState === "completed"
-                          ? "success"
-                          : runAllState === "failed"
-                            ? "danger"
-                            : runAllState === "running"
-                              ? "info"
-                              : "neutral"
-                      }
-                    >
-                      {runAllState === "completed"
-                        ? "Completed"
-                        : runAllState === "failed"
-                          ? "Failed"
-                          : runAllState === "running"
-                            ? "Running"
-                            : "Idle"}
-                    </Badge>
-                  }
-                />
-                <div className="mt-6 max-h-[24rem] space-y-3 overflow-y-auto rounded-[1.5rem] border border-border/80 bg-surface p-5">
-                  {runAllMessages.map((message, index) => (
-                    <p key={`${index}-${message}`} className="text-sm leading-7 text-ink">
-                      {message}
-                    </p>
-                  ))}
-                </div>
-              </Card>
-            ) : null}
+            <IngestActivityDock
+              title="Trim activity"
+              description="Keep the servo controls, master generation, and downstream automation in one shared ingest dock."
+              workflowItems={[
+                {
+                  label: "Source Intake",
+                  href: `/projects/${projectId}/source`,
+                  status: sourceReady ? "Ready" : "Needed",
+                  tone: sourceReady ? "success" : "warning",
+                },
+                {
+                  label: "Sermon Master",
+                  href: `/projects/${projectId}/trim`,
+                  active: true,
+                  status: sermonAsset ? "Ready" : sourceReady ? "Current" : "Blocked",
+                  tone: sermonAsset ? "success" : sourceReady ? "brand" : "warning",
+                },
+                {
+                  label: "Transcript Review",
+                  href: `/projects/${projectId}/transcript`,
+                  status: transcriptData?.approved_at ? "Approved" : sermonAsset ? "Next" : "Blocked",
+                  tone: transcriptData?.approved_at ? "success" : sermonAsset ? "brand" : "warning",
+                },
+              ]}
+              statusItems={[
+                {
+                  label: "Source",
+                  value: sourceReady ? "Ready" : sourceAsset ? "Processing" : "Missing",
+                  tone: sourceReady ? "success" : sourceAsset ? "info" : "warning",
+                  helper: "The uploaded sermon source that drives the preview.",
+                },
+                {
+                  label: "Range",
+                  value: useFullFile ? "Full file" : `${formatTime(safeStart)} - ${formatTime(safeEnd)}`,
+                  tone: "brand",
+                  helper: "The selected sermon master boundaries.",
+                },
+                {
+                  label: "Selection",
+                  value: sourceReady ? (useFullFile ? "Locked" : "Editable") : "Blocked",
+                  tone: sourceReady ? (useFullFile ? "neutral" : "info") : "warning",
+                  helper: "Whether the trim frame can still be adjusted.",
+                },
+                {
+                  label: "Run all",
+                  value:
+                    runAllState === "completed"
+                      ? "Completed"
+                      : runAllState === "failed"
+                        ? "Failed"
+                        : runAllState === "running"
+                          ? "Running"
+                          : "Idle",
+                  tone:
+                    runAllState === "completed"
+                      ? "success"
+                      : runAllState === "failed"
+                        ? "danger"
+                        : runAllState === "running"
+                          ? "info"
+                          : "neutral",
+                  helper: "Downstream automation from sermon master through clip analysis.",
+                },
+              ]}
+              jobs={job ? [{ title: "Trim and sermon-master generation", job, runningHint: "This step prepares the master asset used by transcript generation and clip analysis. It can take a little while on larger source files." }] : []}
+              children={
+                runAllMessages.length > 0 ? (
+                  <Card>
+                    <CardHeader
+                      eyebrow="Automation"
+                      title="Run all processes"
+                      description="This log follows the downstream workflow from sermon master through content generation and clip analysis."
+                    />
+                    <div className="mt-6 max-h-[24rem] space-y-3 overflow-y-auto rounded-[1.5rem] border border-border/80 bg-surface p-5">
+                      {runAllMessages.map((message, index) => (
+                        <p key={`${index}-${message}`} className="text-sm leading-7 text-ink">
+                          {message}
+                        </p>
+                      ))}
+                    </div>
+                  </Card>
+                ) : null
+              }
+            />
           </div>
         </div>
       )}

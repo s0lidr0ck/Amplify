@@ -9,6 +9,9 @@
     --surface: 0 0% 100%;
     --surface-strong: 38 27% 94%;
     --surface-tint: 42 60% 97%;
+    --surface-operator: 36 32% 98%;
+    --surface-band: 28 55% 98%;
+    --surface-band-strong: 194 45% 97%;
     --border: 28 18% 82%;
     --border-strong: 28 16% 72%;
     --text: 220 24% 16%;
@@ -43,6 +46,7 @@
     background-image:
       radial-gradient(circle at top left, hsl(var(--brand-soft)) 0, transparent 34%),
       linear-gradient(180deg, hsl(var(--background-alt)), hsl(var(--background)));
+    background-attachment: fixed;
   }
 
   a {
@@ -59,8 +63,20 @@
     @apply rounded-[1.5rem] border border-border/80 bg-surface shadow-card sm:rounded-3xl;
   }
 
+  .operator-card {
+    @apply rounded-[1.25rem] border border-border/80 bg-surface shadow-card;
+  }
+
   .surface-panel {
     @apply rounded-[1.25rem] border border-border/80 bg-surface backdrop-blur sm:rounded-2xl;
+  }
+
+  .workspace-band {
+    @apply rounded-[1.25rem] border border-border/70 bg-[hsl(var(--surface-band))] sm:rounded-2xl;
+  }
+
+  .workspace-band-strong {
+    @apply rounded-[1.25rem] border border-border/70 bg-[hsl(var(--surface-band-strong))] sm:rounded-2xl;
   }
 
   .section-label {
@@ -75,6 +91,10 @@
 
   .page-stack {
     @apply space-y-6 sm:space-y-8 lg:space-y-10;
+  }
+
+  .shell-frame {
+    @apply mx-auto w-full max-w-[1800px] px-4 sm:px-6 lg:px-8;
   }
 
   .text-balance {

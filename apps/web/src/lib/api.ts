@@ -205,6 +205,131 @@ export interface WixConfig {
   site_id: string;
   default_writer_member_id: string;
 }
+
+export interface PublishingChannel {
+  id: "wix" | "youtube" | "facebook" | "instagram" | "tiktok";
+  label: string;
+  kind: string;
+  configured: boolean;
+  connection_status: string;
+  summary: string;
+  requirements: string[];
+}
+
+export interface YouTubeConfig {
+  client_configured: boolean;
+  publish_configured: boolean;
+  channel_id: string;
+}
+
+export interface TikTokConfig {
+  client_configured: boolean;
+  publish_configured: boolean;
+  open_id: string;
+}
+
+export interface YouTubeOAuthStart {
+  auth_url: string;
+  redirect_uri: string;
+}
+
+export interface TikTokOAuthStart {
+  auth_url: string;
+  redirect_uri: string;
+  state: string;
+}
+
+export interface YouTubePublishResult {
+  video_id: string;
+  title: string;
+  status: string;
+  channel_id: string;
+  channel_title: string;
+  watch_url: string;
+  studio_url: string;
+  published_at: string;
+}
+
+export interface FacebookPostResult {
+  post_id: string;
+  status: string;
+  message: string;
+  post_url: string;
+}
+
+export interface FacebookReelResult {
+  video_id: string;
+  status: string;
+  title: string;
+  description: string;
+  post_url: string;
+}
+
+export interface InstagramReelResult {
+  media_id: string;
+  status: string;
+  caption: string;
+  permalink: string;
+}
+
+export interface InstagramImagePostResult {
+  media_id: string;
+  status: string;
+  caption: string;
+  permalink: string;
+}
+
+export interface TikTokPublishResult {
+  publish_id: string;
+  status: string;
+  privacy_level: string;
+  title: string;
+  creator_username?: string | null;
+  max_video_post_duration_sec?: number | null;
+  status_raw?: Record<string, unknown> | null;
+}
+export interface PublishRecommendationSlot {
+  day_of_week: number;
+  hour: number;
+  score: number;
+}
+
+export interface PublishRecommendation {
+  platform: "youtube" | "facebook" | "instagram" | "tiktok" | "wix";
+  recommended_at: string;
+  confidence: "low" | "medium" | "high";
+  confidence_score: number;
+  score: number;
+  reason: string;
+  based_on: {
+    audience_activity: boolean;
+    performance_history: boolean;
+    early_velocity: boolean;
+  };
+  components: {
+    audience_activity: number;
+    historical_performance: number;
+    early_velocity: number;
+  };
+  best_hour: number;
+  best_day_hour: PublishRecommendationSlot[];
+}
+
+export interface PublishRecommendationsResponse {
+  project_id: string;
+  generated_at: string;
+  recommendations: PublishRecommendation[];
+}
+
+export interface PublishMetricsSyncResponse {
+  project_id: string;
+  window_days: number;
+  synced_platforms: string[];
+  fetched_count: number;
+  counts_by_platform: Record<string, number>;
+  warnings_by_platform: Record<string, string[]>;
+  warnings: string[];
+}
 export interface ArtifactStatus {
   transcript_id: string;
   project_id: string;
@@ -577,6 +702,38 @@ export const content = {
 
 export const publishing = {
   getWixConfig: () => api<WixConfig>("/api/publishing/wix/config"),
+  getChannels: () => api<PublishingChannel[]>("/api/publishing/channels"),
+  getYoutubeConfig: () => api<YouTubeConfig>("/api/publishing/youtube/config"),
+  getTikTokConfig: () => api<TikTokConfig>("/api/publishing/tiktok/config"),
+  startYoutubeOAuth: (redirectUri?: string) =>
+    api<YouTubeOAuthStart>(`/api/publishing/youtube/oauth/start${redirectUri ? `?redirect_uri=${encodeURIComponent(redirectUri)}` : ""}`),
+  startTikTokOAuth: (redirectUri?: string) =>
+    api<TikTokOAuthStart>(`/api/publishing/tiktok/oauth/start${redirectUri ? `?redirect_uri=${encodeURIComponent(redirectUri)}` : ""}`),
+  exchangeYoutubeOAuthCode: (data: { code: string; redirect_uri: string }) =>
+    api<{
+      access_token: string;
+      refresh_token: string;
+      expires_in?: number;
+      scope?: string;
+      token_type?: string;
+      channel?: { id: string; title: string };
+    }>("/api/publishing/youtube/oauth/exchange", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  exchangeTikTokOAuthCode: (data: { code: string; redirect_uri: string }) =>
+    api<{
+      access_token: string;
+      expires_in?: number;
+      open_id?: string;
+      refresh_token?: string;
+      refresh_expires_in?: number;
+      scope?: string;
+      token_type?: string;
+    }>("/api/publishing/tiktok/oauth/exchange", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
   uploadWixImage: async (projectId: string, file: File) => {
     const formData = new FormData();
     formData.append("file", file);
@@ -606,7 +763,75 @@ export const publishing = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+  publishYoutubeVideo: (
+    projectId: string,
+    data: { title: string; description: string; tags?: string[]; privacy_status?: string; publish_at?: string }
+  ) =>
+    api<YouTubePublishResult>(`/api/publishing/projects/${projectId}/youtube-video`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  publishYoutubeShort: (
+    projectId: string,
+    data: { title: string; description: string; tags?: string[]; privacy_status?: string; publish_at?: string }
+  ) =>
+    api<YouTubePublishResult>(`/api/publishing/projects/${projectId}/youtube-short`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  publishFacebookPost: (projectId: string, data: { message: string }) =>
+    api<FacebookPostResult>(`/api/publishing/projects/${projectId}/facebook-post`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  publishFacebookReel: (projectId: string, data: { title?: string; description: string }) =>
+    api<FacebookReelResult>(`/api/publishing/projects/${projectId}/facebook-reel`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  publishInstagramReel: (projectId: string, data: { caption: string }) =>
+    api<InstagramReelResult>(`/api/publishing/projects/${projectId}/instagram-reel`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  publishInstagramPost: (projectId: string, data: { caption: string }) =>
+    api<InstagramImagePostResult>(`/api/publishing/projects/${projectId}/instagram-post`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  publishTikTokShort: (projectId: string, data: { title?: string; description: string }) =>
+    api<TikTokPublishResult>(`/api/publishing/projects/${projectId}/tiktok-short`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  getRecommendations: (projectId: string) =>
+    api<PublishRecommendationsResponse>(`/api/publishing/projects/${projectId}/recommendations`),
+  saveAudienceActivity: (
+    projectId: string,
+    data: {
+      platform: "youtube" | "facebook" | "instagram" | "tiktok" | "wix";
+      source?: string;
+      slots: Array<{ day_of_week: number; hour: number; activity: number }>;
+    }
+  ) =>
+    api<{ ok: boolean; platform: string; slots: number }>(`/api/publishing/projects/${projectId}/audience-activity`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  syncLast30DaysMetrics: (projectId: string) =>
+    api<PublishMetricsSyncResponse>(`/api/publishing/projects/${projectId}/metrics/sync-last-30-days`, {
+      method: "POST",
+    }),
+  publishTikTokPhoto: (projectId: string, data: { title?: string; description: string }) =>
+    api<TikTokPublishResult>(`/api/publishing/projects/${projectId}/tiktok-photo`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 };
+
+
+
+
 
 
 

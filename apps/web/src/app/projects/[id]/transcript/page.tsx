@@ -5,11 +5,10 @@ import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { jobs, projects, transcript } from "@/lib/api";
 import { Alert } from "@/components/ui/Alert";
-import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
-import { JobStatusPanel } from "@/components/workflow/JobStatusPanel";
 import { StepIntro } from "@/components/workflow/StepIntro";
+import { IngestActivityDock } from "@/components/ingest/IngestActivityDock";
 
 function formatTimestamp(seconds: number) {
   return `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
@@ -42,6 +41,11 @@ export default function TranscriptPage() {
   const { data: sermonAsset } = useQuery({
     queryKey: ["sermon-asset", projectId],
     queryFn: () => projects.getSermonAsset(projectId),
+  });
+
+  const { data: sourceAsset } = useQuery({
+    queryKey: ["source-asset", projectId],
+    queryFn: () => projects.getSourceAsset(projectId),
   });
 
   const { data: projectJobs = [] } = useQuery({
@@ -274,11 +278,6 @@ export default function TranscriptPage() {
     startJob();
   };
 
-  const startArtifactJob = () => {
-    if (!transcriptData) return;
-    generateArtifacts.mutate(transcriptData.id);
-  };
-
   return (
     <div className="space-y-6">
       <StepIntro
@@ -290,6 +289,55 @@ export default function TranscriptPage() {
           transcriptData?.approved_at ? "Auto-approved transcript" : "Transcript pending",
           sermonAsset ? "Sermon master ready" : "Trim required first",
         ]}
+        statusItems={[
+          {
+            label: "Transcript",
+            value: transcriptData ? "Ready" : "Missing",
+            tone: transcriptData ? "success" : "warning",
+          },
+          {
+            label: "Review",
+            value:
+              visibleJob &&
+              visibleJob.status !== "completed" &&
+              visibleJob.status !== "failed" &&
+              visibleJob.status !== "cancelled"
+                ? "Running"
+                : transcriptData?.approved_at
+                  ? "Approved"
+                  : "Queued",
+            tone:
+              visibleJob &&
+              visibleJob.status !== "completed" &&
+              visibleJob.status !== "failed" &&
+              visibleJob.status !== "cancelled"
+                ? "info"
+                : transcriptData?.approved_at
+                  ? "success"
+                  : "warning",
+          },
+          {
+            label: "Segments",
+            value: String(transcriptData?.segments?.length ?? 0),
+            tone: "brand",
+          },
+        ]}
+        action={
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="secondary" onClick={startJob} disabled={transcriptionBusy}>
+              {transcriptionBusy ? "Transcribing..." : "Re-transcribe"}
+            </Button>
+            {visibleJob && (visibleJob.status === "queued" || visibleJob.status === "running") ? (
+              <Button
+                variant="secondary"
+                onClick={cancelAndRestartJob}
+                disabled={cancelTranscription.isPending || startTranscribe.isPending}
+              >
+                {cancelTranscription.isPending ? "Cancelling..." : "Cancel and restart"}
+              </Button>
+            ) : null}
+          </div>
+        }
       />
 
       {!sermonAsset ? (
@@ -336,23 +384,6 @@ export default function TranscriptPage() {
                 <CardHeader
                   eyebrow="Review"
                   title="Transcript workspace"
-                  action={
-                    <div className="flex flex-wrap gap-2">
-                      <Button variant="secondary" onClick={startJob} disabled={transcriptionBusy}>
-                        {transcriptionBusy ? "Transcribing..." : "Re-Transcribe"}
-                      </Button>
-                      {visibleJob && (visibleJob.status === "queued" || visibleJob.status === "running") ? (
-                        <Button
-                          variant="secondary"
-                          onClick={cancelAndRestartJob}
-                          disabled={cancelTranscription.isPending || startTranscribe.isPending}
-                        >
-                          {cancelTranscription.isPending ? "Cancelling..." : "Cancel and Restart"}
-                        </Button>
-                      ) : null}
-                      <Badge tone="success">{transcriptData.approved_at ? "Auto-approved" : "Ready"}</Badge>
-                    </div>
-                  }
                 />
 
                 <div className="mt-6 space-y-4">
@@ -400,57 +431,76 @@ export default function TranscriptPage() {
           </div>
 
           <div className="space-y-6">
-            <Card>
-              <CardHeader
-                eyebrow="Status"
-                title="Transcript readiness"
-                description="Use this panel to track approval state and confirm when the text is ready for the next stages."
-              />
-                <div className="mt-6 space-y-3">
-                  <div className="flex items-center justify-between rounded-2xl bg-surface-tint p-4 text-sm">
-                    <span className="text-muted">Transcript state</span>
-                    <Badge tone={transcriptData ? "brand" : "warning"}>
-                      {transcriptData ? "Generated" : "Missing"}
-                  </Badge>
-                </div>
-                <div className="flex items-center justify-between rounded-2xl bg-surface-tint p-4 text-sm">
-                  <span className="text-muted">Review state</span>
-                  <Badge tone={transcriptionRequested ? "info" : transcriptData?.approved_at ? "success" : "warning"}>
-                    {transcriptionRequested ? "Re-running" : transcriptData?.approved_at ? "Auto-approved" : "Generating"}
-                  </Badge>
-                </div>
-                <div className="flex items-center justify-between rounded-2xl bg-surface-tint p-4 text-sm">
-                  <span className="text-muted">Segments</span>
-                  <span className="font-semibold text-ink">{transcriptData?.segments?.length ?? 0}</span>
-                </div>
-                <div className="flex items-center justify-between rounded-2xl bg-surface-tint p-4 text-sm">
-                  <span className="text-muted">Clip artifacts</span>
-                  <Badge tone={artifactBusy ? "info" : visibleArtifactJob?.status === "completed" ? "success" : "warning"}>
-                    {artifactBusy ? "Building" : visibleArtifactJob?.status === "completed" ? "Ready" : "Needs run"}
-                  </Badge>
-                </div>
-              </div>
-            </Card>
-
-            {visibleJob ? (
-              <JobStatusPanel
-                title="Transcription job"
-                job={visibleJob}
-                messages={logMessages}
-                endRef={logEndRef}
-                runningHint="Full-sermon transcription can sit on a single step for a while. If the log keeps changing, the process is still making progress."
-              />
-            ) : null}
-
-            {visibleArtifactJob ? (
-              <JobStatusPanel
-                title="Artifact generation job"
-                job={visibleArtifactJob}
-                messages={artifactLogMessages}
-                endRef={artifactLogEndRef}
-                runningHint="This pass rebuilds the FastCap prep bundle from the saved transcript and sermon media."
-              />
-            ) : null}
+            <IngestActivityDock
+              title="Transcript activity"
+              description="Track approval state and background progress in one consistent dock."
+              workflowItems={[
+                {
+                  label: "Source Intake",
+                  href: `/projects/${projectId}/source`,
+                  status: sourceAsset ? "Ready" : "Needed",
+                  tone: sourceAsset ? "success" : "warning",
+                },
+                {
+                  label: "Sermon Master",
+                  href: `/projects/${projectId}/trim`,
+                  status: sermonAsset ? "Ready" : sourceAsset ? "Next" : "Blocked",
+                  tone: sermonAsset ? "success" : sourceAsset ? "brand" : "warning",
+                },
+                {
+                  label: "Transcript Review",
+                  href: `/projects/${projectId}/transcript`,
+                  active: true,
+                  status: transcriptData?.approved_at ? "Approved" : transcriptData ? "Current" : "Needed",
+                  tone: transcriptData?.approved_at ? "success" : transcriptData ? "brand" : "warning",
+                },
+              ]}
+              statusItems={[
+                {
+                  label: "Transcript state",
+                  value: transcriptData ? "Generated" : "Missing",
+                  tone: transcriptData ? "brand" : "warning",
+                  helper: "The written layer that powers the rest of Generate.",
+                },
+                {
+                  label: "Review state",
+                  value: transcriptionRequested ? "Re-running" : transcriptData?.approved_at ? "Auto-approved" : "Generating",
+                  tone: transcriptionRequested ? "info" : transcriptData?.approved_at ? "success" : "warning",
+                  helper: "Sermon transcripts are auto-approved after generation.",
+                },
+                {
+                  label: "Segments",
+                  value: String(transcriptData?.segments?.length ?? 0),
+                  tone: "brand",
+                  helper: "Each segment becomes searchable review text.",
+                },
+                {
+                  label: "Clip artifacts",
+                  value: artifactBusy ? "Building" : visibleArtifactJob?.status === "completed" ? "Ready" : "Needs run",
+                  tone: artifactBusy ? "info" : visibleArtifactJob?.status === "completed" ? "success" : "warning",
+                  helper: "The prep bundle Clip Lab depends on.",
+                },
+              ]}
+              jobs={[
+                {
+                  title: "Transcription job",
+                  job: visibleJob,
+                  messages: logMessages,
+                  endRef: logEndRef,
+                  runningHint:
+                    "Full-sermon transcription can sit on a single step for a while. If the log keeps changing, the process is still making progress.",
+                  emptyMessage: "No transcription job is active right now.",
+                },
+                {
+                  title: "Artifact generation job",
+                  job: visibleArtifactJob,
+                  messages: artifactLogMessages,
+                  endRef: artifactLogEndRef,
+                  runningHint: "This pass rebuilds the FastCap prep bundle from the saved transcript and sermon media.",
+                  emptyMessage: "No artifact job is active right now.",
+                },
+              ]}
+            />
           </div>
         </div>
       )}

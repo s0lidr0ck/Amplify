@@ -9,6 +9,7 @@ import { streamNdjson } from "@/lib/streaming";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
+import { GenerateWorkspace } from "@/components/generate/GenerateWorkspace";
 import { StepIntro } from "@/components/workflow/StepIntro";
 
 const DEFAULT_MODEL =
@@ -180,61 +181,89 @@ export default function TitleDescPage() {
           Generate a transcript first to build the YouTube title and description.
         </Alert>
       ) : (
-        <Card>
-          <CardHeader
-            eyebrow="Output"
-            title="YouTube Title & Description"
-            action={
-              <Button onClick={generateTitleAndDescription} disabled={isStreaming}>
-                {isStreaming ? "Streaming..." : "Generate Title & Description"}
-              </Button>
-            }
-          />
-
-          <div className="mt-6 space-y-3">
-            {error ? <Alert tone="danger">{error}</Alert> : null}
-            {status ? <Alert tone="info">{status}</Alert> : null}
-          </div>
-
-          <div className="mt-6 space-y-4">
-            <label className="space-y-2 text-sm">
-              <div className="flex items-center justify-between gap-3">
-                <span className="font-medium text-ink">YouTube title</span>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => void copyText("youtube-title", title)}
-                  disabled={!title.trim()}
-                >
-                  {copiedKey === "youtube-title" ? "Copied" : "Copy"}
+        <GenerateWorkspace
+          snapshotItems={[
+            {
+              label: "Transcript",
+              value: transcriptText ? "Ready" : "Missing",
+              tone: transcriptText ? "success" : "warning",
+            },
+            { label: "Title", value: title.trim() ? "Ready" : "Empty", tone: title.trim() ? "brand" : "neutral" },
+            {
+              label: "Description",
+              value: description.trim() ? "Ready" : "Empty",
+              tone: description.trim() ? "info" : "neutral",
+            },
+          ]}
+          sections={[
+            { label: "Output", detail: "Generate the packaging copy and keep the result editable.", href: "#title-desc-output" },
+            { label: "Editor", detail: "Copy or refine the final YouTube fields in place.", href: "#title-desc-editor" },
+          ]}
+        >
+          <Card id="title-desc-output">
+            <CardHeader
+              eyebrow="Output"
+              title="YouTube Title & Description"
+              action={
+                <Button onClick={generateTitleAndDescription} disabled={isStreaming}>
+                  {isStreaming ? "Streaming..." : "Generate Title & Description"}
                 </Button>
-              </div>
-              <input
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-                className="w-full rounded-2xl border border-border bg-surface px-4 py-3 text-sm text-ink outline-none transition focus:border-brand"
-              />
-            </label>
-            <label className="space-y-2 text-sm">
-              <div className="flex items-center justify-between gap-3">
-                <span className="font-medium text-ink">YouTube description</span>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => void copyText("youtube-description", description)}
-                  disabled={!description.trim()}
-                >
-                  {copiedKey === "youtube-description" ? "Copied" : "Copy"}
-                </Button>
-              </div>
-              <textarea
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                className="min-h-[16rem] w-full rounded-[1.5rem] border border-border bg-surface px-4 py-3 text-sm text-ink outline-none transition focus:border-brand"
-              />
-            </label>
-          </div>
-        </Card>
+              }
+            />
+
+            <div className="mt-6 space-y-3">
+              {error ? <Alert tone="danger">{error}</Alert> : null}
+              {status ? <Alert tone="info">{status}</Alert> : null}
+            </div>
+          </Card>
+
+          <Card id="title-desc-editor">
+            <CardHeader
+              eyebrow="Editor"
+              title="Review and refine"
+              description="Keep the title and description visible together so the final packaging reads as one unit."
+            />
+
+            <div className="mt-6 space-y-4">
+              <label className="space-y-2 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-medium text-ink">YouTube title</span>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => void copyText("youtube-title", title)}
+                    disabled={!title.trim()}
+                  >
+                    {copiedKey === "youtube-title" ? "Copied" : "Copy"}
+                  </Button>
+                </div>
+                <input
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
+                  className="w-full rounded-2xl border border-border bg-surface px-4 py-3 text-sm text-ink outline-none transition focus:border-brand"
+                />
+              </label>
+              <label className="space-y-2 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-medium text-ink">YouTube description</span>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => void copyText("youtube-description", description)}
+                    disabled={!description.trim()}
+                  >
+                    {copiedKey === "youtube-description" ? "Copied" : "Copy"}
+                  </Button>
+                </div>
+                <textarea
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                  className="min-h-[16rem] w-full rounded-[1.5rem] border border-border bg-surface px-4 py-3 text-sm text-ink outline-none transition focus:border-brand"
+                />
+              </label>
+            </div>
+          </Card>
+        </GenerateWorkspace>
       )}
     </div>
   );

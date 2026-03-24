@@ -15,13 +15,16 @@ import {
   type PublishingDraft,
   type ReelDraft,
 } from "@/lib/projectDrafts";
-import { workflowStages } from "@/lib/workflow";
+import { workflowCategories, workflowStages } from "@/lib/workflow";
 
 function classNames(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
 }
 
-const stateStyles = {
+type StepState = "done" | "now" | "ready" | "locked";
+type CategoryState = "done" | "now" | "active" | "planned";
+
+const stepStateStyles = {
   done: {
     item: "border-success/30 bg-success-soft/70",
     dot: "bg-success",
@@ -46,18 +49,19 @@ const stateStyles = {
     badge: "neutral" as const,
     label: "Locked",
   },
-  soon: {
-    item: "border-border/70 bg-surface/80 opacity-80",
-    dot: "bg-border-strong",
-    badge: "neutral" as const,
-    label: "Soon",
-  },
+};
+
+const categoryStateStyles = {
+  done: "border-success/25 bg-success-soft/60",
+  now: "border-brand/35 bg-brand-soft/75 shadow-soft",
+  active: "border-info/20 bg-info-soft/45",
+  planned: "border-border/70 bg-surface/85",
 };
 
 export function ProjectWorkflowNav({ projectId }: { projectId: string }) {
   const pathname = usePathname();
   const currentStageHref =
-    workflowStages.find((stage) => pathname?.endsWith(`/${stage.href}`))?.href ?? null;
+    workflowStages.find((stage) => pathname?.endsWith(`/${stage.href}`))?.href ?? "source";
 
   const [draftSignals, setDraftSignals] = useState({
     blogReady: false,
@@ -133,7 +137,7 @@ export function ProjectWorkflowNav({ projectId }: { projectId: string }) {
       ),
       publishingDone: Boolean(publishingDraft?.wix_result?.post_id?.trim()),
     });
-  }, [pathname, projectId, reelAsset, reelThumbnailAsset, sermonThumbnailAsset]);
+  }, [pathname, projectId, reelAsset, reelThumbnailAsset]);
 
   const sourceDone = Boolean(sourceAsset);
   const trimDone = Boolean(sermonAsset);
@@ -143,12 +147,12 @@ export function ProjectWorkflowNav({ projectId }: { projectId: string }) {
   const reelDone = draftSignals.reelPackageReady;
   const reelThumbnailDone = draftSignals.reelThumbnailReady;
   const titleDescDone = draftSignals.titleDescReady;
-  const publishingDone = draftSignals.publishingDone;
   const textPostDone = draftSignals.textPostReady;
   const blogDone = draftSignals.blogReady;
   const metadataDone = draftSignals.metadataReady;
+  const publishingDone = draftSignals.publishingDone;
 
-  const stageStatus = {
+  const stageStatus: Record<string, StepState> = {
     source: sourceDone ? "done" : currentStageHref === "source" ? "now" : "ready",
     trim: trimDone ? "done" : currentStageHref === "trim" ? "now" : sourceDone ? "ready" : "locked",
     transcript:
@@ -205,69 +209,100 @@ export function ProjectWorkflowNav({ projectId }: { projectId: string }) {
           : metadataDone || draftSignals.publishingReady
             ? "ready"
             : "locked",
-  } as const;
+    analytics: currentStageHref === "analytics" ? "now" : publishingDone ? "ready" : "locked",
+  };
+
+  const categoryStatus: Record<string, CategoryState> = Object.fromEntries(
+    workflowCategories.map((category) => {
+      const statuses = category.stageHrefs.map((href) => stageStatus[href] ?? "locked");
+      const hasCurrent = category.stageHrefs.includes(currentStageHref);
+      const allDone = statuses.every((status) => status === "done");
+      const anyProgress = statuses.some((status) => status === "done" || status === "ready");
+
+      return [
+        category.id,
+        allDone ? "done" : hasCurrent ? "now" : anyProgress ? "active" : "planned",
+      ];
+    })
+  ) as Record<string, CategoryState>;
 
   return (
     <div className="surface-card p-4">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
-          <p className="section-label">Workflow</p>
-          <p className="mt-1 text-sm text-muted">Move one stage at a time and keep the sermon package flowing.</p>
+          <p className="section-label">Workspace Map</p>
+          <p className="mt-1 text-sm text-muted">Navigate by product area first, then drill into the exact step.</p>
         </div>
-        <Badge tone="info">{workflowStages.length} stages</Badge>
+        <Badge tone="info">{workflowCategories.length} areas</Badge>
       </div>
 
-      <nav className="space-y-2 sm:space-y-3">
-        {workflowStages.map((stage, index) => {
-          const state = stage.disabled ? "soon" : stageStatus[stage.href as keyof typeof stageStatus];
-          const href = `/projects/${projectId}/${stage.href}`;
-
-          const content = (
-            <>
-              <div className="flex items-start gap-3">
-                <div className="mt-1 flex items-center gap-3">
-                  <span className={classNames("h-3 w-3 rounded-full", stateStyles[state].dot)} />
-                  <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">
-                    {String(index + 1).padStart(2, "0")}
-                  </span>
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-semibold text-ink">{stage.label}</span>
-                    <Badge tone={stateStyles[state].badge}>{stateStyles[state].label}</Badge>
-                  </div>
-                </div>
-              </div>
-            </>
-          );
-
-          if (stage.disabled) {
-            return (
-              <div
-                key={stage.href}
-                aria-disabled="true"
-                className={classNames("block cursor-not-allowed rounded-2xl border px-3 py-3 sm:px-4", stateStyles[state].item)}
-              >
-                {content}
-              </div>
-            );
-          }
+      <div className="space-y-4">
+        {workflowCategories.map((category) => {
+          const categoryStages = workflowStages.filter((stage) => category.stageHrefs.includes(stage.href));
+          const currentCategory = category.stageHrefs.includes(currentStageHref);
 
           return (
-            <Link
-              key={stage.href}
-              href={href}
+            <div
+              key={category.id}
               className={classNames(
-                "block rounded-2xl border px-3 py-3 transition-transform duration-200 hover:-translate-y-0.5 hover:border-brand/40 sm:px-4",
-                stateStyles[state].item
+                "rounded-[1.5rem] border p-4",
+                categoryStateStyles[categoryStatus[category.id]]
               )}
             >
-              {content}
-            </Link>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-semibold uppercase tracking-[0.18em] text-muted">{category.label}</p>
+                    <Badge tone={currentCategory ? "brand" : categoryStatus[category.id] === "done" ? "success" : "neutral"}>
+                      {currentCategory ? "Current Area" : categoryStatus[category.id] === "done" ? "Ready" : "Open"}
+                    </Badge>
+                  </div>
+                  <p className="mt-2 text-sm font-semibold text-ink">{category.summary}</p>
+                  <p className="mt-1 text-sm leading-6 text-muted">{category.description}</p>
+                </div>
+                <Link
+                  href={`/projects/${projectId}/${category.href}`}
+                  className="rounded-full border border-border/80 bg-surface px-4 py-2 text-sm font-semibold text-ink transition hover:border-brand/40 hover:text-brand-strong"
+                >
+                  Open {category.shortLabel}
+                </Link>
+              </div>
+
+              <div className="mt-4 space-y-2">
+                {categoryStages.map((stage, index) => {
+                  const state = stepStateStyles[stageStatus[stage.href]];
+                  return (
+                    <Link
+                      key={stage.href}
+                      href={`/projects/${projectId}/${stage.href}`}
+                      className={classNames(
+                        "block rounded-2xl border px-3 py-3 transition-transform duration-200 hover:-translate-y-0.5 hover:border-brand/40",
+                        state.item
+                      )}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="mt-1 flex items-center gap-3">
+                          <span className={classNames("h-3 w-3 rounded-full", state.dot)} />
+                          <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">
+                            {String(index + 1).padStart(2, "0")}
+                          </span>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-sm font-semibold text-ink">{stage.label}</span>
+                            <Badge tone={state.badge}>{state.label}</Badge>
+                          </div>
+                          <p className="mt-1 text-sm leading-6 text-muted">{stage.description}</p>
+                        </div>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
           );
         })}
-      </nav>
+      </div>
     </div>
   );
 }
-

@@ -36,24 +36,28 @@ export function JobStatusPanel({
   messages = [],
   endRef,
   runningHint,
+  compact = false,
+  inline = false,
 }: {
   title: string;
   job: ProcessingJob;
   messages?: string[];
   endRef?: React.RefObject<HTMLDivElement>;
   runningHint?: string;
+  compact?: boolean;
+  inline?: boolean;
 }) {
-  return (
-    <Card>
+  const content = (
+    <>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="section-label">Background Job</p>
-          <h3 className="mt-2 text-lg font-semibold text-ink">{title}</h3>
+          <p className="section-label">{inline ? "Job" : "Background Job"}</p>
+          <h3 className={compact ? "mt-2 text-base font-semibold text-ink" : "mt-2 text-lg font-semibold text-ink"}>{title}</h3>
         </div>
         <Badge tone={getTone(job.status)}>{job.status}</Badge>
       </div>
 
-      <div className="mt-5 space-y-4">
+      <div className={compact ? "mt-4 space-y-3" : "mt-5 space-y-4"}>
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-3 text-sm text-muted">
             <span>{getLabel(job)}</span>
@@ -71,6 +75,12 @@ export function JobStatusPanel({
 
         <ActivityLog messages={messages} endRef={endRef} />
       </div>
-    </Card>
+    </>
   );
+
+  if (inline) {
+    return <div className="rounded-2xl border border-border/80 bg-surface px-4 py-4">{content}</div>;
+  }
+
+  return <Card className={compact ? "p-5" : undefined}>{content}</Card>;
 }

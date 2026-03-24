@@ -6,6 +6,16 @@ export type WorkflowStage = {
   disabled?: boolean;
 };
 
+export type WorkflowCategory = {
+  id: "ingest" | "generate" | "publish" | "analytics";
+  label: string;
+  shortLabel: string;
+  description: string;
+  summary: string;
+  href: string;
+  stageHrefs: string[];
+};
+
 export const workflowStages: WorkflowStage[] = [
   {
     href: "source",
@@ -68,18 +78,80 @@ export const workflowStages: WorkflowStage[] = [
     description: "Create the long-form written adaptation of the message.",
   },
   {
+    href: "metadata",
+    label: "Metadata Studio",
+    shortLabel: "Metadata",
+    description: "Extract structured metadata for downstream publishing.",
+  },
+  {
     href: "publishing",
     label: "Publishing",
     shortLabel: "Publish",
     description: "Review the Wix publishing package, confirm SEO fields, and publish the post live.",
   },
   {
-    href: "metadata",
-    label: "Metadata Studio",
-    shortLabel: "Metadata",
-    description: "Extract structured metadata for downstream publishing.",
+    href: "analytics",
+    label: "Analytics",
+    shortLabel: "Analytics",
+    description: "Track brand, platform, and content performance from one private reporting workspace.",
   },
 ];
+
+export const workflowCategories: WorkflowCategory[] = [
+  {
+    id: "ingest",
+    label: "Ingest",
+    shortLabel: "Ingest",
+    description: "Capture the source, cut the sermon master, and lock the transcript.",
+    summary: "Raw media intake and transcript readiness.",
+    href: "source",
+    stageHrefs: ["source", "trim", "transcript"],
+  },
+  {
+    id: "generate",
+    label: "Generate",
+    shortLabel: "Generate",
+    description: "Shape the content package across clips, visuals, copy, blog, and metadata.",
+    summary: "All generated assets and review loops.",
+    href: "clips",
+    stageHrefs: [
+      "sermon-thumbnail",
+      "clips",
+      "reel",
+      "reel-thumbnail",
+      "title-desc",
+      "text-post",
+      "blog",
+      "metadata",
+    ],
+  },
+  {
+    id: "publish",
+    label: "Publish",
+    shortLabel: "Publish",
+    description: "Finalize outbound distribution and launch the finished post.",
+    summary: "Release controls, SEO, and destination readiness.",
+    href: "publishing",
+    stageHrefs: ["publishing"],
+  },
+  {
+    id: "analytics",
+    label: "Analytics",
+    shortLabel: "Analytics",
+    description: "Aggregate performance at the brand, platform, and content levels.",
+    summary: "Cross-platform reporting and post-performance insight.",
+    href: "analytics",
+    stageHrefs: ["analytics"],
+  },
+];
+
+export function getWorkflowStage(stageHref: string) {
+  return workflowStages.find((stage) => stage.href === stageHref) ?? null;
+}
+
+export function getWorkflowCategoryForStage(stageHref: string) {
+  return workflowCategories.find((category) => category.stageHrefs.includes(stageHref)) ?? null;
+}
 
 export function getStageState(index: number, activeIndex: number): "complete" | "current" | "upcoming" {
   if (index < activeIndex) return "complete";

@@ -11,6 +11,7 @@ import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
+import { GenerateWorkspace } from "@/components/generate/GenerateWorkspace";
 import { StepIntro } from "@/components/workflow/StepIntro";
 
 const DEFAULT_MODEL =
@@ -202,22 +203,40 @@ export default function SermonThumbnailPage() {
           Generate a transcript first to build sermon thumbnail prompts.
         </Alert>
       ) : (
-        <Card>
-          <CardHeader
-            eyebrow="Creative"
-            title="Sermon Thumbnail Prompt Ideas"
-            action={
-              <Button onClick={generateThumbnailPrompts} disabled={isStreaming}>
-                {isStreaming ? "Generating..." : "Generate 3 Prompt Ideas"}
-              </Button>
-            }
-          />
+        <GenerateWorkspace
+          snapshotItems={[
+            { label: "Transcript", value: transcriptText ? "Ready" : "Missing", tone: transcriptText ? "success" : "warning" },
+            {
+              label: "Prompts",
+              value: thumbnailPrompts.length ? "Generated" : "Empty",
+              tone: thumbnailPrompts.length ? "brand" : "neutral",
+            },
+            {
+              label: "Asset",
+              value: sermonThumbnailAsset ? "Uploaded" : "Missing",
+              tone: sermonThumbnailAsset ? "success" : "warning",
+            },
+          ]}
+          sections={[
+            { label: "Prompt ideas", detail: "Generate and compare the three thumbnail directions.", href: "#sermon-thumbnail-prompts" },
+            { label: "Upload", detail: "Place the chosen cover image here once the direction is locked.", href: "#sermon-thumbnail-upload" },
+          ]}
+        >
+          <Card id="sermon-thumbnail-prompts">
+            <CardHeader
+              eyebrow="Creative"
+              title="Sermon Thumbnail Prompt Ideas"
+              action={
+                <Button onClick={generateThumbnailPrompts} disabled={isStreaming}>
+                  {isStreaming ? "Generating..." : "Generate 3 Prompt Ideas"}
+                </Button>
+              }
+            />
 
-          <div className="mt-6 space-y-6">
-            {error ? <Alert tone="danger">{error}</Alert> : null}
-            {status ? <Alert tone="info">{status}</Alert> : null}
+            <div className="mt-6 space-y-6">
+              {error ? <Alert tone="danger">{error}</Alert> : null}
+              {status ? <Alert tone="info">{status}</Alert> : null}
 
-            <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_360px]">
               <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
                 {["A", "B", "C"].map((label, index) => {
                   const prompt = thumbnailPrompts[index];
@@ -248,56 +267,62 @@ export default function SermonThumbnailPage() {
                   );
                 })}
               </div>
-
-              <div className="rounded-[1.5rem] border border-border/80 bg-background-alt p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="font-semibold text-ink">Sermon thumbnail</p>
-                    <p className="mt-1 text-xs text-muted">Upload the image selected from these prompt directions.</p>
-                  </div>
-                  {sermonThumbnailAsset ? <Badge tone="success">Uploaded</Badge> : <Badge tone="neutral">Missing</Badge>}
-                </div>
-
-                <div className="mt-4 space-y-3">
-                  {thumbnailUploadError ? <Alert tone="danger">{thumbnailUploadError}</Alert> : null}
-                  {thumbnailUploadStatus ? <Alert tone="info">{thumbnailUploadStatus}</Alert> : null}
-                  <label className="block">
-                    <span className="sr-only">Choose sermon thumbnail</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(event) => {
-                        const file = event.target.files?.[0];
-                        if (file) uploadMutation.mutate(file);
-                        event.currentTarget.value = "";
-                      }}
-                      className="block w-full rounded-2xl border border-border bg-surface px-4 py-3 text-sm text-ink file:mr-4 file:rounded-full file:border-0 file:bg-brand file:px-4 file:py-2 file:font-semibold file:text-white"
-                    />
-                  </label>
-                  {sermonThumbnailAsset ? (
-                    <div className="space-y-3">
-                      <p className="text-xs text-muted">{sermonThumbnailAsset.filename}</p>
-                      <div className="overflow-hidden rounded-[1.25rem] border border-border bg-surface">
-                        <Image
-                          src={sermonThumbnailAsset.playback_url ?? `${API_BASE}/api/media/asset/${sermonThumbnailAsset.id}`}
-                          alt={sermonThumbnailAsset.filename}
-                          width={640}
-                          height={360}
-                          className="h-auto w-full object-cover"
-                          unoptimized
-                        />
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex aspect-video items-center justify-center rounded-[1.25rem] border border-dashed border-border bg-surface px-4 text-center text-sm text-muted">
-                      No sermon thumbnail uploaded yet
-                    </div>
-                  )}
-                </div>
-              </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+
+          <Card id="sermon-thumbnail-upload">
+            <CardHeader
+              eyebrow="Asset"
+              title="Sermon thumbnail upload"
+              description="Upload the selected image here so the rest of the workflow can reuse it."
+            />
+
+            <div className="mt-6 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-ink">Sermon thumbnail</p>
+                  <p className="mt-1 text-xs text-muted">Upload the image selected from these prompt directions.</p>
+                </div>
+                {sermonThumbnailAsset ? <Badge tone="success">Uploaded</Badge> : <Badge tone="neutral">Missing</Badge>}
+              </div>
+
+              {thumbnailUploadError ? <Alert tone="danger">{thumbnailUploadError}</Alert> : null}
+              {thumbnailUploadStatus ? <Alert tone="info">{thumbnailUploadStatus}</Alert> : null}
+              <label className="block">
+                <span className="sr-only">Choose sermon thumbnail</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) uploadMutation.mutate(file);
+                    event.currentTarget.value = "";
+                  }}
+                  className="block w-full rounded-2xl border border-border bg-surface px-4 py-3 text-sm text-ink file:mr-4 file:rounded-full file:border-0 file:bg-brand file:px-4 file:py-2 file:font-semibold file:text-white"
+                />
+              </label>
+              {sermonThumbnailAsset ? (
+                <div className="space-y-3">
+                  <p className="text-xs text-muted">{sermonThumbnailAsset.filename}</p>
+                  <div className="overflow-hidden rounded-[1.25rem] border border-border bg-surface">
+                    <Image
+                      src={sermonThumbnailAsset.playback_url ?? `${API_BASE}/api/media/asset/${sermonThumbnailAsset.id}`}
+                      alt={sermonThumbnailAsset.filename}
+                      width={640}
+                      height={360}
+                      className="h-auto w-full object-cover"
+                      unoptimized
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="flex aspect-video items-center justify-center rounded-[1.25rem] border border-dashed border-border bg-surface px-4 text-center text-sm text-muted">
+                  No sermon thumbnail uploaded yet
+                </div>
+              )}
+            </div>
+          </Card>
+        </GenerateWorkspace>
       )}
     </div>
   );

@@ -8,6 +8,8 @@ import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
+import { GenerateModePanel } from "@/components/generate/GenerateModePanel";
+import { ActivityDock } from "@/components/workflow/ActivityDock";
 import { JobStatusPanel } from "@/components/workflow/JobStatusPanel";
 import { StepIntro } from "@/components/workflow/StepIntro";
 
@@ -396,24 +398,6 @@ export default function ClipsPage() {
             tone: artifactsReady ? "success" : artifactBusy ? "info" : "warning",
           },
         ]}
-        action={
-          <Button
-            onClick={() =>
-              analyzeMutation.mutate({
-                project_id: projectId,
-                sermon_asset_id: sermonAsset!.id,
-                transcript_id: transcriptData!.id,
-                model,
-                host,
-                candidate_limit: candidateLimit,
-                output_count: outputCount,
-              })
-            }
-            disabled={analyzeMutation.isPending || !artifactsReady || !sermonAsset || !transcriptData}
-          >
-            {analyzeMutation.isPending ? "Starting..." : "Run Clip Analysis"}
-          </Button>
-        }
       />
 
       {!canAnalyze ? (
@@ -422,27 +406,73 @@ export default function ClipsPage() {
         </Alert>
       ) : (
         <div className="space-y-6">
-          {!artifactsReady ? (
-            <Alert tone="warning" title="Clip artifacts required">
-              {artifactStatus
-                ? `Clip Lab still needs: ${artifactStatus.missing_files.join(", ")}.`
-                : "Clip Lab needs the FastCap prep bundle before analysis can run."}{" "}
-              <Button
-                variant="secondary"
-                onClick={() => transcriptData && generateArtifactsMutation.mutate(transcriptData.id)}
-                disabled={artifactBusy || !transcriptData}
-                className="ml-3"
-              >
-                {artifactBusy ? "Building Artifacts..." : "Generate Clip Artifacts"}
-              </Button>
-            </Alert>
-          ) : null}
+            <GenerateModePanel
+              eyebrow="Studio"
+              title="Clip Lab is one of the core Studio work modes."
+              description="Stay here while shaping ranked moments, then move into Visuals and Text once the clip shortlist is clear enough to drive the rest of the package."
+              summary={`${candidates.length} ranked moment${candidates.length === 1 ? "" : "s"} currently available for review.`}
+              links={[
+                {
+                  label: "Visuals",
+                  detail: "Review sermon and reel art once the strongest clip direction is clear.",
+                  href: `/projects/${projectId}/visuals`,
+                  state: sermonAsset ? "Assets in motion" : "Needs assets",
+                  tone: sermonAsset || artifactsReady ? "success" : "warning",
+                  ctaLabel: "Open Visuals",
+                },
+                {
+                  label: "Text",
+                  detail: "Tighten transcript-derived titles, descriptions, and reel copy alongside the clip shortlist.",
+                  href: `/projects/${projectId}/text`,
+                  state: transcriptData ? "Ready for review" : "Transcript needed",
+                  tone: transcriptData ? "info" : "warning",
+                  ctaLabel: "Open Text Desk",
+                },
+                {
+                  label: "Generate overview",
+                  detail: "Return to the grouped Generate hub to see Studio and Deliverables readiness together.",
+                  href: `/projects/${projectId}/generate`,
+                  state: candidates.length > 0 ? "In progress" : "Needs start",
+                  tone: candidates.length > 0 ? "brand" : "neutral",
+                  ctaLabel: "Open Generate",
+                },
+              ]}
+            />
 
             <Card className="overflow-hidden">
               <CardHeader
                 eyebrow="Clip Workspace"
                 title={activeCandidate ? activeCandidate.title : "Clip editor"}
                 description="Keep the playback, active clip details, and ranked candidate rail together so the page reads like one editing surface."
+                action={
+                  <div className="flex flex-wrap justify-end gap-2">
+                    {canAnalyze && !artifactsReady ? (
+                      <Button
+                        variant="secondary"
+                        onClick={() => transcriptData && generateArtifactsMutation.mutate(transcriptData.id)}
+                        disabled={artifactBusy || !transcriptData}
+                      >
+                        {artifactBusy ? "Building Artifacts..." : "Generate Clip Artifacts"}
+                      </Button>
+                    ) : null}
+                    <Button
+                      onClick={() =>
+                        analyzeMutation.mutate({
+                          project_id: projectId,
+                          sermon_asset_id: sermonAsset!.id,
+                          transcript_id: transcriptData!.id,
+                          model,
+                          host,
+                          candidate_limit: candidateLimit,
+                          output_count: outputCount,
+                        })
+                      }
+                      disabled={analyzeMutation.isPending || !artifactsReady || !sermonAsset || !transcriptData}
+                    >
+                      {analyzeMutation.isPending ? "Starting..." : "Run Clip Analysis"}
+                    </Button>
+                  </div>
+                }
               />
               <div className="mt-6 space-y-6">
                 {isLoading ? (
@@ -727,14 +757,14 @@ export default function ClipsPage() {
               </div>
             </Card>
 
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] 2xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1fr)_minmax(0,1fr)]">
+          <div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr)_320px]">
             <Card>
               <CardHeader
                 eyebrow="Readiness"
                 title="Clip-lab inputs"
-                description="A quick check that the pipeline inputs are still in place."
+                description="Keep the gating signals compact here instead of repeating another full workspace explainer."
               />
-              <div className="mt-6 space-y-3">
+              <div className="mt-6 grid gap-3 md:grid-cols-2">
                 <div className="flex items-center justify-between rounded-2xl bg-surface-tint p-4 text-sm">
                   <span className="text-muted">Sermon master</span>
                   <Badge tone={sermonAsset ? "success" : "warning"}>{sermonAsset ? "Ready" : "Missing"}</Badge>
@@ -756,23 +786,40 @@ export default function ClipsPage() {
               </div>
             </Card>
 
-            {artifactJob ? (
-              <JobStatusPanel
-                title="Artifact generation job"
-                job={artifactJob}
-                messages={artifactLogMessages}
-                runningHint="This pass rebuilds the FastCap prep bundle from the current transcript and sermon media."
-              />
-            ) : null}
+            <ActivityDock
+              eyebrow="Activity"
+              title="Clip Lab jobs"
+              description="Keep generation progress docked to the side while you continue reviewing candidates."
+            >
+              {artifactJob ? (
+                <JobStatusPanel
+                  title="Artifact generation"
+                  job={artifactJob}
+                  messages={artifactLogMessages}
+                  runningHint="This pass rebuilds the FastCap prep bundle from the current transcript and sermon media."
+                  compact
+                />
+              ) : null}
 
-            {analysisJob ? (
-              <JobStatusPanel
-                title="Clip analysis job"
-                job={analysisJob}
-                messages={logMessages}
-                runningHint="This pass ranks candidate moments from the sermon transcript and can take a bit if the candidate pool is large."
-              />
-            ) : null}
+              {analysisJob ? (
+                <JobStatusPanel
+                  title="Clip analysis"
+                  job={analysisJob}
+                  messages={logMessages}
+                  runningHint="This pass ranks candidate moments from the sermon transcript and can take a bit if the candidate pool is large."
+                  compact
+                />
+              ) : null}
+
+              {!artifactJob && !analysisJob ? (
+                <Card className="p-5">
+                  <p className="section-label">Background Job</p>
+                  <p className="mt-2 text-sm leading-6 text-muted">
+                    Run artifact generation or clip analysis and the live activity feed will dock here instead of pushing more content below the editor.
+                  </p>
+                </Card>
+              ) : null}
+            </ActivityDock>
           </div>
         </div>
       )}

@@ -9,7 +9,7 @@ import { streamNdjson } from "@/lib/streaming";
 import { Alert } from "@/components/ui/Alert";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
-import { StepIntro } from "@/components/workflow/StepIntro";
+import { GenerateStudioFrame } from "@/components/generate/GenerateStudioFrame";
 
 const DEFAULT_MODEL =
   "arn:aws:bedrock:us-east-1:644190502535:inference-profile/us.anthropic.claude-sonnet-4-6";
@@ -160,105 +160,157 @@ export default function BlogPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <StepIntro
-        eyebrow="Blog Post"
-        title={`Turn ${project?.title ?? "this sermon"} into a long-form article.`}
-        description=""
-        statusItems={[
-          {
-            label: "Transcript",
-            value: transcriptText ? "Ready" : "Missing",
-            tone: transcriptText ? "success" : "warning",
-          },
-          {
-            label: "Speaker",
-            value: project?.speaker_display_name || project?.speaker ? "Set" : "Missing",
-            tone: project?.speaker_display_name || project?.speaker ? "brand" : "warning",
-          },
-          {
-            label: "Draft state",
-            value: hasDraft ? "Editable" : "Empty",
-            tone: hasDraft ? "info" : "neutral",
-          },
-        ]}
-        action={
-          hasDraft ? (
-            <LinkButton href={`/projects/${projectId}/publishing`} variant="secondary">
+    <GenerateStudioFrame
+      eyebrow="Blog Post"
+      title={`Turn ${project?.title ?? "this sermon"} into a long-form article.`}
+      description="Use the blog draft as the long-form bridge between Generate and Publishing."
+      mode={{
+        label: "Deliverables Mode",
+        title: "Blog is part of the deliverable package.",
+        description:
+          "Once the Studio work is stable, shape the long-form article here and hand it into Publishing with metadata and release-ready assets.",
+      }}
+      statusItems={[
+        {
+          label: "Transcript",
+          value: transcriptText ? "Ready" : "Missing",
+          tone: transcriptText ? "success" : "warning",
+        },
+        {
+          label: "Speaker",
+          value: project?.speaker_display_name || project?.speaker ? "Set" : "Missing",
+          tone: project?.speaker_display_name || project?.speaker ? "brand" : "warning",
+        },
+        {
+          label: "Draft state",
+          value: hasDraft ? "Editable" : "Empty",
+          tone: hasDraft ? "info" : "neutral",
+        },
+      ]}
+      actions={
+        hasDraft ? (
+          <LinkButton href={`/projects/${projectId}/publishing`} variant="secondary">
+            Continue to Publishing
+          </LinkButton>
+        ) : null
+      }
+      snapshotItems={[
+        {
+          label: "Transcript",
+          value: transcriptText ? "Ready" : "Missing",
+          tone: transcriptText ? "success" : "warning",
+        },
+        {
+          label: "Draft",
+          value: hasDraft ? "Editable" : "Empty",
+          tone: hasDraft ? "info" : "neutral",
+        },
+        {
+          label: "Publishing",
+          value: hasDraft ? "Next" : "Locked",
+          tone: hasDraft ? "brand" : "neutral",
+        },
+      ]}
+      sections={[
+        { label: "Generation", detail: "Run the blog generator and review the article in place.", href: "#blog-generation" },
+        { label: "Editor", detail: "Refine the title and markdown before handing off to publishing.", href: "#blog-editor" },
+        { label: "Metadata", detail: "Validate the structured fields that will ship with the article.", href: `/projects/${projectId}/metadata` },
+        { label: "Reel", detail: "Finalize the short-form deliverable package in parallel.", href: `/projects/${projectId}/reel` },
+      ]}
+      sectionsTitle="Deliverable Links"
+      footer={
+        <div className="space-y-3">
+          <p className="section-label">Next step</p>
+          <p className="text-sm leading-6 text-muted">
+            Once the article reads right, move into Publishing to finish the Wix image, writer, and SEO package.
+          </p>
+          {hasDraft ? (
+            <LinkButton href={`/projects/${projectId}/publishing`} variant="secondary" className="w-full">
               Continue to Publishing
             </LinkButton>
-          ) : null
-        }
-      />
-
+          ) : null}
+        </div>
+      }
+    >
       {!transcriptText ? (
         <Alert tone="warning" title="Transcript required">
           Generate a transcript first so Blog can build from the sermon text.
         </Alert>
       ) : (
-        <Card>
-          <CardHeader
-                  eyebrow="Blog Post"
-            title="Editable blog post"
-            action={
-              <Button onClick={generateBlogStream} disabled={isStreaming}>
+        <>
+          <Card id="blog-generation">
+            <CardHeader
+              eyebrow="Blog Post"
+              title="Editable blog post"
+              action={
+                <Button onClick={generateBlogStream} disabled={isStreaming}>
                   {isStreaming ? "Streaming..." : "Generate Blog Post"}
-              </Button>
-            }
-          />
-
-          <div className="mt-6 space-y-4">
-            {error ? <Alert tone="danger">{error}</Alert> : null}
-            {streamStatus ? <Alert tone="info">{streamStatus}</Alert> : null}
-            {hasDraft ? (
-              <Alert tone="success" title="Draft ready for publishing">
-                When the article looks right, continue to Publishing to review the Wix featured image,
-                writer, publish date, and SEO fields before it goes live.
-              </Alert>
-            ) : null}
-
-            <label className="space-y-2 text-sm">
-              <div className="flex items-center justify-between gap-3">
-                <span className="font-medium text-ink">Blog title</span>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => void copyText("blog-title", blogTitle)}
-                  disabled={!blogTitle.trim()}
-                >
-                  {copiedKey === "blog-title" ? "Copied" : "Copy"}
                 </Button>
-              </div>
-              <input
-                value={blogTitle}
-                onChange={(e) => setBlogTitle(e.target.value)}
-                className="w-full rounded-2xl border border-border bg-surface px-4 py-3 text-sm text-ink outline-none transition focus:border-brand"
-                placeholder="Generated title will appear here."
-              />
-            </label>
-
-            <label className="space-y-2 text-sm">
-              <div className="flex items-center justify-between gap-3">
-                <span className="font-medium text-ink">Blog markdown</span>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => void copyText("blog-body", blogBody)}
-                  disabled={!blogBody.trim()}
-                >
-                  {copiedKey === "blog-body" ? "Copied" : "Copy"}
-                </Button>
-              </div>
-            <textarea
-              value={blogBody}
-              onChange={(e) => setBlogBody(e.target.value)}
-              className="min-h-[38rem] w-full rounded-[1.75rem] border border-border bg-surface px-5 py-4 font-mono text-sm text-ink outline-none transition focus:border-brand"
-              placeholder="Generated markdown will appear here."
+              }
             />
-            </label>
-          </div>
-        </Card>
+
+            <div className="mt-6 space-y-4">
+              {error ? <Alert tone="danger">{error}</Alert> : null}
+              {streamStatus ? <Alert tone="info">{streamStatus}</Alert> : null}
+              {hasDraft ? (
+                <Alert tone="success" title="Draft ready for publishing">
+                  When the article looks right, continue to Publishing to review the Wix featured image, writer, publish date, and SEO fields before it goes live.
+                </Alert>
+              ) : null}
+            </div>
+          </Card>
+
+          <Card id="blog-editor">
+            <CardHeader
+              eyebrow="Blog Post"
+              title="Post editor"
+              description="Keep the title and markdown together so the article can be reviewed as one writing surface."
+            />
+
+            <div className="mt-6 space-y-4">
+              <label className="space-y-2 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-medium text-ink">Blog title</span>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => void copyText("blog-title", blogTitle)}
+                    disabled={!blogTitle.trim()}
+                  >
+                    {copiedKey === "blog-title" ? "Copied" : "Copy"}
+                  </Button>
+                </div>
+                <input
+                  value={blogTitle}
+                  onChange={(e) => setBlogTitle(e.target.value)}
+                  className="w-full rounded-2xl border border-border bg-surface px-4 py-3 text-sm text-ink outline-none transition focus:border-brand"
+                  placeholder="Generated title will appear here."
+                />
+              </label>
+
+              <label className="space-y-2 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-medium text-ink">Blog markdown</span>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => void copyText("blog-body", blogBody)}
+                    disabled={!blogBody.trim()}
+                  >
+                    {copiedKey === "blog-body" ? "Copied" : "Copy"}
+                  </Button>
+                </div>
+                <textarea
+                  value={blogBody}
+                  onChange={(e) => setBlogBody(e.target.value)}
+                  className="min-h-[34rem] w-full rounded-[1.75rem] border border-border bg-surface px-5 py-4 font-mono text-sm text-ink outline-none transition focus:border-brand"
+                placeholder="Generated markdown will appear here."
+              />
+              </label>
+            </div>
+          </Card>
+        </>
       )}
-    </div>
+    </GenerateStudioFrame>
   );
 }

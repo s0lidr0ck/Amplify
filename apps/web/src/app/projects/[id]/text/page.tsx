@@ -16,7 +16,7 @@ import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
-import { StepIntro } from "@/components/workflow/StepIntro";
+import { GenerateStudioFrame } from "@/components/generate/GenerateStudioFrame";
 
 type CopyKey =
   | "sermon-transcript"
@@ -194,178 +194,190 @@ export default function TextAssetsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <StepIntro
-        eyebrow="Text Assets"
-        title={`Review the written package for ${project?.title ?? "this sermon"}.`}
-        description="See transcripts, metadata, long-form drafts, and reel copy together in one text-first handoff view."
-        statusItems={[
-          {
-            label: "Speaker",
-            value: project?.speaker_display_name ?? project?.speaker ?? "Pending",
-            tone: project?.speaker_display_name || project?.speaker ? "brand" : "warning",
-          },
-          {
-            label: "Available sections",
-            value: `${availableCount} ready`,
-            tone: availableCount > 0 ? "success" : "neutral",
-          },
-          {
-            label: "Reel package",
-            value: reelCaption || reelTranscriptText ? "Present" : "Pending",
-            tone: reelCaption || reelTranscriptText ? "info" : "warning",
-          },
-        ]}
-      />
+    <GenerateStudioFrame
+      eyebrow="Text Assets"
+      title={`Review the written package for ${project?.title ?? "this sermon"}.`}
+      description="See transcripts, metadata, long-form drafts, and reel copy together in one text-first handoff view."
+      mode={{
+        label: "Studio Mode",
+        title: "Text is the shared copy desk for Generate.",
+        description:
+          "This surface groups the sermon transcript, packaging copy, and reel language so the core writing package can be tightened before Deliverables takes over.",
+      }}
+      statusItems={[
+        {
+          label: "Speaker",
+          value: project?.speaker_display_name ?? project?.speaker ?? "Pending",
+          tone: project?.speaker_display_name || project?.speaker ? "brand" : "warning",
+        },
+        {
+          label: "Available sections",
+          value: `${availableCount} ready`,
+          tone: availableCount > 0 ? "success" : "neutral",
+        },
+        {
+          label: "Reel package",
+          value: reelCaption || reelTranscriptText ? "Present" : "Pending",
+          tone: reelCaption || reelTranscriptText ? "info" : "warning",
+        },
+      ]}
+      snapshotItems={[
+        { label: "Assets", value: `${availableCount} ready`, tone: availableCount > 0 ? "success" : "neutral" },
+        { label: "Blog", value: blogMarkdown ? "Generated" : "Missing", tone: blogMarkdown ? "info" : "warning" },
+        { label: "Reel", value: reelCaption ? "Ready" : "Missing", tone: reelCaption ? "brand" : "warning" },
+      ]}
+      sections={[
+        { label: "Transcripts", detail: "Review sermon and reel transcripts first.", href: "#text-transcripts" },
+        { label: "Metadata", detail: "Check the raw output and the structured JSON.", href: "#text-metadata" },
+        { label: "Writing", detail: "Inspect blog and packaging copy together.", href: "#text-writing" },
+        { label: "Reel copy", detail: "Keep the caption and platform variations together.", href: "#text-reel-copy" },
+        { label: "Visuals", detail: "Review sermon and reel assets next to this copy package.", href: `/projects/${projectId}/visuals` },
+        { label: "Blog", detail: "Hand the long-form article off once the copy package is stable.", href: `/projects/${projectId}/blog` },
+      ]}
+      sectionsTitle="Mode Links"
+    >
+        {availableCount === 0 ? (
+          <Alert tone="warning" title="No text assets yet">
+            Generate the transcript and content drafts first, then this page will become the central copy review surface.
+          </Alert>
+        ) : null}
 
-      {availableCount === 0 ? (
-        <Alert tone="warning" title="No text assets yet">
-          Generate the transcript and content drafts first, then this page will become the central copy review surface.
-        </Alert>
-      ) : null}
-
-      <div className="grid gap-6 2xl:grid-cols-2">
-        <CopyCard
-          title="Sermon transcript"
-          value={sermonTranscriptText}
-          copyKey="sermon-transcript"
-          copiedKey={copiedKey}
-          onCopy={copyText}
-          badge={sermonTranscript ? sermonTranscript.status || "Ready" : "Missing"}
-        />
-        <CopyCard
-          title="Reel transcript"
-          value={reelTranscriptText}
-          copyKey="reel-transcript"
-          copiedKey={copiedKey}
-          onCopy={copyText}
-          badge={reelTranscript ? reelTranscript.status || "Ready" : "Missing"}
-        />
-        <CopyCard
-          title="Metadata raw output"
-          value={metadataRaw}
-          copyKey="metadata-raw"
-          copiedKey={copiedKey}
-          onCopy={copyText}
-          badge={metadataRaw ? "Generated" : "Missing"}
-        />
-        <CopyCard
-          title="Metadata JSON"
-          value={metadataJson === "{}" ? "" : metadataJson}
-          copyKey="metadata-json"
-          copiedKey={copiedKey}
-          onCopy={copyText}
-          badge={metadataJson !== "{}" ? "Structured" : "Missing"}
-        />
-        <CopyCard
-          title="Blog draft"
-          value={blogMarkdown}
-          copyKey="blog"
-          copiedKey={copiedKey}
-          onCopy={copyText}
-          badge={blogMarkdown ? "Generated" : "Missing"}
-          className="2xl:col-span-2"
-        />
-      </div>
-
-      <div className="grid gap-6 2xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
-        <Card>
-          <CardHeader title="Sermon packaging copy" />
-          <div className="mt-6 grid gap-4 lg:grid-cols-2">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-medium text-ink">Title</p>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => void copyText("packaging-title", packagingTitle)}
-                  disabled={!packagingTitle.trim()}
-                >
-                  {copiedKey === "packaging-title" ? "Copied" : "Copy"}
-                </Button>
-              </div>
-              <textarea
-                readOnly
-                value={formatBlock(packagingTitle)}
-                className="min-h-[12rem] w-full rounded-[1.5rem] border border-border bg-surface px-5 py-4 text-sm leading-7 text-ink outline-none"
-              />
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-medium text-ink">Description</p>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => void copyText("packaging-description", packagingDescription)}
-                  disabled={!packagingDescription.trim()}
-                >
-                  {copiedKey === "packaging-description" ? "Copied" : "Copy"}
-                </Button>
-              </div>
-              <textarea
-                readOnly
-                value={formatBlock(packagingDescription)}
-                className="min-h-[12rem] w-full rounded-[1.5rem] border border-border bg-surface px-5 py-4 text-sm leading-7 text-ink outline-none"
-              />
-            </div>
-          </div>
-        </Card>
-
-        <CopyCard
-          title="Facebook post"
-          value={facebookPost}
-          copyKey="facebook-post"
-          copiedKey={copiedKey}
-          onCopy={copyText}
-          badge={facebookPost ? "Generated" : "Missing"}
-        />
-      </div>
-
-      <div className="grid gap-6">
-        <CopyCard
-          title="Reel caption"
-          value={reelCaption}
-          copyKey="reel-caption"
-          copiedKey={copiedKey}
-          onCopy={copyText}
-          badge={reelCaption ? "Generated" : "Missing"}
-        />
-
-        <div className="grid gap-6 2xl:grid-cols-2">
+        <div id="text-transcripts" className="grid gap-6 2xl:grid-cols-2">
           <CopyCard
-            title="YouTube reel copy"
-            value={platformBlocks.youtube}
-            copyKey="platform-youtube"
+            title="Sermon transcript"
+            value={sermonTranscriptText}
+            copyKey="sermon-transcript"
             copiedKey={copiedKey}
             onCopy={copyText}
-            badge={platformBlocks.youtube ? "Ready" : "Missing"}
+            badge={sermonTranscript ? sermonTranscript.status || "Ready" : "Missing"}
           />
           <CopyCard
-            title="Facebook reel copy"
-            value={platformBlocks.facebook}
-            copyKey="platform-facebook"
+            title="Reel transcript"
+            value={reelTranscriptText}
+            copyKey="reel-transcript"
             copiedKey={copiedKey}
             onCopy={copyText}
-            badge={platformBlocks.facebook ? "Ready" : "Missing"}
-          />
-          <CopyCard
-            title="Instagram reel copy"
-            value={platformBlocks.instagram}
-            copyKey="platform-instagram"
-            copiedKey={copiedKey}
-            onCopy={copyText}
-            badge={platformBlocks.instagram ? "Ready" : "Missing"}
-          />
-          <CopyCard
-            title="TikTok reel copy"
-            value={platformBlocks.tiktok}
-            copyKey="platform-tiktok"
-            copiedKey={copiedKey}
-            onCopy={copyText}
-            badge={platformBlocks.tiktok ? "Ready" : "Missing"}
+            badge={reelTranscript ? reelTranscript.status || "Ready" : "Missing"}
           />
         </div>
-      </div>
-    </div>
+
+        <div id="text-metadata" className="grid gap-6 2xl:grid-cols-2">
+          <CopyCard
+            title="Metadata raw output"
+            value={metadataRaw}
+            copyKey="metadata-raw"
+            copiedKey={copiedKey}
+            onCopy={copyText}
+            badge={metadataRaw ? "Generated" : "Missing"}
+          />
+          <CopyCard
+            title="Metadata JSON"
+            value={metadataJson === "{}" ? "" : metadataJson}
+            copyKey="metadata-json"
+            copiedKey={copiedKey}
+            onCopy={copyText}
+            badge={metadataJson !== "{}" ? "Structured" : "Missing"}
+          />
+        </div>
+
+        <div id="text-writing" className="grid gap-6 2xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+          <Card>
+            <CardHeader title="Sermon packaging copy" />
+            <div className="mt-6 grid gap-4 lg:grid-cols-2">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-medium text-ink">Title</p>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => void copyText("packaging-title", packagingTitle)}
+                    disabled={!packagingTitle.trim()}
+                  >
+                    {copiedKey === "packaging-title" ? "Copied" : "Copy"}
+                  </Button>
+                </div>
+                <textarea
+                  readOnly
+                  value={formatBlock(packagingTitle)}
+                  className="min-h-[12rem] w-full rounded-[1.5rem] border border-border bg-surface px-5 py-4 text-sm leading-7 text-ink outline-none"
+                />
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-medium text-ink">Description</p>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => void copyText("packaging-description", packagingDescription)}
+                    disabled={!packagingDescription.trim()}
+                  >
+                    {copiedKey === "packaging-description" ? "Copied" : "Copy"}
+                  </Button>
+                </div>
+                <textarea
+                  readOnly
+                  value={formatBlock(packagingDescription)}
+                  className="min-h-[12rem] w-full rounded-[1.5rem] border border-border bg-surface px-5 py-4 text-sm leading-7 text-ink outline-none"
+                />
+              </div>
+            </div>
+          </Card>
+
+          <CopyCard
+            title="Facebook post"
+            value={facebookPost}
+            copyKey="facebook-post"
+            copiedKey={copiedKey}
+            onCopy={copyText}
+            badge={facebookPost ? "Generated" : "Missing"}
+          />
+        </div>
+
+        <div id="text-reel-copy" className="space-y-6">
+          <CopyCard
+            title="Reel caption"
+            value={reelCaption}
+            copyKey="reel-caption"
+            copiedKey={copiedKey}
+            onCopy={copyText}
+            badge={reelCaption ? "Generated" : "Missing"}
+          />
+
+          <div className="grid gap-6 2xl:grid-cols-2">
+            <CopyCard
+              title="YouTube reel copy"
+              value={platformBlocks.youtube}
+              copyKey="platform-youtube"
+              copiedKey={copiedKey}
+              onCopy={copyText}
+              badge={platformBlocks.youtube ? "Ready" : "Missing"}
+            />
+            <CopyCard
+              title="Facebook reel copy"
+              value={platformBlocks.facebook}
+              copyKey="platform-facebook"
+              copiedKey={copiedKey}
+              onCopy={copyText}
+              badge={platformBlocks.facebook ? "Ready" : "Missing"}
+            />
+            <CopyCard
+              title="Instagram reel copy"
+              value={platformBlocks.instagram}
+              copyKey="platform-instagram"
+              copiedKey={copiedKey}
+              onCopy={copyText}
+              badge={platformBlocks.instagram ? "Ready" : "Missing"}
+            />
+            <CopyCard
+              title="TikTok reel copy"
+              value={platformBlocks.tiktok}
+              copyKey="platform-tiktok"
+              copiedKey={copiedKey}
+              onCopy={copyText}
+              badge={platformBlocks.tiktok ? "Ready" : "Missing"}
+            />
+          </div>
+        </div>
+    </GenerateStudioFrame>
   );
 }

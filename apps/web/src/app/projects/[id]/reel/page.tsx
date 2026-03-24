@@ -10,6 +10,8 @@ import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
+import { GenerateModePanel } from "@/components/generate/GenerateModePanel";
+import { GenerateWorkspace } from "@/components/generate/GenerateWorkspace";
 import { JobStatusPanel } from "@/components/workflow/JobStatusPanel";
 import { StepIntro } from "@/components/workflow/StepIntro";
 
@@ -300,8 +302,8 @@ export default function ReelPage() {
             );
           }
         } else if (payload.type === "done") {
-          setDraft((current) => ({
-            ...current,
+          const nextDraft: ReelDraft = {
+            ...draft,
             platforms: {
               youtube: {
                 title: payload.platforms.youtube?.title || "",
@@ -325,7 +327,11 @@ export default function ReelPage() {
               },
             },
             thumbnail_prompts: payload.thumbnail_prompts || [],
-          }));
+          };
+          setDraft(nextDraft);
+          saveProjectDraft(projectId, "reel", nextDraft);
+          void projects.saveDraft(projectId, "reel", nextDraft);
+          void queryClient.invalidateQueries({ queryKey: ["project-draft", projectId, "reel"] });
           setGenerateStatus("Done");
           setGenerationMessages((current) => [...current, "Reel package ready."]);
         } else if (payload.type === "error") {
@@ -421,8 +427,74 @@ export default function ReelPage() {
         ]}
       />
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(340px,0.8fr)]">
-        <Card>
+      <GenerateWorkspace
+        mode={{
+          label: "Deliverables Mode",
+          title: "Reel is the short-form deliverable desk.",
+          description:
+            "Use this page after the edit is locked to package the final reel, its caption, and its platform variants before release handoff.",
+        }}
+        snapshotItems={[
+          {
+            label: "Reel",
+            value: reelAsset ? "Uploaded" : "Missing",
+            tone: reelAsset ? "success" : "warning",
+          },
+          {
+            label: "Caption",
+            value: reelTranscriptText ? "Ready" : draft.caption.trim() ? "Drafted" : "Missing",
+            tone: reelTranscriptText || draft.caption.trim() ? "info" : "warning",
+          },
+          {
+            label: "Platforms",
+            value: draft.platforms.youtube.title.trim() ? "Ready" : "Pending",
+            tone: draft.platforms.youtube.title.trim() ? "brand" : "neutral",
+          },
+        ]}
+        sections={[
+          { label: "Upload", detail: "Bring in the finished reel file first.", href: "#reel-upload" },
+          { label: "Caption", detail: "Use the transcript excerpt to guide the generated copy.", href: "#reel-caption" },
+          { label: "Platform copy", detail: "Review the per-platform variants together.", href: "#reel-platform-copy" },
+          { label: "Blog", detail: "Keep the long-form article moving alongside the reel package.", href: `/projects/${projectId}/blog` },
+          { label: "Metadata", detail: "Validate the structured publish fields before release.", href: `/projects/${projectId}/metadata` },
+        ]}
+        sectionsTitle="Deliverable Links"
+      >
+        <GenerateModePanel
+          eyebrow="Deliverables"
+          title="Finish the short-form package here."
+          description="This mode is for locked outputs, not exploration. Upload the final reel, tighten the caption, and confirm the per-platform copy that Publishing will depend on."
+          summary={draft.platforms.youtube.title.trim() ? "Platform copy has been generated for the current reel package." : "Platform copy has not been generated yet."}
+          links={[
+            {
+              label: "Blog",
+              detail: "Keep the article moving in parallel so long-form and short-form outputs stay aligned.",
+              href: `/projects/${projectId}/blog`,
+              state: transcriptText ? "Ready to refine" : "Transcript needed",
+              tone: transcriptText ? "info" : "warning",
+              ctaLabel: "Open Blog",
+            },
+            {
+              label: "Metadata",
+              detail: "Validate the structured fields that connect this reel package to downstream publishing.",
+              href: `/projects/${projectId}/metadata`,
+              state: transcriptText ? "Ready to extract" : "Transcript needed",
+              tone: transcriptText ? "brand" : "warning",
+              ctaLabel: "Open Metadata",
+            },
+            {
+              label: "Generate overview",
+              detail: "Return to the Generate hub to compare Deliverables readiness against Studio work.",
+              href: `/projects/${projectId}/generate`,
+              state: reelAsset ? "Deliverable in motion" : "Awaiting reel",
+              tone: reelAsset ? "success" : "neutral",
+              ctaLabel: "Open Generate",
+            },
+          ]}
+        />
+
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(340px,0.8fr)]">
+        <Card id="reel-upload">
           <CardHeader
             eyebrow="Asset"
             title="Finished reel upload"
@@ -488,7 +560,7 @@ export default function ReelPage() {
           </div>
         </Card>
 
-        <Card>
+        <Card id="reel-caption">
           <CardHeader
             eyebrow="Caption"
             title="Transcript excerpt / caption copy"
@@ -530,7 +602,7 @@ export default function ReelPage() {
         />
       ) : null}
 
-      <Card>
+      <Card id="reel-platform-copy">
         <CardHeader eyebrow="Distribution" title="Platform Copy" />
         <div className="mt-6 grid gap-4 xl:grid-cols-2">
           {PLATFORM_CONFIG.map((platform) => {
@@ -641,6 +713,7 @@ export default function ReelPage() {
           })}
         </div>
       </Card>
+      </GenerateWorkspace>
     </div>
   );
 }

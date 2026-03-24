@@ -9,7 +9,7 @@ import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
-import { StepIntro } from "@/components/workflow/StepIntro";
+import { GenerateStudioFrame } from "@/components/generate/GenerateStudioFrame";
 
 type VisualAsset = Awaited<ReturnType<typeof projects.getSourceAsset>>;
 
@@ -158,46 +158,80 @@ export default function VisualAssetsPage() {
   const availableCount = [sourceAsset, sermonAsset, sermonThumbnailAsset, reelAsset, reelThumbnailAsset].filter(Boolean).length;
 
   return (
-    <div className="space-y-6">
-      <StepIntro
-        eyebrow="Visual Assets"
-        title={`Review the visual package for ${project?.title ?? "this sermon"}.`}
-        description="See the sermon media and reel media together in one place so the final visual handoff is easier to inspect."
-        meta={[
-          project?.speaker_display_name ?? project?.speaker ?? "Speaker pending",
-          `${availableCount} of 5 assets available`,
-          reelAsset ? "Reel uploaded" : "Reel pending",
-        ]}
-      />
+    <GenerateStudioFrame
+      eyebrow="Visual Assets"
+      title={`Review the visual package for ${project?.title ?? "this sermon"}.`}
+      description="See the sermon media and reel media together in one place so the final visual handoff is easier to inspect."
+      mode={{
+        label: "Studio Mode",
+        title: "Visual review sits inside the Studio group.",
+        description:
+          "Use Visuals alongside Clips and Text while the source material is still being shaped. Once the assets look right, the deliverable pages can package the final outputs.",
+      }}
+      statusItems={[
+        {
+          label: "Project",
+          value: project?.speaker_display_name ?? project?.speaker ?? "Pending",
+          tone: project?.speaker_display_name || project?.speaker ? "brand" : "warning",
+        },
+        {
+          label: "Assets",
+          value: `${availableCount}/5`,
+          tone: availableCount > 0 ? "success" : "neutral",
+        },
+        {
+          label: "Reel",
+          value: reelAsset ? "Uploaded" : "Pending",
+          tone: reelAsset ? "info" : "warning",
+        },
+      ]}
+      snapshotItems={[
+        {
+          label: "Available",
+          value: `${availableCount}/5`,
+          tone: availableCount > 0 ? "success" : "neutral",
+        },
+        {
+          label: "Sermon",
+          value: sermonAsset ? "Ready" : "Pending",
+          tone: sermonAsset ? "success" : "warning",
+        },
+        {
+          label: "Reel",
+          value: reelAsset ? "Ready" : "Pending",
+          tone: reelAsset ? "brand" : "warning",
+        },
+      ]}
+      sections={[
+        { label: "Source video", detail: "The upload used to build the sermon workflow.", href: "#source-video" },
+        { label: "Sermon assets", detail: "The sermon master and thumbnail used throughout the pipeline.", href: "#sermon-assets" },
+        { label: "Reel assets", detail: "The final reel and reel thumbnail for distribution.", href: "#reel-assets" },
+        { label: "Sermon thumbnail", detail: "Open the dedicated prompt-and-upload page for the sermon cover.", href: `/projects/${projectId}/sermon-thumbnail` },
+        { label: "Reel thumbnail", detail: "Open the dedicated prompt-and-upload page for the reel cover.", href: `/projects/${projectId}/reel-thumbnail` },
+        { label: "Text workspace", detail: "Check titles, descriptions, and reel copy next.", href: `/projects/${projectId}/text` },
+        { label: "Clip Lab", detail: "Return to ranked moments while polishing visuals.", href: `/projects/${projectId}/clips` },
+      ]}
+      sectionsTitle="Studio Links"
+    >
+        {!sourceAsset && !sermonAsset && !sermonThumbnailAsset && !reelAsset && !reelThumbnailAsset ? (
+          <Alert tone="warning" title="No visual assets yet">
+            Upload and generate the sermon/reel assets first, then this page will become the shared review surface.
+          </Alert>
+        ) : null}
 
-      {!sourceAsset && !sermonAsset && !sermonThumbnailAsset && !reelAsset && !reelThumbnailAsset ? (
-        <Alert tone="warning" title="No visual assets yet">
-          Upload and generate the sermon/reel assets first, then this page will become the shared review surface.
-        </Alert>
-      ) : null}
+        <div id="source-video">
+          <AssetCard title="Source video" asset={sourceAsset ?? null} />
+        </div>
 
-      <div className="grid gap-6 2xl:grid-cols-2">
-        <AssetCard
-          title="Source video"
-          asset={sourceAsset ?? null}
-        />
-        <AssetCard
-          title="Sermon master"
-          asset={sermonAsset ?? null}
-        />
-        <AssetCard
-          title="Sermon thumbnail"
-          asset={sermonThumbnailAsset ?? null}
-        />
-        <AssetCard
-          title="Final reel"
-          asset={reelAsset ?? null}
-        />
-        <AssetCard
-          title="Reel thumbnail"
-          asset={reelThumbnailAsset ?? null}
-        />
-      </div>
-    </div>
+        <div id="sermon-assets" className="grid gap-6 2xl:grid-cols-2">
+          <AssetCard title="Sermon master" asset={sermonAsset ?? null} />
+          <AssetCard title="Sermon thumbnail" asset={sermonThumbnailAsset ?? null} />
+        </div>
+
+        <div id="reel-assets" className="grid gap-6 2xl:grid-cols-2">
+          <AssetCard title="Final reel" asset={reelAsset ?? null} />
+          <AssetCard title="Reel thumbnail" asset={reelThumbnailAsset ?? null} />
+        </div>
+    </GenerateStudioFrame>
   );
 }

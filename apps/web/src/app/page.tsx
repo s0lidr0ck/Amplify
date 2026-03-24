@@ -85,21 +85,21 @@ export default function Dashboard() {
               <Card className="bg-[linear-gradient(160deg,rgba(255,255,255,0.98),rgba(237,248,250,0.96))]">
                 <CardHeader
                   eyebrow="Workflow Model"
-                  title="One guided system, nine stages."
-                  description="The overhaul is organized around a clear production path so every page can communicate progress, blockers, and next actions."
+                  title="Four product areas, one workspace map."
+                  description="The overhaul now groups work into Ingest, Generate, Publish, and Analytics so the team can orient faster before dropping into individual steps."
                 />
                 <div className="mt-6 space-y-3 text-sm text-muted">
                   <div className="rounded-2xl bg-surface/80 p-4">
-                    <p className="font-semibold text-ink">Source to transcript</p>
-                    <p className="mt-2 leading-6">Bring in the sermon, trim the usable message, and approve the transcript.</p>
+                    <p className="font-semibold text-ink">Ingest</p>
+                    <p className="mt-2 leading-6">Bring in the sermon, create the master asset, and lock the transcript foundation.</p>
                   </div>
                   <div className="rounded-2xl bg-surface/80 p-4">
-                    <p className="font-semibold text-ink">Clips to packaging</p>
-                    <p className="mt-2 leading-6">Shape short-form moments and create the long-form presentation assets.</p>
+                    <p className="font-semibold text-ink">Generate and publish</p>
+                    <p className="mt-2 leading-6">Shape clips, visuals, copy, metadata, and outbound publishing from one connected studio flow.</p>
                   </div>
                   <div className="rounded-2xl bg-surface/80 p-4">
-                    <p className="font-semibold text-ink">Metadata to publishing</p>
-                    <p className="mt-2 leading-6">Finalize downstream data and handoff for release with less guesswork.</p>
+                    <p className="font-semibold text-ink">Analytics</p>
+                    <p className="mt-2 leading-6">Start building toward brand, platform, and per-content visibility without losing the operational context.</p>
                   </div>
                 </div>
               </Card>
@@ -108,12 +108,12 @@ export default function Dashboard() {
                 <CardHeader
                   eyebrow="Next Build"
                   title="What this first pass upgrades"
-                  description="The design foundation, navigation shell, and dashboard now set the tone for the remaining workflow pages."
+                  description="The design foundation, navigation shell, and category overview now set the tone for the remaining workflow pages."
                 />
                 <ul className="mt-6 space-y-3 text-sm text-muted">
                   <li className="rounded-2xl bg-surface-strong/60 p-4">Shared tokens for surfaces, type, color, and state styling.</li>
-                  <li className="rounded-2xl bg-surface-strong/60 p-4">A workflow rail that explains where the sermon is now and what comes next.</li>
-                  <li className="rounded-2xl bg-surface-strong/60 p-4">A dashboard built around resuming work, not just listing records.</li>
+                  <li className="rounded-2xl bg-surface-strong/60 p-4">A workspace map that groups steps into Ingest, Generate, Publish, and Analytics.</li>
+                  <li className="rounded-2xl bg-surface-strong/60 p-4">A project overview built around readiness, blockers, and next actions instead of pure scrolling.</li>
                 </ul>
               </Card>
             </div>

@@ -11,6 +11,7 @@ import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
+import { GenerateWorkspace } from "@/components/generate/GenerateWorkspace";
 import { StepIntro } from "@/components/workflow/StepIntro";
 
 const EMPTY_PLATFORM = { title: "", description: "", tags: [] as string[] };
@@ -145,8 +146,12 @@ export default function ReelThumbnailPage() {
         if (payload.type === "status") {
           setGenerateStatus(payload.message);
         } else if (payload.type === "done") {
+          const nextDraft: ReelDraft = { ...draft, thumbnail_prompts: payload.thumbnail_prompts || [] };
           setGenerateStatus("Done");
-          setDraft((current) => ({ ...current, thumbnail_prompts: payload.thumbnail_prompts || [] }));
+          setDraft(nextDraft);
+          saveProjectDraft(projectId, "reel", nextDraft);
+          void projects.saveDraft(projectId, "reel", nextDraft);
+          void queryClient.invalidateQueries({ queryKey: ["project-draft", projectId, "reel"] });
         } else if (payload.type === "error") {
           throw new Error(payload.message);
         }
@@ -179,25 +184,43 @@ export default function ReelThumbnailPage() {
         ]}
       />
 
-      <Card>
-        <CardHeader
-          eyebrow="Creative"
-          title="Reel Thumbnail Prompt Ideas"
-          action={
-            <Button onClick={generateReelThumbnailPrompts} disabled={isGenerating}>
-              {isGenerating ? "Generating..." : "Generate 3 Prompt Ideas"}
-            </Button>
-          }
-        />
-        <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_360px]">
-          <div className="xl:col-span-2 space-y-3">
+      <GenerateWorkspace
+        snapshotItems={[
+          { label: "Caption", value: draft.caption.trim() ? "Ready" : "Missing", tone: draft.caption.trim() ? "success" : "warning" },
+          {
+            label: "Prompts",
+            value: draft.thumbnail_prompts.length ? "Generated" : "Empty",
+            tone: draft.thumbnail_prompts.length ? "brand" : "neutral",
+          },
+          {
+            label: "Asset",
+            value: reelThumbnailAsset ? "Uploaded" : "Missing",
+            tone: reelThumbnailAsset ? "success" : "warning",
+          },
+        ]}
+        sections={[
+          { label: "Prompt ideas", detail: "Generate and compare the three reel thumbnail directions.", href: "#reel-thumbnail-prompts" },
+          { label: "Upload", detail: "Store the selected cover image here for later publishing.", href: "#reel-thumbnail-upload" },
+        ]}
+      >
+        <Card id="reel-thumbnail-prompts">
+          <CardHeader
+            eyebrow="Creative"
+            title="Reel Thumbnail Prompt Ideas"
+            action={
+              <Button onClick={generateReelThumbnailPrompts} disabled={isGenerating}>
+                {isGenerating ? "Generating..." : "Generate 3 Prompt Ideas"}
+              </Button>
+            }
+          />
+          <div className="mt-6 space-y-3">
             {!draft.caption.trim() ? (
               <Alert tone="warning">Generate the reel package or add caption text first so thumbnail prompts have source material.</Alert>
             ) : null}
             {generateError ? <Alert tone="danger">{generateError}</Alert> : null}
             {generateStatus ? <Alert tone="info">{generateStatus}</Alert> : null}
           </div>
-          <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+          <div className="mt-6 grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
             {["A", "B", "C"].map((label, index) => {
               const prompt = draft.thumbnail_prompts[index];
               return (
@@ -230,8 +253,12 @@ export default function ReelThumbnailPage() {
               );
             })}
           </div>
+        </Card>
 
-          <div className="rounded-[1.5rem] border border-border/80 bg-background-alt p-4">
+        <Card id="reel-thumbnail-upload">
+          <CardHeader eyebrow="Asset" title="Reel thumbnail upload" description="Upload the chosen reel cover image here." />
+
+          <div className="mt-4 space-y-3">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="font-semibold text-ink">Reel thumbnail</p>
@@ -240,45 +267,43 @@ export default function ReelThumbnailPage() {
               {reelThumbnailAsset ? <Badge tone="success">Uploaded</Badge> : <Badge tone="neutral">Missing</Badge>}
             </div>
 
-            <div className="mt-4 space-y-3">
-              {thumbnailUploadError ? <Alert tone="danger">{thumbnailUploadError}</Alert> : null}
-              {thumbnailUploadStatus ? <Alert tone="info">{thumbnailUploadStatus}</Alert> : null}
-              <label className="block">
-                <span className="sr-only">Choose reel thumbnail</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (file) uploadMutation.mutate(file);
-                    event.currentTarget.value = "";
-                  }}
-                  className="block w-full rounded-2xl border border-border bg-surface px-4 py-3 text-sm text-ink file:mr-4 file:rounded-full file:border-0 file:bg-brand file:px-4 file:py-2 file:font-semibold file:text-white"
-                />
-              </label>
-              {reelThumbnailAsset ? (
-                <div className="space-y-3">
-                  <p className="text-xs text-muted">{reelThumbnailAsset.filename}</p>
-                  <div className="overflow-hidden rounded-[1.25rem] border border-border bg-surface">
-                    <Image
-                      src={reelThumbnailAsset.playback_url ?? `${API_BASE}/api/media/asset/${reelThumbnailAsset.id}`}
-                      alt={reelThumbnailAsset.filename}
-                      width={640}
-                      height={360}
-                      className="h-auto w-full object-cover"
-                      unoptimized
-                    />
-                  </div>
+            {thumbnailUploadError ? <Alert tone="danger">{thumbnailUploadError}</Alert> : null}
+            {thumbnailUploadStatus ? <Alert tone="info">{thumbnailUploadStatus}</Alert> : null}
+            <label className="block">
+              <span className="sr-only">Choose reel thumbnail</span>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) uploadMutation.mutate(file);
+                  event.currentTarget.value = "";
+                }}
+                className="block w-full rounded-2xl border border-border bg-surface px-4 py-3 text-sm text-ink file:mr-4 file:rounded-full file:border-0 file:bg-brand file:px-4 file:py-2 file:font-semibold file:text-white"
+              />
+            </label>
+            {reelThumbnailAsset ? (
+              <div className="space-y-3">
+                <p className="text-xs text-muted">{reelThumbnailAsset.filename}</p>
+                <div className="overflow-hidden rounded-[1.25rem] border border-border bg-surface">
+                  <Image
+                    src={reelThumbnailAsset.playback_url ?? `${API_BASE}/api/media/asset/${reelThumbnailAsset.id}`}
+                    alt={reelThumbnailAsset.filename}
+                    width={640}
+                    height={360}
+                    className="h-auto w-full object-cover"
+                    unoptimized
+                  />
                 </div>
-              ) : (
-                <div className="flex aspect-video items-center justify-center rounded-[1.25rem] border border-dashed border-border bg-surface px-4 text-center text-sm text-muted">
-                  No reel thumbnail uploaded yet
-                </div>
-              )}
-            </div>
+              </div>
+            ) : (
+              <div className="flex aspect-video items-center justify-center rounded-[1.25rem] border border-dashed border-border bg-surface px-4 text-center text-sm text-muted">
+                No reel thumbnail uploaded yet
+              </div>
+            )}
           </div>
-        </div>
-      </Card>
+        </Card>
+      </GenerateWorkspace>
     </div>
   );
 }

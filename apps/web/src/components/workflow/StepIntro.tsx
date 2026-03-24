@@ -15,6 +15,7 @@ export function StepIntro({
   meta,
   statusItems,
   action,
+  supportingPanel,
 }: {
   eyebrow: string;
   title: string;
@@ -22,6 +23,7 @@ export function StepIntro({
   meta?: string[];
   statusItems?: StepIntroStatusItem[];
   action?: ReactNode;
+  supportingPanel?: ReactNode;
 }) {
   return (
     <Card className="overflow-hidden bg-[linear-gradient(140deg,rgba(255,255,255,0.98),rgba(255,247,242,0.96))]">
@@ -56,6 +58,7 @@ export function StepIntro({
           ))}
         </div>
       ) : null}
+      {supportingPanel ? <div className="mt-4">{supportingPanel}</div> : null}
     </Card>
   );
 }

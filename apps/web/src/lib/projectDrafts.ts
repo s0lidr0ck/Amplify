@@ -24,6 +24,25 @@ export interface ReelPlatformDraft {
   tags: string[];
 }
 
+
+export interface ScheduledPublishItem {
+  id: string;
+  starts_at: string;
+  platform: "wix" | "youtube" | "facebook" | "instagram" | "tiktok";
+  post_type:
+    | "wix_article"
+    | "youtube_sermon"
+    | "youtube_short"
+    | "facebook_text"
+    | "facebook_reel"
+    | "instagram_image"
+    | "instagram_reel"
+    | "tiktok_photo"
+    | "tiktok_short";
+  asset_ref: string;
+  label: string;
+  status: "scheduled" | "posted";
+}
 export interface PublishingDraft {
   featured_image_source: string;
   featured_image_id: string;
@@ -36,6 +55,7 @@ export interface PublishingDraft {
   meta_description: string;
   og_title: string;
   og_description: string;
+  schedule_items?: ScheduledPublishItem[];
   wix_result?: {
     draft_post_id: string;
     post_id: string;
@@ -43,6 +63,69 @@ export interface PublishingDraft {
     title: string;
     preview_url: string;
     published_at: string;
+  } | null;
+  youtube_result?: {
+    video_id: string;
+    status: string;
+    title: string;
+    watch_url: string;
+    studio_url: string;
+    published_at: string;
+    channel_id: string;
+    channel_title: string;
+  } | null;
+  youtube_short_result?: {
+    video_id: string;
+    status: string;
+    title: string;
+    watch_url: string;
+    studio_url: string;
+    published_at: string;
+    channel_id: string;
+    channel_title: string;
+  } | null;
+  facebook_post_result?: {
+    post_id: string;
+    status: string;
+    message: string;
+    post_url: string;
+  } | null;
+  facebook_reel_result?: {
+    video_id: string;
+    status: string;
+    title: string;
+    description: string;
+    post_url: string;
+  } | null;
+  instagram_reel_result?: {
+    media_id: string;
+    status: string;
+    caption: string;
+    permalink: string;
+  } | null;
+  instagram_post_result?: {
+    media_id: string;
+    status: string;
+    caption: string;
+    permalink: string;
+  } | null;
+  tiktok_short_result?: {
+    publish_id: string;
+    status: string;
+    privacy_level: string;
+    title: string;
+    creator_username?: string | null;
+    max_video_post_duration_sec?: number | null;
+    status_raw?: Record<string, unknown> | null;
+  } | null;
+  tiktok_photo_result?: {
+    publish_id: string;
+    status: string;
+    privacy_level: string;
+    title: string;
+    description?: string;
+    creator_username?: string | null;
+    status_raw?: Record<string, unknown> | null;
   } | null;
 }
 
