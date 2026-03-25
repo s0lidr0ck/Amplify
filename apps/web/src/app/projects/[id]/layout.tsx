@@ -18,6 +18,7 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
   const params = useParams();
   const projectId = params.id as string;
   const [mobileRailOpen, setMobileRailOpen] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
 
   const { data: project } = useQuery({
     queryKey: ["project", projectId],
@@ -65,6 +66,18 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
     };
   }, [mobileRailOpen]);
 
+  useEffect(() => {
+    if (!shareCopied) return;
+    const timeoutId = window.setTimeout(() => setShareCopied(false), 1800);
+    return () => window.clearTimeout(timeoutId);
+  }, [shareCopied]);
+
+  async function copyShareLink() {
+    const shareUrl = `${window.location.origin}/share/${projectId}`;
+    await navigator.clipboard.writeText(shareUrl);
+    setShareCopied(true);
+  }
+
   return (
     <AppShell
       action={
@@ -90,6 +103,9 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
                 <LinkButton href={`/projects/${projectId}/visuals`} variant="secondary" size="sm">
                   Visual Assets
                 </LinkButton>
+                <Button type="button" variant="secondary" size="sm" onClick={() => void copyShareLink()}>
+                  {shareCopied ? "Share Link Copied" : "Share"}
+                </Button>
               </>
             }
           />
