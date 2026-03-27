@@ -153,12 +153,20 @@ export function ProjectWorkflowNav({ projectId }: { projectId: string }) {
     trim: trimDone ? "done" : currentStageHref === "trim" ? "now" : sourceDone ? "ready" : "locked",
     transcript:
       transcriptDone ? "done" : currentStageHref === "transcript" ? "now" : trimDone ? "ready" : "locked",
+    "title-desc":
+      titleDescDone
+        ? "done"
+        : currentStageHref === "title-desc"
+          ? "now"
+          : transcriptDone
+            ? "ready"
+            : "locked",
     "sermon-thumbnail":
       sermonThumbnailDone
         ? "done"
         : currentStageHref === "sermon-thumbnail"
           ? "now"
-          : transcriptDone
+          : titleDescDone
             ? "ready"
             : "locked",
     clips:
@@ -178,25 +186,17 @@ export function ProjectWorkflowNav({ projectId }: { projectId: string }) {
           : reelDone
             ? "ready"
             : "locked",
-    "title-desc":
-      titleDescDone
-        ? "done"
-        : currentStageHref === "title-desc"
-          ? "now"
-          : reelThumbnailDone
-            ? "ready"
-            : "locked",
+    blog: blogDone ? "done" : currentStageHref === "blog" ? "now" : reelThumbnailDone ? "ready" : "locked",
     "text-post":
       textPostDone
         ? "done"
         : currentStageHref === "text-post"
           ? "now"
-          : titleDescDone
+          : blogDone
             ? "ready"
             : "locked",
-    blog: blogDone ? "done" : currentStageHref === "blog" ? "now" : textPostDone ? "ready" : "locked",
     metadata:
-      metadataDone ? "done" : currentStageHref === "metadata" ? "now" : blogDone ? "ready" : "locked",
+      metadataDone ? "done" : currentStageHref === "metadata" ? "now" : textPostDone ? "ready" : "locked",
     publishing:
       publishingDone
         ? "done"
