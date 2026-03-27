@@ -60,6 +60,7 @@ export default function TrimPage() {
   const [runAllState, setRunAllState] = useState<"idle" | "running" | "completed" | "failed">("idle");
   const [runAllMessages, setRunAllMessages] = useState<string[]>([]);
   const [runAllError, setRunAllError] = useState("");
+  const [runAllJobId, setRunAllJobId] = useState<string | null>(null);
 
   const duration = videoDuration ?? sourceAsset?.duration_seconds ?? 60;
 
@@ -82,6 +83,33 @@ export default function TrimPage() {
       setJobId(data.job_id);
     },
   });
+
+  // On mount, check if a run-all pipeline job is already in progress
+  // so we can resume showing status if the user navigated away and came back.
+  const { data: projectJobs } = useQuery({
+    queryKey: ["project-jobs", projectId],
+    queryFn: () => jobs.listForProject(projectId),
+    enabled: runAllState === "idle",
+  });
+
+  useEffect(() => {
+    if (runAllState !== "idle" || !projectJobs) return;
+    const active = projectJobs.find(
+      (j) => j.job_type === "run_all_pipeline" && (j.status === "queued" || j.status === "running")
+    );
+    const finished = projectJobs.find(
+      (j) => j.job_type === "run_all_pipeline" && (j.status === "completed" || j.status === "failed")
+    );
+    if (active) {
+      setRunAllJobId(active.id);
+      setRunAllState("running");
+      setRunAllMessages([`Pipeline job ${active.id} is already running. Resuming status updates...`]);
+    } else if (finished && finished.status === "completed") {
+      setRunAllJobId(finished.id);
+      setRunAllState("completed");
+      setRunAllMessages([`Last pipeline completed successfully.`]);
+    }
+  }, [projectJobs, runAllState]);
 
   const appendRunAllMessage = (message: string) => {
     setRunAllMessages((prev) => (prev[prev.length - 1] === message ? prev : [...prev, message]));
@@ -130,8 +158,9 @@ export default function TrimPage() {
         candidate_limit: DEFAULT_CANDIDATE_LIMIT,
         output_count: DEFAULT_OUTPUT_COUNT,
       });
+      setRunAllJobId(response.job_id);
       setJobId(response.job_id);
-      appendRunAllMessage(`Run all: Pipeline started (job ${response.job_id}). You can close this page — it will keep running.`);
+      appendRunAllMessage(`Run all: Pipeline started. You can close this page — it will keep running.`);
       await waitForJob(response.job_id, "Pipeline");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["jobs", projectId] }),
@@ -151,6 +180,44 @@ export default function TrimPage() {
       setRunAllState("failed");
     }
   }
+
+  // Poll the pipeline job when we have its ID (works after page reload too)
+  const { data: runAllJob } = useQuery({
+    queryKey: ["run-all-job", runAllJobId],
+    queryFn: () => jobs.get(runAllJobId!),
+    enabled: !!runAllJobId,
+    refetchInterval: (query) => {
+      const s = query.state.data?.status;
+      return s === "completed" || s === "failed" ? false : 3000;
+    },
+  });
+
+  // Sync polled job status into the message log when resuming after navigation
+  useEffect(() => {
+    if (!runAllJob || runAllState !== "running") return;
+    const msg = runAllJob.current_message;
+    const pct = runAllJob.progress_percent;
+    if (msg) {
+      appendRunAllMessage(
+        `Pipeline: ${msg}${pct != null ? ` (${pct}%)` : ""}`
+      );
+    }
+    if (runAllJob.status === "completed") {
+      appendRunAllMessage("Run all: Everything finished successfully.");
+      setRunAllState("completed");
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["transcript", projectId] }),
+        queryClient.invalidateQueries({ queryKey: ["clip-candidates", projectId] }),
+        queryClient.invalidateQueries({ queryKey: ["project-draft", projectId] }),
+        queryClient.invalidateQueries({ queryKey: ["project", projectId] }),
+      ]);
+    } else if (runAllJob.status === "failed") {
+      const errMsg = runAllJob.error_text || "Pipeline failed.";
+      setRunAllError(errMsg);
+      appendRunAllMessage(`Run all: ERROR: ${errMsg}`);
+      setRunAllState("failed");
+    }
+  }, [runAllJob]);
 
   const { data: job } = useQuery({
     queryKey: ["job", jobId],
@@ -408,7 +475,15 @@ export default function TrimPage() {
               />
             ) : null}
 
-            {runAllMessages.length > 0 ? (
+            {runAllJob ? (
+              <JobStatusPanel
+                title="Run all processes"
+                job={runAllJob}
+                runningHint="The full pipeline is running on the server. You can leave this page and come back — it will keep going."
+              />
+            ) : null}
+
+            {runAllJobId || runAllMessages.length > 0 ? (
               <Card>
                 <CardHeader
                   eyebrow="Automation"
@@ -437,11 +512,13 @@ export default function TrimPage() {
                   }
                 />
                 <div className="mt-6 max-h-[24rem] space-y-3 overflow-y-auto rounded-[1.5rem] border border-border/80 bg-surface p-5">
-                  {runAllMessages.map((message, index) => (
+                  {runAllMessages.length > 0 ? runAllMessages.map((message, index) => (
                     <p key={`${index}-${message}`} className="text-sm leading-7 text-ink">
                       {message}
                     </p>
-                  ))}
+                  )) : (
+                    <p className="text-sm text-muted">Waiting for status updates...</p>
+                  )}
                 </div>
               </Card>
             ) : null}
