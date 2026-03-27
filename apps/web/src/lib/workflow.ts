@@ -26,6 +26,12 @@ export const workflowStages: WorkflowStage[] = [
     description: "Generate, inspect, and review the sermon transcript.",
   },
   {
+    href: "title-desc",
+    label: "Title & Desc",
+    shortLabel: "Title & Desc",
+    description: "Generate and refine the YouTube title and description for the sermon.",
+  },
+  {
     href: "sermon-thumbnail",
     label: "Sermon Thumbnail",
     shortLabel: "Sermon Thumb",
@@ -50,22 +56,16 @@ export const workflowStages: WorkflowStage[] = [
     description: "Review the reel thumbnail prompt ideas and upload the selected cover image.",
   },
   {
-    href: "title-desc",
-    label: "Title & Desc",
-    shortLabel: "Title & Desc",
-    description: "Generate and refine the YouTube title and description for the sermon.",
+    href: "blog",
+    label: "Blog Post",
+    shortLabel: "Blog",
+    description: "Create the long-form written adaptation of the message.",
   },
   {
     href: "text-post",
     label: "Text Post",
     shortLabel: "Text Post",
     description: "Generate and edit the text-only social post for the sermon.",
-  },
-  {
-    href: "blog",
-    label: "Blog Post",
-    shortLabel: "Blog",
-    description: "Create the long-form written adaptation of the message.",
   },
   {
     href: "publishing",

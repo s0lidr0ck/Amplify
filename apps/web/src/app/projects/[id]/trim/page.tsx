@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { clips, content, jobs, projects, transcript, trim, getMediaPlaybackUrl } from "@/lib/api";
+import { jobs, projects, trim, automation, getMediaPlaybackUrl } from "@/lib/api";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -112,135 +112,21 @@ export default function TrimPage() {
     }
   }
 
-  async function waitForCurrentSermonAsset() {
-    for (let attempt = 0; attempt < 30; attempt += 1) {
-      const currentAsset = await projects.getSermonAsset(projectId);
-      if (currentAsset) return currentAsset;
-      await sleep(1000);
-    }
-    throw new Error("Sermon master was generated, but the new sermon asset did not appear.");
-  }
-
-  async function waitForCurrentTranscript() {
-    for (let attempt = 0; attempt < 30; attempt += 1) {
-      const currentTranscript = await transcript.getForProject(projectId);
-      if (currentTranscript) return currentTranscript;
-      await sleep(1000);
-    }
-    throw new Error("Transcript job completed, but the transcript record did not appear.");
-  }
-
-  async function ensureTranscriptArtifacts(transcriptId: string) {
-    const artifactStatus = await transcript.getArtifactStatus(transcriptId);
-    if (artifactStatus.ready) {
-      appendRunAllMessage("Clip artifacts: Ready.");
-      return;
-    }
-
-    appendRunAllMessage("Clip artifacts: Missing pieces detected. Rebuilding artifacts...");
-    const artifactJob = await transcript.generateArtifacts(transcriptId);
-    await waitForJob(artifactJob.job_id, "Clip artifacts");
-  }
-
   async function runAllProcesses() {
     if (!project || !sourceAsset) return;
 
     setRunAllState("running");
     setRunAllError("");
-    setRunAllMessages(["Run all: Starting full downstream workflow."]);
+    setRunAllMessages(["Run all: Sending pipeline to server..."]);
 
     try {
-      let activeSermonAsset = sermonAsset;
-
-      if (!activeSermonAsset) {
-        appendRunAllMessage("Sermon master: No existing master found. Generating one first...");
-        const trimResponse = await trimMutation.mutateAsync({
-          project_id: projectId,
-          source_asset_id: sourceAsset.id,
-          start_seconds: useFullFile ? 0 : safeStart,
-          end_seconds: useFullFile ? duration : safeEnd,
-          use_full_file: useFullFile,
-        });
-        setJobId(trimResponse.job_id);
-        await waitForJob(trimResponse.job_id, "Sermon master");
-        activeSermonAsset = await waitForCurrentSermonAsset();
-      } else {
-        appendRunAllMessage("Sermon master: Using the current sermon master asset.");
-      }
-
-      appendRunAllMessage("Transcript: Starting sermon transcription...");
-      const transcriptResponse = await transcript.start({
-        project_id: projectId,
-        sermon_asset_id: activeSermonAsset.id,
-      });
-      await waitForJob(transcriptResponse.job_id, "Transcript");
-      const currentTranscript = await waitForCurrentTranscript();
-      const transcriptText = currentTranscript.raw_text || currentTranscript.cleaned_text || "";
-      if (!transcriptText.trim()) {
-        throw new Error("Transcript finished without any usable text.");
-      }
-
-      await ensureTranscriptArtifacts(currentTranscript.id);
-
-      appendRunAllMessage("Metadata: Generating structured sermon metadata...");
-      const metadataResult = await content.generateMetadata({
-        transcript: transcriptText,
-        preacher_name: project.speaker_display_name || project.speaker,
-        date_preached: project.sermon_date,
-        model: DEFAULT_MODEL,
-        host: DEFAULT_HOST,
-      });
-      await projects.saveDraft(projectId, "metadata", {
-        raw: metadataResult.raw,
-        metadata: metadataResult.metadata,
-        warnings: metadataResult.warnings,
-      });
-      appendRunAllMessage("Metadata: Saved.");
-
-      appendRunAllMessage("Blog: Generating long-form article draft...");
-      const blogResult = await content.generateBlog({
-        transcript: transcriptText,
-        preacher_name: project.speaker_display_name || project.speaker,
-        date_preached: project.sermon_date,
-        model: DEFAULT_MODEL,
-        host: DEFAULT_HOST,
-      });
-      await projects.saveDraft(projectId, "blog", { markdown: blogResult.markdown });
-      appendRunAllMessage("Blog: Saved.");
-
-      appendRunAllMessage("Sermon Thumbnail / Title & Desc: Generating prompts plus YouTube copy...");
-      const packagingResult = await content.generatePackaging({
-        transcript: transcriptText,
-        preacher_name: project.speaker_display_name || project.speaker,
-        date_preached: project.sermon_date,
-        model: DEFAULT_MODEL,
-        host: DEFAULT_HOST,
-        sermon_metadata: metadataResult.metadata,
-      });
-      await projects.saveDraft(projectId, "packaging", packagingResult);
-      appendRunAllMessage("Sermon Thumbnail / Title & Desc: Saved.");
-
-      appendRunAllMessage("Clip Lab: Running clip analysis...");
-      const clipAnalysis = await clips.analyze({
-        project_id: projectId,
-        sermon_asset_id: activeSermonAsset.id,
-        transcript_id: currentTranscript.id,
-        model: DEFAULT_MODEL,
-        host: DEFAULT_HOST,
+      const response = await automation.runAll(projectId, {
         candidate_limit: DEFAULT_CANDIDATE_LIMIT,
         output_count: DEFAULT_OUTPUT_COUNT,
       });
-      await waitForJob(clipAnalysis.job_id, "Clip analysis");
-
-      appendRunAllMessage("Text Post: Generating social post from the blog draft...");
-      const facebookResult = await content.generateFacebook({
-        blog_post_markdown: blogResult.markdown,
-        model: DEFAULT_MODEL,
-        host: DEFAULT_HOST,
-      });
-      await projects.saveDraft(projectId, "facebook", { post: facebookResult.post });
-      appendRunAllMessage("Text Post: Saved.");
-
+      setJobId(response.job_id);
+      appendRunAllMessage(`Run all: Pipeline started (job ${response.job_id}). You can close this page — it will keep running.`);
+      await waitForJob(response.job_id, "Pipeline");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["jobs", projectId] }),
         queryClient.invalidateQueries({ queryKey: ["sermon-asset", projectId] }),
@@ -250,7 +136,6 @@ export default function TrimPage() {
         queryClient.invalidateQueries({ queryKey: ["project-draft", projectId] }),
         queryClient.invalidateQueries({ queryKey: ["project", projectId] }),
       ]);
-
       appendRunAllMessage("Run all: Everything finished successfully.");
       setRunAllState("completed");
     } catch (error) {
@@ -499,7 +384,7 @@ export default function TrimPage() {
                     </Button>
                   </div>
                   <p className="text-xs leading-6 text-muted">
-                    Run All will use the current sermon master if one already exists. Otherwise it will generate the master first, then run transcript, metadata, blog, sermon thumbnail prompts, title/description, clip analysis, and the text post in sequence.
+                    Run All sends the full pipeline to the server. You can close the app and come back later — transcript, title/desc, sermon thumbnail prompts, clip analysis, blog post, text post, and metadata will all be generated in order.
                   </p>
                   {trimMutation.isError ? (
                     <Alert tone="danger">{(trimMutation.error as Error).message}</Alert>

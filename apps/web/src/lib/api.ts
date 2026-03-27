@@ -575,6 +575,17 @@ export const content = {
     }),
 };
 
+export const automation = {
+  runAll: (
+    projectId: string,
+    opts?: { model?: string; host?: string; candidate_limit?: number; output_count?: number }
+  ) =>
+    api<{ job_id: string; status: string; message: string }>(
+      `/api/automation/projects/${projectId}/run-all`,
+      { method: "POST", body: JSON.stringify(opts ?? {}) }
+    ),
+};
+
 export const publishing = {
   getWixConfig: () => api<WixConfig>("/api/publishing/wix/config"),
   uploadWixImage: async (projectId: string, file: File) => {
