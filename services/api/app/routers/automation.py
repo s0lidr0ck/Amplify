@@ -118,7 +118,6 @@ async def _run_pipeline(
     )
     from app.lib.llm import LlmError, call_llm_generate
     from app.lib.transcript_analysis import generate_transcript_analysis_artifacts, get_analysis_artifact_status
-    from app.routers.transcript import _run_local_transcription
     from app.routers.clips import _run_clip_analysis
 
     async def step(message: str, pct: int) -> None:
@@ -168,43 +167,105 @@ async def _run_pipeline(
             transcript_id = str(existing_tx.id)
             transcript_text = existing_tx.raw_text or existing_tx.cleaned_text or ""
         else:
-            # Start a new transcription job
-            tx_job_id = str(uuid.uuid4())
-            async with async_session() as db:
-                tx_job = ProcessingJob(
-                    id=tx_job_id,
-                    project_id=project_id,
-                    job_type="transcribe_sermon",
-                    subject_type="media_asset",
-                    subject_id=sermon_asset_id,
-                    status="queued",
-                    current_message="Transcription queued by automation",
-                )
-                db.add(tx_job)
-                await db.flush()
-                await append_job_event(db, tx_job_id, "status", "Queued by run-all automation", progress_percent=0)
-                await db.commit()
-
-            # Run transcription in-process (same path as local fallback)
-            await _run_local_transcription(tx_job_id, project_id, sermon_asset_id, "sermon")
-            await _poll_job(pipeline_job_id, tx_job_id, "Transcript")
+            # Run Whisper directly in a thread — avoids the event-loop conflict
+            # that occurs when calling _run_local_transcription (which uses
+            # asyncio.run() internally via _record_transcription_event).
+            await step("Transcript: Loading Faster-Whisper model...", 6)
 
             async with async_session() as db:
-                tx_result = await db.execute(
-                    select(Transcript)
-                    .where(
+                asset_obj = await db.get(MediaAsset, sermon_asset_id)
+                if not asset_obj:
+                    raise ValueError(f"Sermon asset {sermon_asset_id} not found")
+
+            from pathlib import Path
+            from app.routers.transcript import _resolve_upload_path, _format_progress_time
+            import queue as _queue
+            import threading
+
+            source_path = _resolve_upload_path(asset_obj.storage_key, asset_obj.filename)
+            if not source_path.exists():
+                raise FileNotFoundError(f"Sermon file not found on disk: {source_path}")
+
+            progress_q: _queue.Queue[tuple[str, int]] = _queue.Queue()
+            result_holder: dict = {}
+            error_holder: dict = {}
+
+            def _transcribe() -> None:
+                try:
+                    from faster_whisper import WhisperModel
+                    wm = WhisperModel("base", device="cpu", compute_type="int8")
+                    progress_q.put(("Starting transcription...", 8))
+                    segs_iter, info = wm.transcribe(str(source_path), language="en", word_timestamps=True)
+                    raw_parts, segs_list, words_list = [], [], []
+                    total_dur = float(getattr(info, "duration", 0.0) or 0.0)
+                    last_pct = -1
+                    for seg in segs_iter:
+                        raw_parts.append(seg.text)
+                        segs_list.append({"start": seg.start, "end": seg.end, "text": seg.text})
+                        if seg.words:
+                            for w in seg.words:
+                                words_list.append({"word": w.word, "start": w.start, "end": w.end})
+                        if total_dur > 0:
+                            pct = min(11, max(8, 8 + int((seg.end / total_dur) * 3)))
+                            if pct > last_pct:
+                                last_pct = pct
+                                progress_q.put((
+                                    f"Transcribing... ({_format_progress_time(seg.end)} / {_format_progress_time(total_dur)})",
+                                    pct,
+                                ))
+                    result_holder["data"] = {
+                        "raw_text": " ".join(raw_parts).strip(),
+                        "language": info.language or "en",
+                        "segments": segs_list,
+                        "word_timestamps": words_list,
+                    }
+                except Exception as exc:
+                    error_holder["error"] = exc
+
+            worker = threading.Thread(target=_transcribe, daemon=True)
+            worker.start()
+            while worker.is_alive() or not progress_q.empty():
+                try:
+                    msg, pct = progress_q.get_nowait()
+                    await step(f"Transcript: {msg}", pct)
+                except _queue.Empty:
+                    await asyncio.sleep(0.5)
+            worker.join()
+
+            if error_holder.get("error"):
+                raise error_holder["error"]
+
+            tx_data = result_holder["data"]
+            raw_text = tx_data["raw_text"]
+            new_tx_id = str(uuid.uuid4())
+
+            async with async_session() as db:
+                old_txs = (await db.execute(
+                    select(Transcript).where(
                         Transcript.project_id == project_id,
                         Transcript.transcript_scope == "sermon",
-                        Transcript.is_current == True,
                     )
-                    .order_by(Transcript.created_at.desc())
-                    .limit(1)
-                )
-                new_tx = tx_result.scalar_one_or_none()
-                if not new_tx:
-                    raise ValueError("Transcription completed but no transcript record found.")
-                transcript_id = str(new_tx.id)
-                transcript_text = new_tx.raw_text or new_tx.cleaned_text or ""
+                )).scalars().all()
+                for t in old_txs:
+                    t.is_current = False
+                db.add(Transcript(
+                    id=new_tx_id,
+                    project_id=project_id,
+                    asset_id=sermon_asset_id,
+                    transcript_scope="sermon",
+                    status="ready",
+                    language=tx_data["language"],
+                    raw_text=raw_text,
+                    cleaned_text=raw_text,
+                    segments_json=tx_data["segments"],
+                    word_timestamps_json=tx_data["word_timestamps"],
+                    is_current=True,
+                ))
+                await db.flush()
+                await db.commit()
+
+            transcript_id = new_tx_id
+            transcript_text = raw_text
 
         if not transcript_text.strip():
             raise ValueError("Transcript text is empty — cannot continue pipeline.")
@@ -390,7 +451,8 @@ async def run_all(
         .order_by(MediaAsset.created_at.desc())
         .limit(1)
     )
-    if not sermon_result.scalar_one_or_none():
+    sermon_asset = sermon_result.scalar_one_or_none()
+    if not sermon_asset:
         raise HTTPException(status_code=400, detail="No sermon master asset found. Generate the sermon master first.")
 
     job_id = str(uuid.uuid4())
