@@ -114,6 +114,12 @@ export default function TrimPage() {
 
   async function runAllProcesses() {
     if (!project || !sourceAsset) return;
+    if (!sermonAsset) {
+      setRunAllError("Generate the sermon master first before running all processes.");
+      setRunAllState("failed");
+      setRunAllMessages(["Run all: No sermon master found. Generate it first."]);
+      return;
+    }
 
     setRunAllState("running");
     setRunAllError("");
