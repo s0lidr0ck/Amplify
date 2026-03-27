@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from app.config import settings
 from app.queue import close_queue
 from app.routers import (
+    automation,
     clips,
     content,
     dev,
@@ -67,6 +68,7 @@ async def global_exception_handler(request, exc):
 
 
 app.include_router(projects.router)
+app.include_router(automation.router)
 app.include_router(speakers.router)
 app.include_router(media.router)
 app.include_router(jobs.router)
