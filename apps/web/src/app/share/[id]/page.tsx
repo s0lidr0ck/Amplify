@@ -14,140 +14,174 @@ import type {
   FacebookDraft,
   MetadataDraft,
   PackagingDraft,
-  PublishingDraft,
   ReelDraft,
 } from "@/lib/projectDrafts";
 
 type NullableAsset = ProjectAsset | null;
 
-function isImageAsset(asset: NullableAsset) {
-  return Boolean(asset?.mime_type?.startsWith("image/"));
+function classNames(...values: Array<string | false | null | undefined>) {
+  return values.filter(Boolean).join(" ");
 }
 
 function formatDate(value: string | undefined) {
-  if (!value) return "Date pending";
+  if (!value) return "";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  return parsed.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
 }
 
-function textOrFallback(value: string | undefined) {
-  const trimmed = value?.trim() ?? "";
-  return trimmed || "Not generated yet.";
+// ---------------------------------------------------------------------------
+// Copy button
+// ---------------------------------------------------------------------------
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1800);
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => void copy()}
+      className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border-strong bg-surface px-3 text-xs font-semibold text-muted transition-all hover:border-brand/40 hover:text-ink"
+    >
+      {copied ? "Copied" : "Copy"}
+    </button>
+  );
 }
 
-function AssetCard({
+// ---------------------------------------------------------------------------
+// Media card
+// ---------------------------------------------------------------------------
+function MediaCard({
   title,
-  description,
-  usage,
+  hint,
   asset,
 }: {
   title: string;
-  description: string;
-  usage: string;
+  hint: string;
   asset: NullableAsset;
 }) {
+  if (!asset) return null;
+  const isImage = asset.mime_type?.startsWith("image/");
+  const url = asset.playback_url ?? getMediaPlaybackUrl(asset.id);
+
   return (
     <Card>
-      <CardHeader
-        title={title}
-        description={description}
-        action={
-          asset ? (
-            <a
-              href={asset.playback_url ?? getMediaPlaybackUrl(asset.id)}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex h-10 items-center justify-center rounded-full border border-border-strong bg-surface px-4 text-sm font-semibold text-ink transition-all hover:border-brand/40 hover:bg-brand-soft/50"
-            >
-              Open
-            </a>
-          ) : null
-        }
-      />
-      <div className="mt-5 space-y-3">
-        <div className="rounded-2xl border border-border/70 bg-surface px-4 py-3 text-sm text-muted">
-          <span className="font-semibold text-ink">How to use:</span> {usage}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-base font-semibold text-ink">{title}</p>
+          <p className="mt-0.5 text-sm text-muted">{hint}</p>
         </div>
-        {asset ? (
-          <>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge tone="success">{asset.status || "ready"}</Badge>
-              <Badge tone="neutral">{asset.filename}</Badge>
-            </div>
-            <div className="overflow-hidden rounded-[1.25rem] border border-border/80 bg-background-alt">
-              {isImageAsset(asset) ? (
-                <Image
-                  src={asset.playback_url ?? getMediaPlaybackUrl(asset.id)}
-                  alt={asset.filename}
-                  width={960}
-                  height={540}
-                  className="h-auto w-full object-cover"
-                  unoptimized
-                />
-              ) : (
-                <video
-                  src={asset.playback_url ?? getMediaPlaybackUrl(asset.id)}
-                  controls
-                  className="aspect-video w-full bg-black"
-                />
-              )}
-            </div>
-          </>
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          className="shrink-0 inline-flex h-9 items-center justify-center rounded-full border border-border-strong bg-surface px-4 text-sm font-semibold text-ink transition-all hover:border-brand/40 hover:bg-brand-soft/50"
+        >
+          Download
+        </a>
+      </div>
+      <div className="mt-4 overflow-hidden rounded-[1.25rem] border border-border/80 bg-background-alt">
+        {isImage ? (
+          <Image src={url} alt={title} width={960} height={540} className="h-auto w-full object-cover" unoptimized />
         ) : (
-          <div className="rounded-2xl border border-dashed border-border/80 bg-background-alt px-4 py-8 text-center text-sm text-muted">
-            Not generated yet.
-          </div>
+          <video src={url} controls className="aspect-video w-full bg-black" />
         )}
       </div>
     </Card>
   );
 }
 
+// ---------------------------------------------------------------------------
+// Text card
+// ---------------------------------------------------------------------------
 function TextCard({
   title,
-  description,
-  usage,
+  hint,
   value,
 }: {
   title: string;
-  description: string;
-  usage: string;
+  hint: string;
   value: string | undefined;
 }) {
+  const text = value?.trim() ?? "";
+  if (!text) return null;
   return (
     <Card>
-      <CardHeader title={title} description={description} />
-      <div className="mt-4 rounded-2xl border border-border/70 bg-surface px-4 py-3 text-sm text-muted">
-        <span className="font-semibold text-ink">How to use:</span> {usage}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-base font-semibold text-ink">{title}</p>
+          <p className="mt-0.5 text-sm text-muted">{hint}</p>
+        </div>
+        <CopyButton text={text} />
       </div>
       <textarea
         readOnly
-        value={textOrFallback(value)}
-        className="mt-4 min-h-[14rem] w-full rounded-[1.25rem] border border-border bg-surface px-4 py-3 text-sm leading-7 text-ink outline-none"
+        value={text}
+        className="mt-4 min-h-[10rem] w-full rounded-[1.25rem] border border-border bg-surface px-4 py-3 text-sm leading-7 text-ink outline-none resize-none"
       />
     </Card>
   );
 }
 
+// ---------------------------------------------------------------------------
+// Tab nav
+// ---------------------------------------------------------------------------
+const TABS = ["Videos", "Images", "Written Content", "Social Copy"] as const;
+type Tab = (typeof TABS)[number];
+
+function TabBar({ active, onChange, counts }: { active: Tab; onChange: (t: Tab) => void; counts: Record<Tab, number> }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {TABS.map((tab) => (
+        <button
+          key={tab}
+          type="button"
+          onClick={() => onChange(tab)}
+          className={classNames(
+            "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition-all",
+            active === tab
+              ? "border-brand/40 bg-brand-soft/80 text-brand-strong"
+              : "border-border/80 bg-surface text-muted hover:border-brand/30 hover:text-ink"
+          )}
+        >
+          {tab}
+          {counts[tab] > 0 ? (
+            <span className={classNames(
+              "inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full px-1.5 text-xs font-bold",
+              active === tab ? "bg-brand/20 text-brand-strong" : "bg-surface-strong text-muted"
+            )}>
+              {counts[tab]}
+            </span>
+          ) : null}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
 export default function ProjectSharePage() {
   const params = useParams();
   const projectId = params.id as string;
-  const [copied, setCopied] = useState(false);
+  const [activeTab, setActiveTab] = useState<Tab>("Videos");
+  const [linkCopied, setLinkCopied] = useState(false);
 
+  async function copyLink() {
+    await navigator.clipboard.writeText(window.location.href);
+    setLinkCopied(true);
+    window.setTimeout(() => setLinkCopied(false), 1800);
+  }
+
+  // Data fetching
   const { data: project, error: projectError, isLoading } = useQuery({
     queryKey: ["shared-project", projectId],
     queryFn: () => projects.get(projectId),
     retry: false,
-  });
-
-  const { data: sourceAsset } = useQuery({
-    queryKey: ["shared-source-asset", projectId],
-    queryFn: () => projects.getSourceAsset(projectId),
   });
   const { data: sermonAsset } = useQuery({
     queryKey: ["shared-sermon-asset", projectId],
@@ -169,14 +203,6 @@ export default function ProjectSharePage() {
     queryKey: ["shared-sermon-transcript", projectId],
     queryFn: () => transcript.getForProject(projectId, "sermon"),
   });
-  const { data: reelTranscript } = useQuery({
-    queryKey: ["shared-reel-transcript", projectId],
-    queryFn: () => transcript.getForProject(projectId, "reel"),
-  });
-  const { data: metadataDraft } = useQuery({
-    queryKey: ["shared-draft-metadata", projectId],
-    queryFn: () => projects.getDraft<MetadataDraft>(projectId, "metadata"),
-  });
   const { data: blogDraft } = useQuery({
     queryKey: ["shared-draft-blog", projectId],
     queryFn: () => projects.getDraft<BlogDraft>(projectId, "blog"),
@@ -193,212 +219,227 @@ export default function ProjectSharePage() {
     queryKey: ["shared-draft-reel", projectId],
     queryFn: () => projects.getDraft<ReelDraft>(projectId, "reel"),
   });
-  const { data: publishingDraft } = useQuery({
-    queryKey: ["shared-draft-publishing", projectId],
-    queryFn: () => projects.getDraft<PublishingDraft>(projectId, "publishing"),
+  const { data: metadataDraft } = useQuery({
+    queryKey: ["shared-draft-metadata", projectId],
+    queryFn: () => projects.getDraft<MetadataDraft>(projectId, "metadata"),
   });
 
-  const sermonTranscriptText = sermonTranscript?.cleaned_text || sermonTranscript?.raw_text;
-  const reelTranscriptText = reelTranscript?.cleaned_text || reelTranscript?.raw_text;
-  const metadataRaw = metadataDraft?.payload?.raw;
-  const metadataJson = metadataDraft?.payload?.metadata
-    ? JSON.stringify(metadataDraft.payload.metadata, null, 2)
-    : "";
-  const blogMarkdown = blogDraft?.payload?.markdown;
-  const packagingTitle = packagingDraft?.payload?.title;
-  const packagingDescription = packagingDraft?.payload?.description;
-  const facebookPost = facebookDraft?.payload?.post;
-  const reelCaption = reelDraft?.payload?.caption;
-  const youtubeReelCopy = reelDraft?.payload?.platforms?.youtube
-    ? `Title: ${reelDraft.payload.platforms.youtube.title || ""}\n\nDescription:\n${reelDraft.payload.platforms.youtube.description || ""}\n\nTags:\n${
-        reelDraft.payload.platforms.youtube.tags?.join(", ") || ""
-      }`
-    : "";
-  const facebookReelCopy = reelDraft?.payload?.platforms?.facebook
-    ? `Title: ${reelDraft.payload.platforms.facebook.title || ""}\n\nDescription:\n${reelDraft.payload.platforms.facebook.description || ""}\n\nTags:\n${
-        reelDraft.payload.platforms.facebook.tags?.join(", ") || ""
-      }`
-    : "";
-  const instagramReelCopy = reelDraft?.payload?.platforms?.instagram
-    ? `Title: ${reelDraft.payload.platforms.instagram.title || ""}\n\nDescription:\n${reelDraft.payload.platforms.instagram.description || ""}\n\nTags:\n${
-        reelDraft.payload.platforms.instagram.tags?.join(", ") || ""
-      }`
-    : "";
-  const tiktokReelCopy = reelDraft?.payload?.platforms?.tiktok
-    ? `Title: ${reelDraft.payload.platforms.tiktok.title || ""}\n\nDescription:\n${reelDraft.payload.platforms.tiktok.description || ""}\n\nTags:\n${
-        reelDraft.payload.platforms.tiktok.tags?.join(", ") || ""
-      }`
-    : "";
-  const publishPreviewUrl = publishingDraft?.payload?.wix_result?.preview_url;
+  // Derived content
+  const sermonTitle = packagingDraft?.payload?.title?.trim() || project?.title || "";
+  const sermonDescription = packagingDraft?.payload?.description?.trim() || "";
+  const transcriptText = (sermonTranscript?.cleaned_text || sermonTranscript?.raw_text || "").trim();
+  const blogMarkdown = blogDraft?.payload?.markdown?.trim() || "";
+  const facebookPost = facebookDraft?.payload?.post?.trim() || "";
+  const reelCaption = reelDraft?.payload?.caption?.trim() || "";
 
-  async function copyCurrentLink() {
-    await navigator.clipboard.writeText(window.location.href);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1800);
-  }
+  const ytReel = reelDraft?.payload?.platforms?.youtube;
+  const fbReel = reelDraft?.payload?.platforms?.facebook;
+  const igReel = reelDraft?.payload?.platforms?.instagram;
+  const ttReel = reelDraft?.payload?.platforms?.tiktok;
 
-  const visualAssetCount = [sourceAsset, sermonAsset, sermonThumbnailAsset, reelAsset, reelThumbnailAsset].filter(Boolean).length;
+  const ytReelCopy = ytReel
+    ? [`${ytReel.title || ""}`, `${ytReel.description || ""}`, ytReel.tags?.length ? `Tags: ${ytReel.tags.join(", ")}` : ""]
+        .filter(Boolean).join("\n\n")
+    : "";
+  const fbReelCopy = fbReel
+    ? [`${fbReel.title || ""}`, `${fbReel.description || ""}`, fbReel.tags?.length ? `Tags: ${fbReel.tags.join(", ")}` : ""]
+        .filter(Boolean).join("\n\n")
+    : "";
+  const igReelCopy = igReel
+    ? [`${igReel.title || ""}`, `${igReel.description || ""}`, igReel.tags?.length ? `Tags: ${igReel.tags.join(", ")}` : ""]
+        .filter(Boolean).join("\n\n")
+    : "";
+  const ttReelCopy = ttReel
+    ? [`${ttReel.title || ""}`, `${ttReel.description || ""}`, ttReel.tags?.length ? `Tags: ${ttReel.tags.join(", ")}` : ""]
+        .filter(Boolean).join("\n\n")
+    : "";
+
+  // Metadata as readable summary (no raw JSON exposed)
+  const meta = metadataDraft?.payload?.metadata as Record<string, unknown> | undefined;
+  const metaSummary = meta
+    ? Object.entries(meta)
+        .filter(([, v]) => v !== null && v !== undefined && String(v).trim())
+        .map(([k, v]) => {
+          const label = k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+          const val = Array.isArray(v) ? (v as unknown[]).join(", ") : String(v);
+          return `${label}: ${val}`;
+        })
+        .join("\n")
+    : "";
+
+  // Tab counts (only count items that have content)
+  const videoCounts = [sermonAsset, reelAsset].filter(Boolean).length;
+  const imageCounts = [sermonThumbnailAsset, reelThumbnailAsset].filter(Boolean).length;
+  const writtenCounts = [sermonTitle, sermonDescription, transcriptText, blogMarkdown, metaSummary].filter(Boolean).length;
+  const socialCounts = [facebookPost, reelCaption, ytReelCopy, fbReelCopy, igReelCopy, ttReelCopy].filter(Boolean).length;
+
+  const tabCounts: Record<Tab, number> = {
+    Videos: videoCounts,
+    Images: imageCounts,
+    "Written Content": writtenCounts,
+    "Social Copy": socialCounts,
+  };
+
+  const speaker = project?.speaker_display_name || project?.speaker || "";
+  const date = formatDate(project?.sermon_date);
 
   return (
-    <main className="page-frame py-8 lg:py-10">
+    <main className="page-frame py-8 lg:py-12">
       <div className="page-stack">
-        <Card>
-          <CardHeader
-            eyebrow="Shared Project"
-            title={project?.title ?? "Project share"}
-            description="This is a read-only view for reviewing and posting generated assets."
-            action={
-              <Button type="button" variant="secondary" onClick={() => void copyCurrentLink()}>
-                {copied ? "Link copied" : "Copy link"}
-              </Button>
-            }
-          />
-          <div className="mt-5 flex flex-wrap items-center gap-2">
-            <Badge tone="brand">{project?.status ?? "Loading"}</Badge>
-            <Badge tone="neutral">{project?.speaker_display_name ?? project?.speaker ?? "Speaker pending"}</Badge>
-            <Badge tone="info">{formatDate(project?.sermon_date)}</Badge>
-            <Badge tone="success">{visualAssetCount} visual assets</Badge>
-          </div>
-        </Card>
 
-        {isLoading ? (
-          <Alert tone="info">Loading shared assets...</Alert>
-        ) : null}
+        {/* Hero header */}
+        <div className="space-y-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="space-y-2">
+              <p className="section-label">Sermon Package</p>
+              <h1 className="text-2xl font-bold text-ink sm:text-3xl">
+                {project?.title ?? (isLoading ? "Loading..." : "Sermon Package")}
+              </h1>
+              {(speaker || date) ? (
+                <p className="text-sm text-muted">
+                  {[speaker, date].filter(Boolean).join(" · ")}
+                </p>
+              ) : null}
+            </div>
+            <Button type="button" variant="secondary" onClick={() => void copyLink()}>
+              {linkCopied ? "Link copied" : "Share link"}
+            </Button>
+          </div>
+
+          {/* Tab counts summary badges */}
+          <div className="flex flex-wrap gap-2">
+            {videoCounts > 0 && <Badge tone="info">{videoCounts} video{videoCounts !== 1 ? "s" : ""}</Badge>}
+            {imageCounts > 0 && <Badge tone="brand">{imageCounts} image{imageCounts !== 1 ? "s" : ""}</Badge>}
+            {writtenCounts > 0 && <Badge tone="success">{writtenCounts} written piece{writtenCounts !== 1 ? "s" : ""}</Badge>}
+            {socialCounts > 0 && <Badge tone="warning">{socialCounts} social caption{socialCounts !== 1 ? "s" : ""}</Badge>}
+          </div>
+        </div>
+
+        {isLoading ? <Alert tone="info">Loading content...</Alert> : null}
         {projectError ? (
-          <Alert tone="danger" title="Project unavailable">
-            This project link is invalid or no longer available.
+          <Alert tone="danger" title="Not available">
+            This link is invalid or the content is no longer available.
           </Alert>
         ) : null}
 
-        <div className="grid gap-6 2xl:grid-cols-2">
-          <AssetCard
-            title="Source video"
-            description="Original uploaded source before any edits."
-            usage="Use this as archive footage or fallback media if no finished cut is available."
-            asset={sourceAsset ?? null}
-          />
-          <AssetCard
-            title="Sermon master"
-            description="Primary full-length sermon video prepared for distribution."
-            usage="Post this to long-form platforms (YouTube, website, or livestream replay pages)."
-            asset={sermonAsset ?? null}
-          />
-          <AssetCard
-            title="Sermon thumbnail"
-            description="Thumbnail image designed for the full sermon post."
-            usage="Use this as the cover image for the full sermon on YouTube, website, or app."
-            asset={sermonThumbnailAsset ?? null}
-          />
-          <AssetCard
-            title="Final reel"
-            description="Finished short-form vertical clip export."
-            usage="Upload this to Instagram Reels, TikTok, Facebook Reels, and YouTube Shorts."
-            asset={reelAsset ?? null}
-          />
-          <AssetCard
-            title="Reel thumbnail"
-            description="Cover image optimized for short-form reel posts."
-            usage="Set this as the reel cover frame/thumbnail where your platform supports custom covers."
-            asset={reelThumbnailAsset ?? null}
-          />
-        </div>
+        {/* Tab navigation */}
+        {!isLoading && !projectError ? (
+          <div className="space-y-6">
+            <TabBar active={activeTab} onChange={setActiveTab} counts={tabCounts} />
 
-        <div className="grid gap-6 2xl:grid-cols-2">
-          <TextCard
-            title="Sermon transcript"
-            description="Full transcript of the sermon content."
-            usage="Use this for accessibility captions, editing reference, and repurposing into written content."
-            value={sermonTranscriptText}
-          />
-          <TextCard
-            title="Reel transcript"
-            description="Transcript for the final reel clip."
-            usage="Use this to verify hook wording and create on-screen captions or subtitle text."
-            value={reelTranscriptText}
-          />
-          <TextCard
-            title="Metadata (raw)"
-            description="Unformatted generated metadata output."
-            usage="Use as source notes if you need to quickly rebuild a title/description from scratch."
-            value={metadataRaw}
-          />
-          <TextCard
-            title="Metadata (JSON)"
-            description="Structured metadata fields from the content workflow."
-            usage="Use for system imports, CMS fields, or tooling that expects structured content."
-            value={metadataJson}
-          />
-          <TextCard
-            title="Blog draft"
-            description="Long-form sermon article draft."
-            usage="Use this as your website/blog post body, then lightly edit for final voice and formatting."
-            value={blogMarkdown}
-          />
-          <TextCard
-            title="Packaging title"
-            description="Suggested headline for long-form sermon publishing."
-            usage="Use this as the default sermon title on YouTube or your website."
-            value={packagingTitle}
-          />
-          <TextCard
-            title="Packaging description"
-            description="Suggested long-form description copy."
-            usage="Use this in the sermon description field and add links, CTAs, or timestamps."
-            value={packagingDescription}
-          />
-          <TextCard
-            title="Facebook post"
-            description="Suggested post copy for standard Facebook feed content."
-            usage="Paste this into a Facebook post and pair it with the sermon thumbnail or reel."
-            value={facebookPost}
-          />
-          <TextCard
-            title="Reel caption"
-            description="General short-form caption for reel distribution."
-            usage="Use this as your base caption, then tailor hashtags and CTA per platform."
-            value={reelCaption}
-          />
-          <TextCard
-            title="YouTube reel copy"
-            description="Platform-specific title, description, and tags for YouTube Shorts."
-            usage="Use these fields directly when publishing a Short in YouTube Studio."
-            value={youtubeReelCopy}
-          />
-          <TextCard
-            title="Facebook reel copy"
-            description="Platform-specific title, description, and tags for Facebook Reels."
-            usage="Use this copy for Facebook Reel captions and post metadata."
-            value={facebookReelCopy}
-          />
-          <TextCard
-            title="Instagram reel copy"
-            description="Platform-specific title, description, and tags for Instagram Reels."
-            usage="Use this as the Instagram caption and adjust hashtags for your audience."
-            value={instagramReelCopy}
-          />
-          <TextCard
-            title="TikTok reel copy"
-            description="Platform-specific title, description, and tags for TikTok."
-            usage="Use this in TikTok caption fields and trim to fit character limits if needed."
-            value={tiktokReelCopy}
-          />
-        </div>
+            {/* Videos */}
+            {activeTab === "Videos" ? (
+              <div className="space-y-6">
+                {videoCounts === 0 ? (
+                  <p className="text-sm text-muted">No videos are ready yet.</p>
+                ) : null}
+                <MediaCard
+                  title="Full Sermon"
+                  hint="The complete sermon video, ready to post on YouTube or your website."
+                  asset={sermonAsset ?? null}
+                />
+                <MediaCard
+                  title="Short Clip"
+                  hint="A short highlight clip for Instagram Reels, TikTok, Facebook Reels, and YouTube Shorts."
+                  asset={reelAsset ?? null}
+                />
+              </div>
+            ) : null}
 
-        {publishPreviewUrl ? (
-          <Card>
-            <CardHeader title="Published Preview" />
-            <div className="mt-4">
-              <a
-                href={publishPreviewUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="text-sm font-semibold text-brand hover:text-brand-strong"
-              >
-                Open Wix preview
-              </a>
-            </div>
-          </Card>
+            {/* Images */}
+            {activeTab === "Images" ? (
+              <div className="space-y-6">
+                {imageCounts === 0 ? (
+                  <p className="text-sm text-muted">No images are ready yet.</p>
+                ) : null}
+                <MediaCard
+                  title="Sermon Cover Image"
+                  hint="Thumbnail for the full sermon post on YouTube or your website."
+                  asset={sermonThumbnailAsset ?? null}
+                />
+                <MediaCard
+                  title="Short Clip Cover Image"
+                  hint="Cover image for the short clip on social platforms."
+                  asset={reelThumbnailAsset ?? null}
+                />
+              </div>
+            ) : null}
+
+            {/* Written Content */}
+            {activeTab === "Written Content" ? (
+              <div className="grid gap-6 2xl:grid-cols-2">
+                {writtenCounts === 0 ? (
+                  <p className="text-sm text-muted">No written content is ready yet.</p>
+                ) : null}
+                <TextCard
+                  title="YouTube Title"
+                  hint="Suggested title for the full sermon on YouTube or your website."
+                  value={sermonTitle}
+                />
+                <TextCard
+                  title="YouTube Description"
+                  hint="Full description copy including chapters and links. Paste directly into YouTube Studio."
+                  value={sermonDescription}
+                />
+                <TextCard
+                  title="Blog Post"
+                  hint="A long-form written version of the sermon, ready to publish on your website or blog."
+                  value={blogMarkdown}
+                />
+                <TextCard
+                  title="Sermon Transcript"
+                  hint="Full word-for-word transcript. Useful for accessibility, captions, and repurposing."
+                  value={transcriptText}
+                />
+                <TextCard
+                  title="Sermon Details"
+                  hint="Key information about this sermon — topic, scripture references, themes, and more."
+                  value={metaSummary}
+                />
+              </div>
+            ) : null}
+
+            {/* Social Copy */}
+            {activeTab === "Social Copy" ? (
+              <div className="grid gap-6 2xl:grid-cols-2">
+                {socialCounts === 0 ? (
+                  <p className="text-sm text-muted">No social copy is ready yet.</p>
+                ) : null}
+                <TextCard
+                  title="Facebook Post"
+                  hint="Ready-to-post copy for a standard Facebook feed post. Pair with the sermon cover image."
+                  value={facebookPost}
+                />
+                <TextCard
+                  title="Short Clip Caption"
+                  hint="General caption for the short clip. Adjust hashtags per platform before posting."
+                  value={reelCaption}
+                />
+                <TextCard
+                  title="YouTube Shorts Copy"
+                  hint="Title, description, and tags for posting the short clip as a YouTube Short."
+                  value={ytReelCopy}
+                />
+                <TextCard
+                  title="Facebook Reels Copy"
+                  hint="Title, description, and tags for posting the short clip as a Facebook Reel."
+                  value={fbReelCopy}
+                />
+                <TextCard
+                  title="Instagram Reels Copy"
+                  hint="Caption and tags for posting the short clip as an Instagram Reel."
+                  value={igReelCopy}
+                />
+                <TextCard
+                  title="TikTok Copy"
+                  hint="Caption and tags for posting the short clip on TikTok."
+                  value={ttReelCopy}
+                />
+              </div>
+            ) : null}
+          </div>
         ) : null}
+
       </div>
     </main>
   );
