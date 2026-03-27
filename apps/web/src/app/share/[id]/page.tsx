@@ -227,6 +227,7 @@ export default function ProjectSharePage() {
   // Derived content
   const sermonTitle = packagingDraft?.payload?.title?.trim() || project?.title || "";
   const sermonDescription = packagingDraft?.payload?.description?.trim() || "";
+  const thumbnailPrompts = packagingDraft?.payload?.thumbnail_prompts ?? [];
   const transcriptText = (sermonTranscript?.cleaned_text || sermonTranscript?.raw_text || "").trim();
   const blogMarkdown = blogDraft?.payload?.markdown?.trim() || "";
   const facebookPost = facebookDraft?.payload?.post?.trim() || "";
@@ -269,7 +270,7 @@ export default function ProjectSharePage() {
 
   // Tab counts (only count items that have content)
   const videoCounts = [sermonAsset, reelAsset].filter(Boolean).length;
-  const imageCounts = [sermonThumbnailAsset, reelThumbnailAsset].filter(Boolean).length;
+  const imageCounts = [sermonThumbnailAsset, reelThumbnailAsset].filter(Boolean).length + (thumbnailPrompts.length > 0 ? 1 : 0);
   const writtenCounts = [sermonTitle, sermonDescription, transcriptText, blogMarkdown, metaSummary].filter(Boolean).length;
   const socialCounts = [facebookPost, reelCaption, ytReelCopy, fbReelCopy, igReelCopy, ttReelCopy].filter(Boolean).length;
 
@@ -349,7 +350,7 @@ export default function ProjectSharePage() {
             {/* Images */}
             {activeTab === "Images" ? (
               <div className="space-y-6">
-                {imageCounts === 0 ? (
+                {imageCounts === 0 && thumbnailPrompts.length === 0 ? (
                   <p className="text-sm text-muted">No images are ready yet.</p>
                 ) : null}
                 <MediaCard
@@ -362,6 +363,29 @@ export default function ProjectSharePage() {
                   hint="Cover image for the short clip on social platforms."
                   asset={reelThumbnailAsset ?? null}
                 />
+                {thumbnailPrompts.length > 0 ? (
+                  <Card>
+                    <CardHeader
+                      title="Sermon Thumbnail Prompts"
+                      description="Use these prompts with your image generation tool of choice to create the sermon cover image."
+                    />
+                    <div className="mt-5 grid gap-4 md:grid-cols-3">
+                      {thumbnailPrompts.map((p, i) => {
+                        const label = p.label || String.fromCharCode(65 + i);
+                        const text = p.prompt?.trim() ?? "";
+                        return (
+                          <div key={label} className="rounded-[1.25rem] border border-border/80 bg-background-alt p-4">
+                            <div className="mb-3 flex items-center justify-between gap-2">
+                              <span className="text-sm font-semibold text-ink">Option {label}</span>
+                              {text ? <CopyButton text={text} /> : null}
+                            </div>
+                            <p className="text-sm leading-7 text-muted">{text || "Not generated yet."}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </Card>
+                ) : null}
               </div>
             ) : null}
 
