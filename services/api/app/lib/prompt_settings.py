@@ -180,6 +180,49 @@ Transcript excerpt:
 Return exactly 3 variants in JSON now.
 Each variant should include these keys: label, title, sermon_theme, sermon_summary, thumbnail_phrase, scene_concept, text_position, lighting_description, mood_color_direction, layout_style, background_style, typography_feel, shot_preference, framing_guidance, editor_notes.""",
     },
+    "thumbnail_render": {
+        "label": "Sermon Thumbnail Image Prompt",
+        "category": "Visuals",
+        "description": "The final image-generation prompt assembled for each sermon thumbnail variant. Edit this to change the structure of the prompt you copy into your image tool.",
+        "template": """Create a cinematic YouTube sermon thumbnail.
+
+Message context:
+Title: {{sermon_title}}
+Theme: {{sermon_theme}}
+Summary: {{sermon_summary}}
+
+Creative direction:
+Concept title: {{concept_title}}
+Mood / color direction: {{mood_color_direction}}
+Layout style: {{layout_style}}
+Background style: {{background_style}}
+Typography feel: {{typography_feel}}
+Shot preference: {{shot_preference}}
+Framing / crop guidance: {{framing_guidance}}
+Editor notes: {{editor_notes}}
+
+Scene:
+{{scene_concept}}
+
+Composition:
+A human subject is in the foreground.
+Large bold text "{{thumbnail_phrase}}" sits in the {{text_position}} area in the middle depth layer.
+The environment is in the background.
+The foreground subject must partially overlap at least one letter of the text to create natural depth.
+
+Lighting:
+{{lighting_description}}
+
+Style:
+Realistic photography, cinematic lighting, shallow depth of field, subtle film grain, bold composition.
+
+Important constraints:
+Use a visual metaphor for the sermon message, not a literal church service scene.
+Only visible text in the image should be "{{thumbnail_phrase}}".
+Keep the text large, bold, and easy to read at small sizes.
+Do not let the subject become a tiny figure in a generic wide landscape.
+The composition must still feel strong if adapted to either horizontal or vertical output.""",
+    },
     "reel_social": {
         "label": "Final Reel Social Copy",
         "category": "Reels",
