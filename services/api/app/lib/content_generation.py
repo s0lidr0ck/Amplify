@@ -473,36 +473,34 @@ def render_thumbnail_prompt(variant: dict[str, str]) -> str:
     position = _ensure_str(variant.get("text_position")).lower()
     if position not in THUMBNAIL_ALLOWED_POSITIONS:
         position = "center"
-    return (
-        "Create a cinematic YouTube sermon thumbnail.\n\n"
-        f"Message context:\nTitle: {_ensure_str(variant.get('sermon_title')) or 'Untitled sermon'}\n"
-        f"Theme: {_ensure_str(variant.get('sermon_theme')) or 'hope'}\n"
-        f"Summary: {_ensure_str(variant.get('sermon_summary')) or 'A message of faith, hope, and perseverance.'}\n\n"
-        "Creative direction:\n"
-        f"Concept title: {_ensure_str(variant.get('title')) or 'Hero sermon thumbnail'}\n"
-        f"Mood / color direction: {_ensure_str(variant.get('mood_color_direction')) or 'warm cinematic contrast with natural skin tones and atmospheric highlights'}\n"
-        f"Layout style: {_ensure_str(variant.get('layout_style')) or 'clear focal subject with large readable headline and layered depth'}\n"
-        f"Background style: {_ensure_str(variant.get('background_style')) or 'soft environmental texture with subtle cinematic blur'}\n"
-        f"Typography feel: {_ensure_str(variant.get('typography_feel')) or 'bold modern sans-serif with clean hierarchy'}\n"
-        f"Shot preference: {_ensure_str(variant.get('shot_preference')) or 'tight portrait'}\n"
-        f"Framing / crop guidance: {_ensure_str(variant.get('framing_guidance')) or 'Keep the subject and headline readable in both horizontal and vertical crops.'}\n"
-        f"Editor notes: {_ensure_str(variant.get('editor_notes')) or 'Aim for a polished YouTube sermon thumbnail that feels premium, emotional, and instantly readable.'}\n\n"
-        f"Scene:\n{_ensure_str(variant.get('scene_concept')) or 'person watching sunrise from a hillside'}\n\n"
-        "Composition:\n"
-        "A human subject is in the foreground.\n"
-        f'Large bold text "{phrase}" sits in the {position} area in the middle depth layer.\n'
-        "The environment is in the background.\n"
-        "The foreground subject must partially overlap at least one letter of the text to create natural depth.\n\n"
-        f"Lighting:\n{_ensure_str(variant.get('lighting_description')) or 'warm sunrise light'}\n\n"
-        "Style:\n"
-        "Realistic photography, cinematic lighting, shallow depth of field, subtle film grain, bold composition.\n\n"
-        "Important constraints:\n"
-        "Use a visual metaphor for the sermon message, not a literal church service scene.\n"
-        f'Only visible text in the image should be "{phrase}".\n'
-        "Keep the text large, bold, and easy to read at small sizes.\n"
-        "Do not let the subject become a tiny figure in a generic wide landscape.\n"
-        "The composition must still feel strong if adapted to either horizontal or vertical output."
-    )
+
+    # Build replacements from variant data, applying fallback defaults.
+    replacements: dict[str, str] = {}
+
+    # Pass through every key from the variant so custom planner fields
+    # (e.g. emotional_hook, curiosity_gap) are available in the template.
+    for key, value in variant.items():
+        if key != "prompt":
+            replacements[key] = _ensure_str(value)
+
+    # Map well-known fields with fallback defaults.
+    replacements["sermon_title"] = _ensure_str(variant.get("sermon_title")) or "Untitled sermon"
+    replacements["sermon_theme"] = _ensure_str(variant.get("sermon_theme")) or "hope"
+    replacements["sermon_summary"] = _ensure_str(variant.get("sermon_summary")) or "A message of faith, hope, and perseverance."
+    replacements["concept_title"] = _ensure_str(variant.get("title")) or "Hero sermon thumbnail"
+    replacements["mood_color_direction"] = _ensure_str(variant.get("mood_color_direction")) or "warm cinematic contrast with natural skin tones and atmospheric highlights"
+    replacements["layout_style"] = _ensure_str(variant.get("layout_style")) or "clear focal subject with large readable headline and layered depth"
+    replacements["background_style"] = _ensure_str(variant.get("background_style")) or "soft environmental texture with subtle cinematic blur"
+    replacements["typography_feel"] = _ensure_str(variant.get("typography_feel")) or "bold modern sans-serif with clean hierarchy"
+    replacements["shot_preference"] = _ensure_str(variant.get("shot_preference")) or "tight portrait"
+    replacements["framing_guidance"] = _ensure_str(variant.get("framing_guidance")) or "Keep the subject and headline readable in both horizontal and vertical crops."
+    replacements["editor_notes"] = _ensure_str(variant.get("editor_notes")) or "Aim for a polished YouTube sermon thumbnail that feels premium, emotional, and instantly readable."
+    replacements["scene_concept"] = _ensure_str(variant.get("scene_concept")) or "person watching sunrise from a hillside"
+    replacements["thumbnail_phrase"] = phrase
+    replacements["text_position"] = position
+    replacements["lighting_description"] = _ensure_str(variant.get("lighting_description")) or "warm sunrise light"
+
+    return render_prompt_template("thumbnail_render", replacements)
 
 
 def fallback_thumbnail_prompt_variants(
@@ -598,6 +596,16 @@ def parse_thumbnail_prompt_variants(
     for index, default_variant in enumerate(fallback):
         source = source_variants[index] if index < len(source_variants) and isinstance(source_variants[index], dict) else {}
         variant = dict(default_variant)
+
+        # Pass through ALL keys from the LLM response so custom planner
+        # fields (e.g. emotional_hook, curiosity_gap) are available in the
+        # thumbnail_render template.
+        for key, value in source.items():
+            cleaned = _ensure_str(value) if isinstance(value, str) else str(value) if value is not None else ""
+            if cleaned:
+                variant[key] = cleaned
+
+        # Apply well-known field mapping with fallback defaults.
         variant["label"] = THUMBNAIL_VARIANT_LABELS[index]
         variant["title"] = _ensure_str(source.get("title")) or default_variant["title"]
         variant["sermon_theme"] = _ensure_str(source.get("sermon_theme")) or default_variant["sermon_theme"]
