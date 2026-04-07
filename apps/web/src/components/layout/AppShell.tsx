@@ -24,6 +24,7 @@ export function AppShell({
   const navItems = [
     { href: "/", label: "Home", match: pathname === "/" },
     { href: "/library", label: "Library", match: pathname?.startsWith("/library") },
+    { href: "/publishing", label: "Publishing", match: pathname?.startsWith("/publishing") },
     { href: "/settings", label: "Settings", match: pathname?.startsWith("/settings") },
   ];
 
@@ -46,6 +47,9 @@ export function AppShell({
             </Link>
             <Link href="/library" className="hidden text-sm font-medium text-muted hover:text-ink sm:inline-flex">
               Library
+            </Link>
+            <Link href="/publishing" className="hidden text-sm font-medium text-muted hover:text-ink sm:inline-flex">
+              Publishing
             </Link>
             <Link href="/settings" className="hidden text-sm font-medium text-muted hover:text-ink sm:inline-flex">
               Settings
