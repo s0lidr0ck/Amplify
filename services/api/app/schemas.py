@@ -122,3 +122,82 @@ class ProjectDraftRead(BaseModel):
 
 class StartYoutubeImportBody(BaseModel):
     source_url: str
+
+
+# ---------------------------------------------------------------------------
+# Publish Workspace schemas
+# ---------------------------------------------------------------------------
+
+class PublishBundleCreate(BaseModel):
+    project_id: str
+    organization_id: str
+    bundle_type: str = "sermon_full"  # sermon_full | reel_clip | blog_post | text_post
+    label: Optional[str] = None
+    thumbnail_asset_id: Optional[str] = None
+    week_date: date
+    notes: Optional[str] = None
+    status: str = "draft"
+
+
+class PublishBundleUpdate(BaseModel):
+    label: Optional[str] = None
+    thumbnail_asset_id: Optional[str] = None
+    status: Optional[str] = None
+    notes: Optional[str] = None
+    week_date: Optional[date] = None
+
+
+class PublishVariantRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    bundle_id: str
+    platform: str
+    title: Optional[str]
+    description: Optional[str]
+    tags: Optional[Any]
+    hashtags: Optional[Any]
+    extra_json: Optional[Any]
+    media_asset_id: Optional[str]
+    scheduled_at: Optional[datetime]
+    published_at: Optional[datetime]
+    publish_status: str
+    publish_result_json: Optional[Any]
+    ai_generated: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class PublishBundleRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    project_id: str
+    organization_id: str
+    bundle_type: str
+    label: Optional[str]
+    thumbnail_asset_id: Optional[str]
+    status: str
+    week_date: date
+    notes: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+    variants: list[PublishVariantRead] = []
+
+
+class PublishVariantUpsert(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    tags: Optional[Any] = None
+    hashtags: Optional[Any] = None
+    extra_json: Optional[Any] = None
+    media_asset_id: Optional[str] = None
+    scheduled_at: Optional[datetime] = None
+    published_at: Optional[datetime] = None
+    publish_status: str = "draft"
+    ai_generated: bool = False
+
+
+class CalendarBundleRead(PublishBundleRead):
+    """Alias used for the calendar endpoint response; identical shape to BundleRead."""
+    pass
