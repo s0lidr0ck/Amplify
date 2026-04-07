@@ -619,5 +619,121 @@ export const publishing = {
     }),
 };
 
+// ── Publishing Workspace ────────────────────────────────────────────────────
+
+export type BundleType = "sermon_full" | "reel_clip" | "blog_post" | "text_post";
+export type BundleStatus = "draft" | "scheduled" | "partially_published" | "published";
+export type Platform = "youtube" | "instagram" | "tiktok" | "facebook" | "wix_blog";
+export type PublishStatus = "draft" | "scheduled" | "published" | "failed";
+
+export interface PublishVariant {
+  id: string;
+  bundle_id: string;
+  platform: Platform;
+  title: string | null;
+  description: string | null;
+  tags: string[] | null;
+  hashtags: string[] | null;
+  extra_json: Record<string, unknown> | null;
+  media_asset_id: string | null;
+  scheduled_at: string | null;
+  published_at: string | null;
+  publish_status: PublishStatus;
+  publish_result_json: Record<string, unknown> | null;
+  ai_generated: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PublishBundle {
+  id: string;
+  project_id: string;
+  organization_id: string;
+  bundle_type: BundleType;
+  label: string | null;
+  thumbnail_asset_id: string | null;
+  status: BundleStatus;
+  week_date: string;
+  notes: string | null;
+  variants: PublishVariant[];
+  created_at: string;
+  updated_at: string;
+}
+
+export const publishingWorkspace = {
+  createBundle: (data: {
+    project_id: string;
+    organization_id: string;
+    bundle_type: BundleType;
+    label?: string;
+    thumbnail_asset_id?: string;
+    week_date: string;
+    notes?: string;
+    status?: BundleStatus;
+  }) => api<PublishBundle>("/api/publish/bundles", { method: "POST", body: JSON.stringify(data) }),
+
+  listBundles: (week: string) =>
+    api<PublishBundle[]>(`/api/publish/bundles?week=${week}`),
+
+  getBundle: (id: string) => api<PublishBundle>(`/api/publish/bundles/${id}`),
+
+  updateBundle: (id: string, data: Partial<{
+    label: string;
+    thumbnail_asset_id: string;
+    status: BundleStatus;
+    notes: string;
+    week_date: string;
+  }>) => api<PublishBundle>(`/api/publish/bundles/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+
+  deleteBundle: async (id: string) => {
+    const res = await fetch(`${API_BASE}/api/publish/bundles/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const text = await res.text();
+      try {
+        const json = JSON.parse(text) as { detail?: string };
+        throw new Error(json.detail ?? `API error ${res.status}`);
+      } catch (e) {
+        if (e instanceof SyntaxError) throw new Error(`API error ${res.status}: ${text}`);
+        throw e;
+      }
+    }
+  },
+
+  upsertVariant: (
+    bundleId: string,
+    platform: Platform,
+    data: Partial<{
+      title: string;
+      description: string;
+      tags: string[];
+      hashtags: string[];
+      extra_json: Record<string, unknown>;
+      media_asset_id: string;
+      scheduled_at: string;
+      published_at: string;
+      publish_status: PublishStatus;
+      ai_generated: boolean;
+    }>
+  ) =>
+    api<PublishVariant>(`/api/publish/bundles/${bundleId}/variants/${platform}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  publishVariant: (bundleId: string, platform: Platform) =>
+    api<PublishVariant>(`/api/publish/bundles/${bundleId}/variants/${platform}/publish`, {
+      method: "POST",
+    }),
+
+  createBundleFromProject: (projectId: string, data?: { bundle_type?: BundleType; label?: string }) =>
+    api<PublishBundle>(`/api/publish/projects/${projectId}/create-bundle`, {
+      method: "POST",
+      body: JSON.stringify(data ?? {}),
+    }),
+
+  getCalendar: (from: string, to: string) =>
+    api<PublishBundle[]>(`/api/publish/calendar?from=${from}&to=${to}`),
+};
+
 
 
