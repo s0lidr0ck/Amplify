@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { publishing, projects, type ProjectAsset, type WixImageAsset } from "@/lib/api";
+import { publishing, publishingWorkspace, projects, type ProjectAsset, type WixImageAsset } from "@/lib/api";
 import { loadProjectDraft, saveProjectDraft, type BlogDraft, type PublishingDraft } from "@/lib/projectDrafts";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
@@ -46,7 +46,20 @@ function isPreviewableImage(value: string): boolean {
 
 export default function PublishingPage() {
   const params = useParams();
+  const router = useRouter();
   const projectId = params.id as string;
+  const [sendToWorkspaceError, setSendToWorkspaceError] = useState("");
+
+  const sendToWorkspaceMutation = useMutation({
+    mutationFn: () => publishingWorkspace.createBundleFromProject(projectId),
+    onSuccess: (bundle) => {
+      router.push(`/publishing/bundles/${bundle.id}`);
+    },
+    onError: (err) => {
+      setSendToWorkspaceError(err instanceof Error ? err.message : "Failed to create bundle.");
+    },
+  });
+
   const [form, setForm] = useState<PublishingDraft>({
     featured_image_source: "",
     featured_image_id: "",
@@ -471,6 +484,28 @@ export default function PublishingPage() {
           ) : (
             <Alert tone="info">No Wix publish result has been saved for this project yet.</Alert>
           )}
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader
+          eyebrow="Publishing Workspace"
+          title="Send to Publishing Workspace"
+          description="Harvest all saved content drafts into a multi-platform bundle ready for scheduling and publishing."
+        />
+        <div className="mt-6">
+          {sendToWorkspaceError ? (
+            <div className="mb-4">
+              <Alert tone="danger">{sendToWorkspaceError}</Alert>
+            </div>
+          ) : null}
+          <Button
+            onClick={() => sendToWorkspaceMutation.mutate()}
+            disabled={sendToWorkspaceMutation.isPending}
+            variant="primary"
+          >
+            {sendToWorkspaceMutation.isPending ? "Creating bundle..." : "Send to Publishing Workspace"}
+          </Button>
         </div>
       </Card>
     </div>
