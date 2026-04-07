@@ -31,8 +31,17 @@ const DESCRIPTION_LABEL: Record<Platform, string> = {
 const PUBLISH_STATUS_TONE: Record<string, "neutral" | "warning" | "success" | "danger"> = {
   draft: "neutral",
   scheduled: "warning",
+  processing: "warning",
   published: "success",
   failed: "danger",
+};
+
+const PUBLISH_STATUS_LABEL: Record<string, string> = {
+  draft: "draft",
+  scheduled: "scheduled",
+  processing: "Uploading…",
+  published: "published",
+  failed: "failed",
 };
 
 interface PlatformVariantEditorProps {
@@ -173,7 +182,7 @@ export function PlatformVariantEditor({
         {/* Status row */}
         <div className="flex flex-wrap items-center gap-3">
           <Badge tone={PUBLISH_STATUS_TONE[currentVariant?.publish_status ?? "draft"]}>
-            {currentVariant?.publish_status ?? "draft"}
+            {PUBLISH_STATUS_LABEL[currentVariant?.publish_status ?? "draft"] ?? currentVariant?.publish_status ?? "draft"}
           </Badge>
           {currentVariant?.ai_generated && (
             <Badge tone="info">✓ AI generated</Badge>
@@ -260,7 +269,7 @@ export function PlatformVariantEditor({
         </label>
 
         {/* Publish Now button */}
-        {currentVariant?.publish_status !== "published" && (
+        {currentVariant?.publish_status !== "published" && currentVariant?.publish_status !== "processing" && (
           <div className="pt-2">
             <Button
               variant="primary"
@@ -268,7 +277,7 @@ export function PlatformVariantEditor({
               disabled={publishMutation.isPending}
             >
               {publishMutation.isPending && publishMutation.variables === activeTab
-                ? "Publishing…"
+                ? "Queuing…"
                 : `Publish Now on ${PLATFORM_LABELS[activeTab]}`}
             </Button>
             {publishMutation.isError && publishMutation.variables === activeTab && (
@@ -278,6 +287,12 @@ export function PlatformVariantEditor({
                   : "Publish failed"}
               </p>
             )}
+          </div>
+        )}
+        {currentVariant?.publish_status === "processing" && (
+          <div className="pt-2 flex items-center gap-2 text-sm text-muted">
+            <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-brand border-t-transparent" />
+            Upload queued — you'll get a Slack approval request shortly
           </div>
         )}
       </div>
