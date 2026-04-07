@@ -10,7 +10,7 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
-from app.models import Project, ProjectContentDraft, PublishBundle, PublishVariant
+from app.models import MediaAsset, Project, ProjectContentDraft, PublishBundle, PublishVariant
 from app.routers.projects import DEFAULT_ORG_ID
 from app.schemas import (
     CalendarBundleRead,
@@ -247,6 +247,17 @@ async def create_bundle_from_project(
     drafts = result.scalars().all()
     drafts_by_kind: dict[str, dict] = {d.draft_kind: d.payload_json for d in drafts}
 
+    # Load media assets for this project
+    assets_result = await db.execute(
+        select(MediaAsset).where(MediaAsset.project_id == project_id)
+    )
+    assets = assets_result.scalars().all()
+    assets_by_kind: dict[str, MediaAsset] = {a.asset_kind: a for a in assets}
+
+    # Resolve master video and thumbnail assets
+    master_asset = assets_by_kind.get("sermon_master")
+    thumbnail_asset = assets_by_kind.get("sermon_thumbnail")
+
     # Create the bundle
     week_date: date = project.sermon_date
     bundle = PublishBundle(
@@ -257,6 +268,7 @@ async def create_bundle_from_project(
         label=project.title,
         status="draft",
         week_date=week_date,
+        thumbnail_asset_id=thumbnail_asset.id if thumbnail_asset else None,
     )
     db.add(bundle)
     await db.flush()
@@ -287,6 +299,8 @@ async def create_bundle_from_project(
             title=yt_title,
             description=yt_description,
             tags=yt_tags,
+            # Wire the longform master video file to this variant
+            media_asset_id=master_asset.id if master_asset else None,
             ai_generated=True,
         )
         db.add(yt_variant)
