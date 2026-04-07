@@ -12,12 +12,14 @@ Required env vars:
 
 from __future__ import annotations
 
+import io
 import json
 import mimetypes
 from pathlib import Path
 from typing import Any
 
 import httpx
+from PIL import Image
 
 from app.config import settings
 
@@ -186,18 +188,47 @@ async def upload_thumbnail(*, video_id: str, file_path: Path) -> dict[str, Any]:
     Set a custom thumbnail on a YouTube video.
 
     The channel must be verified for custom thumbnails to work.
+    YouTube requires thumbnails to be under 2 MB — this function
+    automatically resizes/compresses if the file exceeds that limit.
     Returns the thumbnail resource dict.
     """
+    _YT_THUMB_MAX_BYTES = 2 * 1024 * 1024  # 2 MB
+
     if not file_path.exists():
         raise YouTubePublishError(f"Thumbnail file not found: {file_path}")
 
+    # Read and compress if needed
+    with open(file_path, "rb") as f:
+        image_bytes = f.read()
+
+    if len(image_bytes) > _YT_THUMB_MAX_BYTES:
+        # Resize and re-compress to JPEG until under the limit
+        img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        quality = 88
+        scale = 1.0
+        while quality >= 40:
+            buf = io.BytesIO()
+            w = int(img.width * scale)
+            h = int(img.height * scale)
+            resized = img.resize((w, h), Image.LANCZOS) if scale < 1.0 else img
+            resized.save(buf, format="JPEG", quality=quality, optimize=True)
+            image_bytes = buf.getvalue()
+            if len(image_bytes) <= _YT_THUMB_MAX_BYTES:
+                break
+            # Reduce quality first, then scale down
+            if quality > 60:
+                quality -= 10
+            else:
+                quality -= 10
+                scale *= 0.85
+
+    content_type = "image/jpeg" if len(image_bytes) < len(open(file_path, "rb").read()) else (
+        mimetypes.guess_type(str(file_path))[0] or "image/jpeg"
+    )
+
     access_token = await _get_access_token()
-    content_type = mimetypes.guess_type(str(file_path))[0] or "image/jpeg"
 
     async with httpx.AsyncClient(timeout=120.0) as client:
-        with open(file_path, "rb") as f:
-            image_bytes = f.read()
-
         response = await client.post(
             _THUMBNAIL_URL,
             params={"videoId": video_id},
