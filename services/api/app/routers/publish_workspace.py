@@ -447,7 +447,7 @@ async def publish_variant(
     if platform == "youtube":
         # Resolve media asset
         if not variant.media_asset_id:
-            raise HTTPException(status_code=422, detail="No media asset linked to this YouTube variant. Re-run AI harvest to link the sermon master file.")
+            raise HTTPException(status_code=422, detail="No media asset linked to this YouTube variant. Re-run AI harvest to link the reel file.")
 
         media_result = await db.execute(select(MediaAsset).where(MediaAsset.id == variant.media_asset_id))
         media_asset = media_result.scalar_one_or_none()
@@ -646,8 +646,8 @@ async def create_bundle_from_project(
             title=yt_title,
             description=yt_description,
             tags=yt_tags,
-            # Wire the longform master video file to this variant
-            media_asset_id=master_asset.id if master_asset else None,
+            # Use the final reel (step 7) as the YouTube upload source
+            media_asset_id=reel_asset.id if reel_asset else None,
             ai_generated=True,
         )
         db.add(yt_variant)
