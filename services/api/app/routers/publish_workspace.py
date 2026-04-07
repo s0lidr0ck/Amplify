@@ -315,17 +315,9 @@ async def create_bundle_from_project(
         if p_title or p_description:
             social_variants[platform_key] = dict(title=p_title, description=p_description, tags=p_tags)
 
-    # ------------------------------------------------------------------ #
-    # Facebook text post — from facebook draft (may override reel's fb)
-    # ------------------------------------------------------------------ #
-    facebook_draft = drafts_by_kind.get("facebook", {})
-    fb_post_text = facebook_draft.get("post") or None
-    if fb_post_text:
-        if "facebook" in social_variants:
-            # Prefer dedicated facebook draft text
-            social_variants["facebook"]["description"] = fb_post_text
-        else:
-            social_variants["facebook"] = dict(description=fb_post_text)
+    # NOTE: The facebook text post draft (drafts_by_kind["facebook"]) is intentionally
+    # NOT included here. Text posts (facebook/instagram/tiktok) are a separate
+    # variant type from reels and will be handled in a future schema update.
 
     # Add all social variants (deduplicated by platform)
     for platform_key, kwargs in social_variants.items():
