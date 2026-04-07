@@ -3,7 +3,7 @@
 import { useRef } from "react";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { publishingWorkspace, type PublishVariant } from "@/lib/api";
+import { publishingWorkspace, getMediaPlaybackUrl, type PublishVariant } from "@/lib/api";
 import { AppShell } from "@/components/layout/AppShell";
 import { StepIntro } from "@/components/workflow/StepIntro";
 import { Card, CardHeader } from "@/components/ui/Card";
@@ -139,6 +139,19 @@ export default function BundleDetailPage() {
                 <p className="truncate font-mono text-xs text-muted">{bundle.project_id}</p>
               </div>
             </div>
+
+            {bundle.thumbnail_asset_id && (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted">
+                  Thumbnail
+                </p>
+                <img
+                  src={getMediaPlaybackUrl(bundle.thumbnail_asset_id)}
+                  alt="Bundle thumbnail"
+                  className="h-32 w-auto rounded-2xl border border-border object-cover"
+                />
+              </div>
+            )}
 
             <label className="block space-y-2 text-sm">
               <span className="font-medium text-ink">Notes</span>
