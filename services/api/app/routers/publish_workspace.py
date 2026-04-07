@@ -293,9 +293,13 @@ async def create_bundle_from_project(
 
     # ------------------------------------------------------------------ #
     # Instagram / TikTok / Facebook (social) — from reel draft
+    # Accumulate into a dict keyed by platform to avoid duplicate inserts.
     # ------------------------------------------------------------------ #
     reel_draft = drafts_by_kind.get("reel", {})
     reel_platforms: dict = reel_draft.get("platforms", {})
+
+    # platform_key -> variant kwargs
+    social_variants: dict[str, dict] = {}
 
     for platform_key in ("instagram", "tiktok", "facebook"):
         plat_data = reel_platforms.get(platform_key) or {}
@@ -309,15 +313,7 @@ async def create_bundle_from_project(
             p_tags = [t.strip() for t in p_tags_raw.split(",") if t.strip()]
 
         if p_title or p_description:
-            db.add(PublishVariant(
-                id=str(uuid.uuid4()),
-                bundle_id=bundle.id,
-                platform=platform_key,
-                title=p_title,
-                description=p_description,
-                tags=p_tags,
-                ai_generated=True,
-            ))
+            social_variants[platform_key] = dict(title=p_title, description=p_description, tags=p_tags)
 
     # ------------------------------------------------------------------ #
     # Facebook text post — from facebook draft (may override reel's fb)
@@ -325,28 +321,21 @@ async def create_bundle_from_project(
     facebook_draft = drafts_by_kind.get("facebook", {})
     fb_post_text = facebook_draft.get("post") or None
     if fb_post_text:
-        # Check if a facebook variant was already added from the reel draft
-        existing_fb_result = await db.execute(
-            select(PublishVariant).where(
-                and_(
-                    PublishVariant.bundle_id == bundle.id,
-                    PublishVariant.platform == "facebook",
-                )
-            )
-        )
-        existing_fb = existing_fb_result.scalar_one_or_none()
-        if existing_fb is not None:
-            # Prefer dedicated facebook draft description over reel one
-            if fb_post_text:
-                existing_fb.description = fb_post_text
+        if "facebook" in social_variants:
+            # Prefer dedicated facebook draft text
+            social_variants["facebook"]["description"] = fb_post_text
         else:
-            db.add(PublishVariant(
-                id=str(uuid.uuid4()),
-                bundle_id=bundle.id,
-                platform="facebook",
-                description=fb_post_text,
-                ai_generated=True,
-            ))
+            social_variants["facebook"] = dict(description=fb_post_text)
+
+    # Add all social variants (deduplicated by platform)
+    for platform_key, kwargs in social_variants.items():
+        db.add(PublishVariant(
+            id=str(uuid.uuid4()),
+            bundle_id=bundle.id,
+            platform=platform_key,
+            ai_generated=True,
+            **kwargs,
+        ))
 
     # ------------------------------------------------------------------ #
     # Wix Blog — from blog draft
