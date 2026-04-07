@@ -624,7 +624,7 @@ export const publishing = {
 export type BundleType = "sermon_full" | "reel_clip" | "blog_post" | "text_post";
 export type BundleStatus = "draft" | "scheduled" | "partially_published" | "published";
 export type Platform = "youtube" | "instagram" | "tiktok" | "facebook" | "wix_blog";
-export type PublishStatus = "draft" | "scheduled" | "published" | "failed";
+export type PublishStatus = "draft" | "scheduled" | "published" | "failed" | "processing";
 
 export interface PublishVariant {
   id: string;
