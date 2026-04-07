@@ -17,6 +17,7 @@ from app.db import async_session as AsyncSessionLocal, get_db
 from app.lib.facebook import FacebookPublishError, upload_reel as fb_upload_reel
 from app.lib.instagram import InstagramPublishError, upload_reel as ig_upload_reel
 from app.lib.tiktok import TikTokPublishError, upload_video as tt_upload_video
+from app.lib.wix_blog import WixPublishError, publish_wix_blog_post
 from app.lib.youtube import YouTubePublishError, upload_thumbnail, upload_video
 from app.models import MediaAsset, Project, ProjectContentDraft, PublishBundle, PublishVariant
 from app.routers.projects import DEFAULT_ORG_ID
@@ -350,6 +351,64 @@ async def _do_tiktok_upload(
                 variant.publish_result_json = {"error": str(exc)}
 
 
+async def _do_wix_blog_publish(
+    variant_id: str,
+    bundle_id: str,
+    bundle_thumbnail_asset_id: str | None,
+    title: str,
+    description: str,
+    tags: list[str] | None,
+) -> None:
+    """Background task: publish blog post to Wix and update DB."""
+    from app.config import settings as _settings
+
+    async with AsyncSessionLocal() as db:
+        async with db.begin():
+            result = await db.execute(select(PublishVariant).where(PublishVariant.id == variant_id))
+            variant = result.scalar_one_or_none()
+            if variant is None:
+                return
+
+            try:
+                # Resolve thumbnail URL if available
+                featured_image_source: str | None = None
+                if bundle_thumbnail_asset_id:
+                    featured_image_source = (
+                        f"{_settings.api_url.rstrip('/')}/api/media/asset/{bundle_thumbnail_asset_id}"
+                    )
+
+                # Build a reasonable excerpt from the description
+                excerpt = (description or "").strip()
+                if len(excerpt) > 300:
+                    excerpt = excerpt[:297] + "…"
+
+                response = await publish_wix_blog_post(
+                    project_title=title,
+                    blog_title=title,
+                    blog_markdown=description or "",
+                    featured_image_source=featured_image_source,
+                    featured_image_id=None,
+                    publish_date=None,
+                    writer_member_id=_settings.wix_blog_member_id,
+                    excerpt=excerpt or title,
+                    title_tag=title,
+                    meta_description=excerpt or title,
+                    og_title=title,
+                    og_description=excerpt or title,
+                )
+                variant.publish_status = "published"
+                variant.published_at = datetime.now(tz=timezone.utc)
+                variant.publish_result_json = response
+            except WixPublishError as exc:
+                logger.exception("Wix Blog publish failed for variant %s", variant_id)
+                variant.publish_status = "failed"
+                variant.publish_result_json = {"error": str(exc)}
+            except Exception as exc:
+                logger.exception("Wix Blog publish unexpected error for variant %s", variant_id)
+                variant.publish_status = "failed"
+                variant.publish_result_json = {"error": str(exc)}
+
+
 @router.post("/bundles/{bundle_id}/variants/{platform}/publish", response_model=PublishVariantRead)
 async def publish_variant(
     bundle_id: str,
@@ -475,11 +534,26 @@ async def publish_variant(
                 hashtags=variant.hashtags or [],
             )
 
+    elif platform == "wix_blog":
+        # Wix Blog — publish markdown body directly
+        variant.publish_status = "processing"
+        await db.flush()
+        await db.refresh(variant)
+
+        background_tasks.add_task(
+            _do_wix_blog_publish,
+            variant_id=variant.id,
+            bundle_id=bundle_id,
+            bundle_thumbnail_asset_id=bundle.thumbnail_asset_id,
+            title=variant.title or bundle.label or "",
+            description=variant.description or "",
+            tags=variant.tags or [],
+        )
+
     else:
-        # wix_blog — coming soon
         raise HTTPException(
-            status_code=501,
-            detail=f"Direct publishing for '{platform}' is not yet wired up.",
+            status_code=422,
+            detail=f"Unknown platform '{platform}'.",
         )
 
     return variant
@@ -526,7 +600,10 @@ async def create_bundle_from_project(
 
     # Resolve master video and thumbnail assets
     master_asset = assets_by_kind.get("sermon_master")
-    thumbnail_asset = assets_by_kind.get("sermon_thumbnail")
+    # Prefer reel_thumbnail (from the "Reel Thumbnail" tab) over sermon_thumbnail
+    thumbnail_asset = assets_by_kind.get("reel_thumbnail") or assets_by_kind.get("sermon_thumbnail")
+    # Also resolve the final reel for social platform variants
+    reel_asset = assets_by_kind.get("final_reel")
 
     # Create the bundle
     week_date: date = project.sermon_date
@@ -598,7 +675,13 @@ async def create_bundle_from_project(
 
         if p_title or p_description or p_tags:
             # Store reel draft's #hashtag-style tags in the `hashtags` column (not `tags`)
-            social_variants[platform_key] = dict(title=p_title, description=p_description, hashtags=p_tags)
+            # Link the final_reel asset as the video source for all social platforms
+            social_variants[platform_key] = dict(
+                title=p_title,
+                description=p_description,
+                hashtags=p_tags,
+                media_asset_id=reel_asset.id if reel_asset else None,
+            )
 
     # NOTE: The facebook text post draft (drafts_by_kind["facebook"]) is intentionally
     # NOT included here. Text posts (facebook/instagram/tiktok) are a separate
