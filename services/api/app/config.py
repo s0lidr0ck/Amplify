@@ -42,6 +42,7 @@ class Settings(BaseSettings):
             "http://localhost:3001",
             "http://127.0.0.1:3000",
             "http://127.0.0.1:3001",
+            "https://amplify-amplify-web.ktfbiu.easypanel.host",
         ],
         validation_alias=AliasChoices("CORS_ORIGINS", "CORS_ORIGIN"),
     )
@@ -68,6 +69,17 @@ class Settings(BaseSettings):
     youtube_client_id: str = ""
     youtube_client_secret: str = ""
     youtube_refresh_token: str = ""
+    # Facebook Graph API
+    facebook_page_access_token: str = ""
+    facebook_page_id: str = ""
+    # Instagram Graph API
+    instagram_business_account_id: str = ""
+    instagram_access_token: str = ""
+    # TikTok Content Posting API
+    tiktok_client_key: str = ""
+    tiktok_client_secret: str = ""
+    tiktok_access_token: str = ""
+    tiktok_refresh_token: str = ""
 
     @field_validator("cors_origins", mode="before")
     @classmethod
