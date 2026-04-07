@@ -205,3 +205,49 @@ class ProcessingJobEvent(Base):
     progress_percent: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     payload_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class PublishBundle(Base):
+    __tablename__ = "publish_bundles"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=uuid4_str)
+    project_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("projects.id"), nullable=False)
+    organization_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("organizations.id"), nullable=False)
+    bundle_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    label: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    thumbnail_asset_id: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False), ForeignKey("media_assets.id"), nullable=True)
+    status: Mapped[str] = mapped_column(String(50), nullable=False, default="draft")
+    week_date: Mapped[date] = mapped_column(Date, nullable=False)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    variants: Mapped[list["PublishVariant"]] = relationship(
+        "PublishVariant",
+        back_populates="bundle",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+
+class PublishVariant(Base):
+    __tablename__ = "publish_variants"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=uuid4_str)
+    bundle_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("publish_bundles.id"), nullable=False)
+    platform: Mapped[str] = mapped_column(String(50), nullable=False)
+    title: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    tags: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
+    hashtags: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
+    extra_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    media_asset_id: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False), ForeignKey("media_assets.id"), nullable=True)
+    scheduled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    published_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    publish_status: Mapped[str] = mapped_column(String(50), nullable=False, default="draft")
+    publish_result_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    ai_generated: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    bundle: Mapped["PublishBundle"] = relationship("PublishBundle", back_populates="variants")
