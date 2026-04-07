@@ -216,6 +216,7 @@ async def _do_youtube_upload(
     thumbnail_path: Path | None,
 ) -> None:
     """Background task: upload video + thumbnail to YouTube and update DB."""
+    # Step 1: immediately mark as processing so the UI reflects progress
     async with AsyncSessionLocal() as db:
         async with db.begin():
             result = await db.execute(select(PublishVariant).where(PublishVariant.id == variant_id))
@@ -223,39 +224,53 @@ async def _do_youtube_upload(
             if variant is None:
                 logger.error("YouTube upload: variant %s not found", variant_id)
                 return
+            variant.publish_status = "processing"
 
+    # Step 2: perform the upload outside any DB transaction (can take minutes)
+    final_status: str
+    result_json: dict
+    published_at = None
+    try:
+        video_resource = await upload_video(
+            file_path=video_path,
+            title=title,
+            description=description,
+            tags=tags,
+            privacy_status="public",
+            notify_subscribers=True,
+        )
+        video_id = video_resource.get("id")
+        if not video_id:
+            raise YouTubePublishError(f"YouTube response missing video ID: {video_resource}")
+
+        # Upload thumbnail if available
+        if thumbnail_path and thumbnail_path.exists():
             try:
-                video_resource = await upload_video(
-                    file_path=video_path,
-                    title=title,
-                    description=description,
-                    tags=tags,
-                    privacy_status="public",
-                    notify_subscribers=True,
-                )
-                video_id = video_resource.get("id")
-                if not video_id:
-                    raise YouTubePublishError(f"YouTube response missing video ID: {video_resource}")
+                await upload_thumbnail(video_id=video_id, file_path=thumbnail_path)
+            except YouTubePublishError as thumb_err:
+                logger.warning("Thumbnail upload failed (video still published): %s", thumb_err)
 
-                # Upload thumbnail if available
-                if thumbnail_path and thumbnail_path.exists():
-                    try:
-                        await upload_thumbnail(video_id=video_id, file_path=thumbnail_path)
-                    except YouTubePublishError as thumb_err:
-                        logger.warning("Thumbnail upload failed (video still published): %s", thumb_err)
+        final_status = "published"
+        published_at = datetime.now(tz=timezone.utc)
+        result_json = {
+            "video_id": video_id,
+            "url": f"https://youtu.be/{video_id}",
+            "title": video_resource.get("snippet", {}).get("title"),
+        }
+    except Exception as exc:
+        logger.exception("YouTube upload failed for variant %s", variant_id)
+        final_status = "failed"
+        result_json = {"error": str(exc)}
 
-                variant.publish_status = "published"
-                variant.published_at = datetime.now(tz=timezone.utc)
-                variant.publish_result_json = {
-                    "video_id": video_id,
-                    "url": f"https://youtu.be/{video_id}",
-                    "title": video_resource.get("snippet", {}).get("title"),
-                }
-
-            except Exception as exc:
-                logger.exception("YouTube upload failed for variant %s", variant_id)
-                variant.publish_status = "failed"
-                variant.publish_result_json = {"error": str(exc)}
+    # Step 3: commit final status
+    async with AsyncSessionLocal() as db:
+        async with db.begin():
+            result = await db.execute(select(PublishVariant).where(PublishVariant.id == variant_id))
+            variant = result.scalar_one_or_none()
+            if variant is not None:
+                variant.publish_status = final_status
+                variant.published_at = published_at
+                variant.publish_result_json = result_json
 
 
 async def _do_facebook_upload(
@@ -273,20 +288,34 @@ async def _do_facebook_upload(
             variant = result.scalar_one_or_none()
             if variant is None:
                 return
-            try:
-                response = await fb_upload_reel(
-                    file_path=video_path,
-                    title=title,
-                    description=description,
-                    hashtags=hashtags,
-                )
-                variant.publish_status = "published"
-                variant.published_at = datetime.now(tz=timezone.utc)
-                variant.publish_result_json = response
-            except Exception as exc:
-                logger.exception("Facebook upload failed for variant %s", variant_id)
-                variant.publish_status = "failed"
-                variant.publish_result_json = {"error": str(exc)}
+            variant.publish_status = "processing"
+
+    final_status: str
+    result_json: dict
+    published_at = None
+    try:
+        response = await fb_upload_reel(
+            file_path=video_path,
+            title=title,
+            description=description,
+            hashtags=hashtags,
+        )
+        final_status = "published"
+        published_at = datetime.now(tz=timezone.utc)
+        result_json = response
+    except Exception as exc:
+        logger.exception("Facebook upload failed for variant %s", variant_id)
+        final_status = "failed"
+        result_json = {"error": str(exc)}
+
+    async with AsyncSessionLocal() as db:
+        async with db.begin():
+            result = await db.execute(select(PublishVariant).where(PublishVariant.id == variant_id))
+            variant = result.scalar_one_or_none()
+            if variant is not None:
+                variant.publish_status = final_status
+                variant.published_at = published_at
+                variant.publish_result_json = result_json
 
 
 async def _do_instagram_upload(
@@ -304,20 +333,34 @@ async def _do_instagram_upload(
             variant = result.scalar_one_or_none()
             if variant is None:
                 return
-            try:
-                response = await ig_upload_reel(
-                    media_asset_id=media_asset_id,
-                    title=title,
-                    description=description,
-                    hashtags=hashtags,
-                )
-                variant.publish_status = "published"
-                variant.published_at = datetime.now(tz=timezone.utc)
-                variant.publish_result_json = response
-            except Exception as exc:
-                logger.exception("Instagram upload failed for variant %s", variant_id)
-                variant.publish_status = "failed"
-                variant.publish_result_json = {"error": str(exc)}
+            variant.publish_status = "processing"
+
+    final_status: str
+    result_json: dict
+    published_at = None
+    try:
+        response = await ig_upload_reel(
+            media_asset_id=media_asset_id,
+            title=title,
+            description=description,
+            hashtags=hashtags,
+        )
+        final_status = "published"
+        published_at = datetime.now(tz=timezone.utc)
+        result_json = response
+    except Exception as exc:
+        logger.exception("Instagram upload failed for variant %s", variant_id)
+        final_status = "failed"
+        result_json = {"error": str(exc)}
+
+    async with AsyncSessionLocal() as db:
+        async with db.begin():
+            result = await db.execute(select(PublishVariant).where(PublishVariant.id == variant_id))
+            variant = result.scalar_one_or_none()
+            if variant is not None:
+                variant.publish_status = final_status
+                variant.published_at = published_at
+                variant.publish_result_json = result_json
 
 
 async def _do_tiktok_upload(
@@ -335,20 +378,34 @@ async def _do_tiktok_upload(
             variant = result.scalar_one_or_none()
             if variant is None:
                 return
-            try:
-                response = await tt_upload_video(
-                    media_asset_id=media_asset_id,
-                    title=title,
-                    description=description,
-                    hashtags=hashtags,
-                )
-                variant.publish_status = "published"
-                variant.published_at = datetime.now(tz=timezone.utc)
-                variant.publish_result_json = response
-            except Exception as exc:
-                logger.exception("TikTok upload failed for variant %s", variant_id)
-                variant.publish_status = "failed"
-                variant.publish_result_json = {"error": str(exc)}
+            variant.publish_status = "processing"
+
+    final_status: str
+    result_json: dict
+    published_at = None
+    try:
+        response = await tt_upload_video(
+            media_asset_id=media_asset_id,
+            title=title,
+            description=description,
+            hashtags=hashtags,
+        )
+        final_status = "published"
+        published_at = datetime.now(tz=timezone.utc)
+        result_json = response
+    except Exception as exc:
+        logger.exception("TikTok upload failed for variant %s", variant_id)
+        final_status = "failed"
+        result_json = {"error": str(exc)}
+
+    async with AsyncSessionLocal() as db:
+        async with db.begin():
+            result = await db.execute(select(PublishVariant).where(PublishVariant.id == variant_id))
+            variant = result.scalar_one_or_none()
+            if variant is not None:
+                variant.publish_status = final_status
+                variant.published_at = published_at
+                variant.publish_result_json = result_json
 
 
 async def _do_wix_blog_publish(
