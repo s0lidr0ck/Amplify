@@ -268,7 +268,7 @@ export function PlatformVariantEditor({
           />
         </label>
 
-        {/* Publish Now button */}
+        {/* Schedule button */}
         {currentVariant?.publish_status !== "published" && currentVariant?.publish_status !== "processing" && (
           <div className="pt-2">
             <Button
@@ -277,14 +277,14 @@ export function PlatformVariantEditor({
               disabled={publishMutation.isPending}
             >
               {publishMutation.isPending && publishMutation.variables === activeTab
-                ? "Queuing…"
-                : `Publish Now on ${PLATFORM_LABELS[activeTab]}`}
+                ? "Scheduling…"
+                : `Schedule on ${PLATFORM_LABELS[activeTab]}`}
             </Button>
             {publishMutation.isError && publishMutation.variables === activeTab && (
               <p className="mt-2 text-xs text-danger">
                 {publishMutation.error instanceof Error
                   ? publishMutation.error.message
-                  : "Publish failed"}
+                  : "Schedule failed"}
               </p>
             )}
           </div>
