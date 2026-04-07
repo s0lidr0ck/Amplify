@@ -14,6 +14,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db import async_session as AsyncSessionLocal, get_db
+from app.lib.facebook import FacebookPublishError, upload_reel as fb_upload_reel
+from app.lib.instagram import InstagramPublishError, upload_reel as ig_upload_reel
+from app.lib.tiktok import TikTokPublishError, upload_video as tt_upload_video
 from app.lib.youtube import YouTubePublishError, upload_thumbnail, upload_video
 from app.models import MediaAsset, Project, ProjectContentDraft, PublishBundle, PublishVariant
 from app.routers.projects import DEFAULT_ORG_ID
@@ -254,6 +257,99 @@ async def _do_youtube_upload(
                 variant.publish_result_json = {"error": str(exc)}
 
 
+async def _do_facebook_upload(
+    variant_id: str,
+    bundle_id: str,
+    title: str,
+    description: str,
+    hashtags: list[str] | None,
+    video_path: Path,
+) -> None:
+    """Background task: upload reel to Facebook Page and update DB."""
+    async with AsyncSessionLocal() as db:
+        async with db.begin():
+            result = await db.execute(select(PublishVariant).where(PublishVariant.id == variant_id))
+            variant = result.scalar_one_or_none()
+            if variant is None:
+                return
+            try:
+                response = await fb_upload_reel(
+                    file_path=video_path,
+                    title=title,
+                    description=description,
+                    hashtags=hashtags,
+                )
+                variant.publish_status = "published"
+                variant.published_at = datetime.now(tz=timezone.utc)
+                variant.publish_result_json = response
+            except Exception as exc:
+                logger.exception("Facebook upload failed for variant %s", variant_id)
+                variant.publish_status = "failed"
+                variant.publish_result_json = {"error": str(exc)}
+
+
+async def _do_instagram_upload(
+    variant_id: str,
+    bundle_id: str,
+    media_asset_id: str,
+    title: str,
+    description: str,
+    hashtags: list[str] | None,
+) -> None:
+    """Background task: upload reel to Instagram and update DB."""
+    async with AsyncSessionLocal() as db:
+        async with db.begin():
+            result = await db.execute(select(PublishVariant).where(PublishVariant.id == variant_id))
+            variant = result.scalar_one_or_none()
+            if variant is None:
+                return
+            try:
+                response = await ig_upload_reel(
+                    media_asset_id=media_asset_id,
+                    title=title,
+                    description=description,
+                    hashtags=hashtags,
+                )
+                variant.publish_status = "published"
+                variant.published_at = datetime.now(tz=timezone.utc)
+                variant.publish_result_json = response
+            except Exception as exc:
+                logger.exception("Instagram upload failed for variant %s", variant_id)
+                variant.publish_status = "failed"
+                variant.publish_result_json = {"error": str(exc)}
+
+
+async def _do_tiktok_upload(
+    variant_id: str,
+    bundle_id: str,
+    media_asset_id: str,
+    title: str,
+    description: str,
+    hashtags: list[str] | None,
+) -> None:
+    """Background task: upload video to TikTok and update DB."""
+    async with AsyncSessionLocal() as db:
+        async with db.begin():
+            result = await db.execute(select(PublishVariant).where(PublishVariant.id == variant_id))
+            variant = result.scalar_one_or_none()
+            if variant is None:
+                return
+            try:
+                response = await tt_upload_video(
+                    media_asset_id=media_asset_id,
+                    title=title,
+                    description=description,
+                    hashtags=hashtags,
+                )
+                variant.publish_status = "published"
+                variant.published_at = datetime.now(tz=timezone.utc)
+                variant.publish_result_json = response
+            except Exception as exc:
+                logger.exception("TikTok upload failed for variant %s", variant_id)
+                variant.publish_status = "failed"
+                variant.publish_result_json = {"error": str(exc)}
+
+
 @router.post("/bundles/{bundle_id}/variants/{platform}/publish", response_model=PublishVariantRead)
 async def publish_variant(
     bundle_id: str,
@@ -327,12 +423,63 @@ async def publish_variant(
             thumbnail_path=thumbnail_path,
         )
 
+    elif platform in ("facebook", "instagram", "tiktok"):
+        # These platforms use the media asset URL (publicly served by our API)
+        if not variant.media_asset_id:
+            raise HTTPException(
+                status_code=422,
+                detail=f"No media asset linked to this {platform} variant. Re-run AI harvest to link the reel file.",
+            )
+
+        variant.publish_status = "processing"
+        await db.flush()
+        await db.refresh(variant)
+
+        if platform == "facebook":
+            media_result = await db.execute(select(MediaAsset).where(MediaAsset.id == variant.media_asset_id))
+            media_asset = media_result.scalar_one_or_none()
+            if media_asset is None:
+                raise HTTPException(status_code=422, detail="Media asset record not found.")
+            video_path = _resolve_asset_path(media_asset)
+            if not video_path.exists():
+                raise HTTPException(status_code=422, detail=f"Video file not found on disk: {video_path.name}")
+            background_tasks.add_task(
+                _do_facebook_upload,
+                variant_id=variant.id,
+                bundle_id=bundle_id,
+                title=variant.title or bundle.label or "",
+                description=variant.description or "",
+                hashtags=variant.hashtags or [],
+                video_path=video_path,
+            )
+
+        elif platform == "instagram":
+            background_tasks.add_task(
+                _do_instagram_upload,
+                variant_id=variant.id,
+                bundle_id=bundle_id,
+                media_asset_id=variant.media_asset_id,
+                title=variant.title or bundle.label or "",
+                description=variant.description or "",
+                hashtags=variant.hashtags or [],
+            )
+
+        elif platform == "tiktok":
+            background_tasks.add_task(
+                _do_tiktok_upload,
+                variant_id=variant.id,
+                bundle_id=bundle_id,
+                media_asset_id=variant.media_asset_id,
+                title=variant.title or bundle.label or "",
+                description=variant.description or "",
+                hashtags=variant.hashtags or [],
+            )
+
     else:
-        # Facebook, Instagram, TikTok, Wix Blog — coming soon
+        # wix_blog — coming soon
         raise HTTPException(
             status_code=501,
-            detail=f"Direct publishing for '{platform}' is not yet wired up. "
-                   "YouTube is currently supported; other platforms are in progress.",
+            detail=f"Direct publishing for '{platform}' is not yet wired up.",
         )
 
     return variant
