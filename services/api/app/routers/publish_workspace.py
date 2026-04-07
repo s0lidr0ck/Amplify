@@ -326,8 +326,9 @@ async def create_bundle_from_project(
         elif isinstance(p_tags_raw, str):
             p_tags = [t.strip() for t in p_tags_raw.split(",") if t.strip()]
 
-        if p_title or p_description:
-            social_variants[platform_key] = dict(title=p_title, description=p_description, tags=p_tags)
+        if p_title or p_description or p_tags:
+            # Store reel draft's #hashtag-style tags in the `hashtags` column (not `tags`)
+            social_variants[platform_key] = dict(title=p_title, description=p_description, hashtags=p_tags)
 
     # NOTE: The facebook text post draft (drafts_by_kind["facebook"]) is intentionally
     # NOT included here. Text posts (facebook/instagram/tiktok) are a separate
@@ -340,7 +341,7 @@ async def create_bundle_from_project(
             bundle_id=bundle.id,
             platform=platform_key,
             ai_generated=True,
-            **kwargs,
+            **kwargs,  # contains title, description, hashtags (not tags)
         ))
 
     # ------------------------------------------------------------------ #
