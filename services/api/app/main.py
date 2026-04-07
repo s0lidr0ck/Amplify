@@ -17,6 +17,7 @@ from app.routers import (
     jobs,
     media,
     projects,
+    publish_workspace,
     publishing,
     settings as settings_router,
     speakers,
@@ -77,6 +78,7 @@ app.include_router(trim.router)
 app.include_router(transcript.router)
 app.include_router(clips.router)
 app.include_router(content.router)
+app.include_router(publish_workspace.router)
 app.include_router(publishing.router)
 app.include_router(settings_router.router)
 app.include_router(worker_internal.router)
