@@ -2,16 +2,24 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import uuid
 from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db import get_db
+from app.config import settings
+from app.db import async_session as AsyncSessionLocal, get_db
+from app.lib.youtube import YouTubePublishError, upload_thumbnail, upload_video
 from app.models import MediaAsset, Project, ProjectContentDraft, PublishBundle, PublishVariant
 from app.routers.projects import DEFAULT_ORG_ID
+
+logger = logging.getLogger(__name__)
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 from app.schemas import (
     CalendarBundleRead,
     PublishBundleCreate,
@@ -183,17 +191,85 @@ async def upsert_variant(
 
 
 # ---------------------------------------------------------------------------
-# Publish stub
+# Publish — real platform uploads
 # ---------------------------------------------------------------------------
+
+def _resolve_asset_path(asset: MediaAsset) -> Path:
+    """Resolve the filesystem path for a media asset."""
+    upload_dir = Path(settings.upload_dir)
+    if not upload_dir.is_absolute():
+        upload_dir = _PROJECT_ROOT / upload_dir
+    return upload_dir / asset.storage_key / asset.filename
+
+
+async def _do_youtube_upload(
+    variant_id: str,
+    bundle_id: str,
+    title: str,
+    description: str,
+    tags: list[str] | None,
+    video_path: Path,
+    thumbnail_path: Path | None,
+) -> None:
+    """Background task: upload video + thumbnail to YouTube and update DB."""
+    async with AsyncSessionLocal() as db:
+        async with db.begin():
+            result = await db.execute(select(PublishVariant).where(PublishVariant.id == variant_id))
+            variant = result.scalar_one_or_none()
+            if variant is None:
+                logger.error("YouTube upload: variant %s not found", variant_id)
+                return
+
+            try:
+                video_resource = await upload_video(
+                    file_path=video_path,
+                    title=title,
+                    description=description,
+                    tags=tags,
+                    privacy_status="public",
+                    notify_subscribers=True,
+                )
+                video_id = video_resource.get("id")
+                if not video_id:
+                    raise YouTubePublishError(f"YouTube response missing video ID: {video_resource}")
+
+                # Upload thumbnail if available
+                if thumbnail_path and thumbnail_path.exists():
+                    try:
+                        await upload_thumbnail(video_id=video_id, file_path=thumbnail_path)
+                    except YouTubePublishError as thumb_err:
+                        logger.warning("Thumbnail upload failed (video still published): %s", thumb_err)
+
+                variant.publish_status = "published"
+                variant.published_at = datetime.now(tz=timezone.utc)
+                variant.publish_result_json = {
+                    "video_id": video_id,
+                    "url": f"https://youtu.be/{video_id}",
+                    "title": video_resource.get("snippet", {}).get("title"),
+                }
+
+            except Exception as exc:
+                logger.exception("YouTube upload failed for variant %s", variant_id)
+                variant.publish_status = "failed"
+                variant.publish_result_json = {"error": str(exc)}
+
 
 @router.post("/bundles/{bundle_id}/variants/{platform}/publish", response_model=PublishVariantRead)
 async def publish_variant(
     bundle_id: str,
     platform: str,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
-    """Stub: mark a variant as published (real platform posting TBD)."""
-    await _get_bundle_or_404(bundle_id, db)
+    """
+    Publish a variant to its platform.
+
+    - Sets publish_status to 'processing' immediately and returns.
+    - A background task performs the actual upload and updates the status
+      to 'published' (or 'failed') when done.
+    - Currently supported: youtube. Others will be wired up next.
+    """
+    bundle = await _get_bundle_or_404(bundle_id, db)
 
     result = await db.execute(
         select(PublishVariant).where(
@@ -207,11 +283,58 @@ async def publish_variant(
     if variant is None:
         raise HTTPException(status_code=404, detail=f"Variant for platform '{platform}' not found on this bundle")
 
-    variant.publish_status = "published"
-    variant.published_at = datetime.now(tz=timezone.utc)
+    if variant.publish_status == "published":
+        raise HTTPException(status_code=409, detail="Variant is already published.")
 
-    await db.flush()
-    await db.refresh(variant)
+    if variant.publish_status == "processing":
+        raise HTTPException(status_code=409, detail="Variant is already being uploaded.")
+
+    if platform == "youtube":
+        # Resolve media asset
+        if not variant.media_asset_id:
+            raise HTTPException(status_code=422, detail="No media asset linked to this YouTube variant. Re-run AI harvest to link the sermon master file.")
+
+        media_result = await db.execute(select(MediaAsset).where(MediaAsset.id == variant.media_asset_id))
+        media_asset = media_result.scalar_one_or_none()
+        if media_asset is None:
+            raise HTTPException(status_code=422, detail="Media asset record not found.")
+
+        video_path = _resolve_asset_path(media_asset)
+        if not video_path.exists():
+            raise HTTPException(status_code=422, detail=f"Video file not found on disk: {video_path.name}")
+
+        # Resolve thumbnail (optional)
+        thumbnail_path: Path | None = None
+        if bundle.thumbnail_asset_id:
+            thumb_result = await db.execute(select(MediaAsset).where(MediaAsset.id == bundle.thumbnail_asset_id))
+            thumb_asset = thumb_result.scalar_one_or_none()
+            if thumb_asset:
+                thumbnail_path = _resolve_asset_path(thumb_asset)
+
+        # Mark as processing and kick off background upload
+        variant.publish_status = "processing"
+        await db.flush()
+        await db.refresh(variant)
+
+        background_tasks.add_task(
+            _do_youtube_upload,
+            variant_id=variant.id,
+            bundle_id=bundle_id,
+            title=variant.title or bundle.label or "",
+            description=variant.description or "",
+            tags=variant.tags or [],
+            video_path=video_path,
+            thumbnail_path=thumbnail_path,
+        )
+
+    else:
+        # Facebook, Instagram, TikTok, Wix Blog — coming soon
+        raise HTTPException(
+            status_code=501,
+            detail=f"Direct publishing for '{platform}' is not yet wired up. "
+                   "YouTube is currently supported; other platforms are in progress.",
+        )
+
     return variant
 
 
