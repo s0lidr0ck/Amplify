@@ -64,6 +64,10 @@ class Settings(BaseSettings):
     wix_site_id: str = ""
     wix_blog_member_id: str = ""
     wix_bearer_token: str = ""
+    # YouTube Data API OAuth2 credentials
+    youtube_client_id: str = ""
+    youtube_client_secret: str = ""
+    youtube_refresh_token: str = ""
 
     @field_validator("cors_origins", mode="before")
     @classmethod
