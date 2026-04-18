@@ -21,9 +21,10 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check for access_token cookie
-  const accessToken = request.cookies.get("access_token");
-  if (!accessToken) {
+  // Check for the client-side session marker set by AuthContext after login.
+  // (The real httpOnly access_token is on the API domain and not visible here.)
+  const loggedIn = request.cookies.get("logged_in");
+  if (!loggedIn) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("redirect", pathname);
     return NextResponse.redirect(loginUrl);
