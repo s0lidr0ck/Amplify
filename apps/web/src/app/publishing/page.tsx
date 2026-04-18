@@ -9,6 +9,7 @@ import { StepIntro } from "@/components/workflow/StepIntro";
 import { Card } from "@/components/ui/Card";
 import { Alert } from "@/components/ui/Alert";
 import { WeeklyCalendar } from "@/components/publishing/WeeklyCalendar";
+import { useAuth } from "@/contexts/AuthContext";
 import type { PublishBundle } from "@/lib/api";
 
 function todayISO(): string {
@@ -17,6 +18,7 @@ function todayISO(): string {
 
 export default function PublishingPage() {
   const router = useRouter();
+  const { user } = useAuth();
   const [currentWeek, setCurrentWeek] = useState<string>(todayISO);
 
   const {
@@ -33,6 +35,9 @@ export default function PublishingPage() {
     router.push(`/publishing/bundles/${bundle.id}`);
   }
 
+  // Coming Soon overlay for non-NLC orgs
+  const isNLC = user?.is_nlc ?? false;
+
   return (
     <AppShell>
       <div className="page-frame space-y-6 py-8 sm:py-10">
@@ -42,7 +47,17 @@ export default function PublishingPage() {
           description="Manage and schedule content across YouTube, Instagram, TikTok, Facebook, and Wix Blog. Each week groups your sermon-derived content bundles by publish date."
         />
 
-        <Card>
+        {!isNLC && (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-6 py-8 text-center">
+            <div className="text-4xl mb-3">🚀</div>
+            <h2 className="text-xl font-semibold text-amber-900 mb-2">Publishing — Coming Soon</h2>
+            <p className="text-sm text-amber-700 max-w-md mx-auto">
+              Social platform publishing is being set up for your organization. You'll be able to publish to YouTube, Instagram, TikTok, and Facebook soon. Contact support for early access.
+            </p>
+          </div>
+        )}
+
+        {isNLC && <Card>
           {isLoading && (
             <div className="flex items-center justify-center py-16">
               <span className="text-sm text-muted">Loading bundles…</span>
@@ -63,7 +78,7 @@ export default function PublishingPage() {
               onWeekChange={setCurrentWeek}
             />
           )}
-        </Card>
+        </Card>}
       </div>
     </AppShell>
   );
