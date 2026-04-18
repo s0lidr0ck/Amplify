@@ -49,6 +49,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       method: "POST",
       body: JSON.stringify({ email, password }),
     });
+    // Set a client-side marker cookie so Next.js middleware can detect the
+    // session. The real auth token is httpOnly on the API domain; this cookie
+    // is just for routing purposes and carries no sensitive data.
+    document.cookie = "logged_in=1; path=/; SameSite=Lax; Secure";
     await fetchMe();
   }
 
@@ -58,6 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // ignore
     }
+    document.cookie = "logged_in=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
     setUser(null);
   }
 
