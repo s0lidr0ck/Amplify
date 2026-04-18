@@ -9,6 +9,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const isFormData = typeof FormData !== "undefined" && init?.body instanceof FormData;
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
+    credentials: "include",
     headers: isFormData
       ? {
           ...init?.headers,
@@ -34,6 +35,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
 export async function download(path: string, init?: RequestInit): Promise<void> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
+    credentials: "include",
     headers: {
       ...init?.headers,
     },
