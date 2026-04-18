@@ -6,9 +6,9 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import UserContext, get_current_user
 from app.db import get_db
 from app.models import Project, Speaker
-from app.routers.projects import DEFAULT_ORG_ID
 from app.schemas import SpeakerCreate, SpeakerRead, SpeakerUpdate
 
 router = APIRouter(prefix="/api/speakers", tags=["speakers"])
@@ -17,9 +17,10 @@ router = APIRouter(prefix="/api/speakers", tags=["speakers"])
 @router.get("", response_model=list[SpeakerRead])
 async def list_speakers(
     db: AsyncSession = Depends(get_db),
+    current_user: UserContext = Depends(get_current_user),
     include_inactive: bool = False,
 ):
-    query = select(Speaker).where(Speaker.organization_id == DEFAULT_ORG_ID)
+    query = select(Speaker).where(Speaker.organization_id == current_user.org_id)
     if not include_inactive:
         query = query.where(Speaker.is_active == True)
     query = query.order_by(Speaker.sort_order.asc(), func.lower(Speaker.display_name).asc())
@@ -31,10 +32,11 @@ async def list_speakers(
 async def create_speaker(
     body: SpeakerCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: UserContext = Depends(get_current_user),
 ):
     speaker = Speaker(
         id=str(uuid.uuid4()),
-        organization_id=DEFAULT_ORG_ID,
+        organization_id=current_user.org_id,
         speaker_name=body.speaker_name.strip(),
         display_name=body.display_name.strip(),
         is_active=body.is_active,
@@ -51,9 +53,10 @@ async def update_speaker(
     speaker_id: str,
     body: SpeakerUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: UserContext = Depends(get_current_user),
 ):
     speaker = await db.get(Speaker, speaker_id)
-    if not speaker or speaker.organization_id != DEFAULT_ORG_ID:
+    if not speaker or speaker.organization_id != current_user.org_id:
         raise HTTPException(status_code=404, detail="Speaker not found")
 
     speaker.speaker_name = body.speaker_name.strip()
@@ -69,14 +72,15 @@ async def update_speaker(
 async def delete_speaker(
     speaker_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: UserContext = Depends(get_current_user),
 ):
     speaker = await db.get(Speaker, speaker_id)
-    if not speaker or speaker.organization_id != DEFAULT_ORG_ID:
+    if not speaker or speaker.organization_id != current_user.org_id:
         raise HTTPException(status_code=404, detail="Speaker not found")
 
     in_use = await db.execute(
         select(Project.id).where(
-            Project.organization_id == DEFAULT_ORG_ID,
+            Project.organization_id == current_user.org_id,
             Project.speaker == speaker.speaker_name,
         ).limit(1)
     )

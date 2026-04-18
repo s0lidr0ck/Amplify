@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import UserContext, get_current_user
 from app.config import settings
 from app.db import get_db
 from app.models import MediaAsset, Project
@@ -119,6 +120,7 @@ async def _mark_replaced_assets(project_id: str, asset_kind: str, db: AsyncSessi
 async def request_upload(
     body: RequestUploadBody,
     db: AsyncSession = Depends(get_db),
+    current_user: UserContext = Depends(get_current_user),
 ):
     """
     Request a signed URL for direct upload to object storage.
@@ -156,6 +158,7 @@ async def request_upload(
 async def start_local_upload(
     body: StartLocalUploadBody,
     db: AsyncSession = Depends(get_db),
+    current_user: UserContext = Depends(get_current_user),
 ):
     result = await db.execute(select(Project).where(Project.id == body.project_id))
     if not result.scalar_one_or_none():
@@ -218,6 +221,7 @@ async def complete_local_upload(
     upload_id: str,
     body: CompleteLocalUploadBody,
     db: AsyncSession = Depends(get_db),
+    current_user: UserContext = Depends(get_current_user),
 ):
     meta = _load_upload_meta(upload_id)
     if meta["project_id"] != body.project_id:

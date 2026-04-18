@@ -12,6 +12,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import UserContext, get_current_user
 from app.config import settings
 from app.db import async_session as AsyncSessionLocal, get_db
 from app.lib.facebook import FacebookPublishError, upload_reel as fb_upload_reel
@@ -20,7 +21,8 @@ from app.lib.tiktok import TikTokPublishError, upload_video as tt_upload_video
 from app.lib.wix_blog import WixPublishError, publish_wix_blog_post
 from app.lib.youtube import YouTubePublishError, upload_thumbnail, upload_video
 from app.models import MediaAsset, Project, ProjectContentDraft, PublishBundle, PublishVariant
-from app.routers.projects import DEFAULT_ORG_ID
+
+NLC_ORG_ID = "00000000-0000-0000-0000-000000000001"
 
 logger = logging.getLogger(__name__)
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
@@ -47,9 +49,9 @@ def _week_bounds(week_date: date) -> tuple[date, date]:
     return monday, sunday
 
 
-async def _get_bundle_or_404(bundle_id: str, db: AsyncSession) -> PublishBundle:
+async def _get_bundle_or_404(bundle_id: str, db: AsyncSession, org_id: str | None = None) -> PublishBundle:
     bundle = await db.get(PublishBundle, bundle_id)
-    if not bundle or bundle.organization_id != DEFAULT_ORG_ID:
+    if not bundle or (org_id and bundle.organization_id != org_id):
         raise HTTPException(status_code=404, detail="Publish bundle not found")
     return bundle
 
@@ -62,6 +64,7 @@ async def _get_bundle_or_404(bundle_id: str, db: AsyncSession) -> PublishBundle:
 async def create_bundle(
     body: PublishBundleCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: UserContext = Depends(get_current_user),
 ):
     """Create a new publish bundle."""
     bundle = PublishBundle(
@@ -85,13 +88,14 @@ async def create_bundle(
 async def list_bundles_for_week(
     week: date,
     db: AsyncSession = Depends(get_db),
+    current_user: UserContext = Depends(get_current_user),
 ):
     """List all publish bundles whose week_date falls within the Mon-Sun week of *week*."""
     monday, sunday = _week_bounds(week)
     result = await db.execute(
         select(PublishBundle).where(
             and_(
-                PublishBundle.organization_id == DEFAULT_ORG_ID,
+                PublishBundle.organization_id == current_user.org_id,
                 PublishBundle.week_date >= monday,
                 PublishBundle.week_date <= sunday,
             )
@@ -104,9 +108,10 @@ async def list_bundles_for_week(
 async def get_bundle(
     bundle_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: UserContext = Depends(get_current_user),
 ):
     """Get a single publish bundle (with its variants)."""
-    return await _get_bundle_or_404(bundle_id, db)
+    return await _get_bundle_or_404(bundle_id, db, org_id=current_user.org_id)
 
 
 @router.patch("/bundles/{bundle_id}", response_model=PublishBundleRead)
@@ -114,9 +119,10 @@ async def update_bundle(
     bundle_id: str,
     body: PublishBundleUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: UserContext = Depends(get_current_user),
 ):
     """Partially update a publish bundle."""
-    bundle = await _get_bundle_or_404(bundle_id, db)
+    bundle = await _get_bundle_or_404(bundle_id, db, org_id=current_user.org_id)
 
     if body.label is not None:
         bundle.label = body.label
@@ -138,9 +144,10 @@ async def update_bundle(
 async def delete_bundle(
     bundle_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: UserContext = Depends(get_current_user),
 ):
     """Delete a publish bundle and all its variants (cascade)."""
-    bundle = await _get_bundle_or_404(bundle_id, db)
+    bundle = await _get_bundle_or_404(bundle_id, db, org_id=current_user.org_id)
     await db.delete(bundle)
     await db.flush()
 
@@ -155,10 +162,11 @@ async def upsert_variant(
     platform: str,
     body: PublishVariantUpsert,
     db: AsyncSession = Depends(get_db),
+    current_user: UserContext = Depends(get_current_user),
 ):
     """Insert or update a variant for a given bundle + platform combination."""
     # Ensure the bundle exists and belongs to this org
-    await _get_bundle_or_404(bundle_id, db)
+    await _get_bundle_or_404(bundle_id, db, org_id=current_user.org_id)
 
     result = await db.execute(
         select(PublishVariant).where(
@@ -472,6 +480,7 @@ async def publish_variant(
     platform: str,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
+    current_user: UserContext = Depends(get_current_user),
 ):
     """
     Publish a variant to its platform.
@@ -481,7 +490,14 @@ async def publish_variant(
       to 'published' (or 'failed') when done.
     - Currently supported: youtube. Others will be wired up next.
     """
-    bundle = await _get_bundle_or_404(bundle_id, db)
+    # Non-NLC orgs: publishing is coming soon
+    if not current_user.is_nlc():
+        from fastapi import HTTPException as _HTTPException
+        raise _HTTPException(
+            status_code=403,
+            detail="Social publishing is coming soon for your organization. Contact support for access.",
+        )
+    bundle = await _get_bundle_or_404(bundle_id, db, org_id=current_user.org_id)
 
     result = await db.execute(
         select(PublishVariant).where(
@@ -624,6 +640,7 @@ async def publish_variant(
 async def create_bundle_from_project(
     project_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: UserContext = Depends(get_current_user),
 ):
     """
     AI harvest: read existing project content drafts and auto-populate a
@@ -636,9 +653,9 @@ async def create_bundle_from_project(
       - blog       → Wix Blog variant
       - metadata   → tags for YouTube (metadata.tags or keywords list)
     """
-    # Verify project exists
+    # Verify project exists and belongs to this org
     project = await db.get(Project, project_id)
-    if not project or project.organization_id != DEFAULT_ORG_ID:
+    if not project or project.organization_id != current_user.org_id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     # Load all drafts for this project
@@ -667,7 +684,7 @@ async def create_bundle_from_project(
     bundle = PublishBundle(
         id=str(uuid.uuid4()),
         project_id=project_id,
-        organization_id=DEFAULT_ORG_ID,
+        organization_id=current_user.org_id,
         bundle_type="sermon_full",
         label=project.title,
         status="draft",
@@ -784,9 +801,10 @@ async def get_calendar(
     from_: date | None = Query(default=None, alias="from"),
     to: date | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
+    current_user: UserContext = Depends(get_current_user),
 ):
     """Return all publish bundles whose week_date falls within [from, to]."""
-    filters = [PublishBundle.organization_id == DEFAULT_ORG_ID]
+    filters = [PublishBundle.organization_id == current_user.org_id]
     if from_ is not None:
         filters.append(PublishBundle.week_date >= from_)
     if to is not None:
