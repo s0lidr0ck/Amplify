@@ -10,6 +10,8 @@ from fastapi.responses import JSONResponse
 from app.config import settings
 from app.queue import close_queue
 from app.routers import (
+    admin,
+    auth as auth_router,
     automation,
     clips,
     content,
@@ -21,6 +23,7 @@ from app.routers import (
     publishing,
     settings as settings_router,
     speakers,
+    team,
     transcript,
     trim,
     uploads,
@@ -68,6 +71,9 @@ async def global_exception_handler(request, exc):
     return JSONResponse(status_code=500, content={"detail": str(exc)})
 
 
+app.include_router(auth_router.router)
+app.include_router(admin.router)
+app.include_router(team.router)
 app.include_router(projects.router)
 app.include_router(automation.router)
 app.include_router(speakers.router)
