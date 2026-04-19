@@ -98,6 +98,7 @@ class MediaAsset(Base):
     width: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     height: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     status: Mapped[str] = mapped_column(String(50), default="pending")
+    storage_backend: Mapped[str] = mapped_column(String(10), nullable=False, server_default="local")
     parent_asset_id: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False), ForeignKey("media_assets.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
