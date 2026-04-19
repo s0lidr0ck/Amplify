@@ -1,5 +1,6 @@
 """Amplify API entrypoint."""
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -35,8 +36,12 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: init queue pool. Shutdown: close pool."""
+    """Startup: launch archival background task. Shutdown: cancel it and close queue."""
+    from app.lib.storage import archival_loop
+
+    archival_task = asyncio.create_task(archival_loop())
     yield
+    archival_task.cancel()
     await close_queue()
 
 
