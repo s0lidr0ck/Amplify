@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.db import get_db
 from app.lib.job_events import append_job_event, set_job_status
+from app.lib.storage import ensure_local_file, is_s3_temp_path
 from app.lib.transcript_analysis import generate_transcript_analysis_artifacts
 from app.models import MediaAsset, ProcessingJob, Transcript, TrimOperation
 
@@ -21,11 +22,9 @@ router = APIRouter(prefix="/api/internal", tags=["internal"])
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
 
-def _resolve_upload_path(storage_key: str, filename: str) -> Path:
-    upload_dir = Path(settings.upload_dir)
-    if not upload_dir.is_absolute():
-        upload_dir = _PROJECT_ROOT / upload_dir
-    return upload_dir / storage_key / filename
+def _resolve_upload_path(storage_key: str, filename: str, storage_backend: str = "local") -> Path:
+    """Resolve local path, downloading from S3 if needed."""
+    return ensure_local_file(storage_key, filename, storage_backend)
 
 
 class JobUpdateBody(BaseModel):
@@ -127,7 +126,11 @@ async def create_transcript(
     asset_result = await db.execute(select(MediaAsset).where(MediaAsset.id == body.asset_id))
     asset = asset_result.scalar_one_or_none()
     if asset and body.transcript_scope == "sermon":
-        sermon_path = _resolve_upload_path(asset.storage_key, asset.filename)
+        sermon_path = _resolve_upload_path(
+            asset.storage_key, asset.filename,
+            getattr(asset, "storage_backend", "local"),
+        )
+        _sermon_is_temp = is_s3_temp_path(sermon_path)
         try:
             await set_job_status(
                 db,
@@ -193,6 +196,9 @@ async def create_transcript(
                 logger=analysis_logger,
                 progress_callback=analysis_progress,
             )
+            # Clean up S3 temp download
+            if _sermon_is_temp:
+                sermon_path.unlink(missing_ok=True)
         except Exception as exc:
             analysis_error = str(exc)
             await db.rollback()
