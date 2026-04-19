@@ -3,17 +3,15 @@
 import os
 from pathlib import Path
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.db import get_db
+from app.lib.storage import get_presigned_url, resolve_local_path
 from app.models import MediaAsset
 
 router = APIRouter(prefix="/api/media", tags=["media"])
-
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
 CHUNK_SIZE = 1024 * 64  # 64KB
 
@@ -66,10 +64,12 @@ async def stream_asset(
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
 
-    upload_dir = Path(settings.upload_dir)
-    if not upload_dir.is_absolute():
-        upload_dir = _PROJECT_ROOT / upload_dir
-    file_path = upload_dir / asset.storage_key / asset.filename
+    # If the asset has been archived to S3 redirect the client to a presigned URL.
+    if getattr(asset, "storage_backend", "local") == "s3":
+        url = get_presigned_url(asset.storage_key, asset.filename, expires=3600)
+        return RedirectResponse(url=url, status_code=302)
+
+    file_path = resolve_local_path(asset.storage_key, asset.filename)
 
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
