@@ -179,10 +179,15 @@ async def _run_pipeline(
 
             from pathlib import Path
             from app.routers.transcript import _resolve_upload_path, _format_progress_time
+            from app.lib.storage import is_s3_temp_path as _is_s3_temp
             import queue as _queue
             import threading
 
-            source_path = _resolve_upload_path(asset_obj.storage_key, asset_obj.filename)
+            source_path = _resolve_upload_path(
+                asset_obj.storage_key, asset_obj.filename,
+                getattr(asset_obj, "storage_backend", "local"),
+            )
+            _transcribe_source_is_temp = _is_s3_temp(source_path)
             if not source_path.exists():
                 raise FileNotFoundError(f"Sermon file not found on disk: {source_path}")
 
@@ -235,6 +240,10 @@ async def _run_pipeline(
             if error_holder.get("error"):
                 raise error_holder["error"]
 
+            # Clean up S3 temp download now that transcription thread is done
+            if _transcribe_source_is_temp:
+                source_path.unlink(missing_ok=True)
+
             tx_data = result_holder["data"]
             raw_text = tx_data["raw_text"]
             new_tx_id = str(uuid.uuid4())
@@ -283,7 +292,12 @@ async def _run_pipeline(
 
             from pathlib import Path
             from app.routers.transcript import _resolve_upload_path
-            source_path = _resolve_upload_path(asset_obj.storage_key, asset_obj.filename)
+            from app.lib.storage import is_s3_temp_path as _is_s3_temp2
+            source_path = _resolve_upload_path(
+                asset_obj.storage_key, asset_obj.filename,
+                getattr(asset_obj, "storage_backend", "local"),
+            )
+            _artifacts_source_is_temp = _is_s3_temp2(source_path)
 
             await asyncio.to_thread(
                 generate_transcript_analysis_artifacts,
@@ -297,6 +311,8 @@ async def _run_pipeline(
                 logger=lambda m: None,
                 progress_callback=lambda m, p: None,
             )
+            if _artifacts_source_is_temp:
+                source_path.unlink(missing_ok=True)
         await step("Clip artifacts: Ready.", 18)
 
         # ── 3. Title & Desc (packaging) ──────────────────────────────────────
