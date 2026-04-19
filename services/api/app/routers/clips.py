@@ -22,6 +22,7 @@ from app.config import settings
 from app.db import async_session, get_db
 from app.lib.fastcap_bridge import rank_clips_from_analysis_dir
 from app.lib.job_events import append_job_event, set_job_status
+from app.lib.storage import ensure_local_file, is_s3_temp_path
 from app.lib.transcript_analysis import get_analysis_artifact_status, transcript_analysis_dir
 from app.models import ClipAnalysisRun, ClipCandidate, MediaAsset, ProcessingJob, ProcessingJobEvent, Project, Transcript
 
@@ -292,11 +293,9 @@ def _parse_timestamp_to_seconds(ts: str) -> float:
     return float(parts[0])
 
 
-def _resolve_upload_path(storage_key: str, filename: str) -> Path:
-    upload_dir = Path(settings.upload_dir)
-    if not upload_dir.is_absolute():
-        upload_dir = _PROJECT_ROOT / upload_dir
-    return upload_dir / storage_key / filename
+def _resolve_upload_path(storage_key: str, filename: str, storage_backend: str = "local") -> Path:
+    """Resolve local path, downloading from S3 if needed."""
+    return ensure_local_file(storage_key, filename, storage_backend)
 
 
 def _ffmpeg_binary() -> str:
@@ -484,7 +483,11 @@ async def export_clip(
     if sermon_asset is None:
         raise HTTPException(status_code=404, detail="Sermon master asset not found for this clip")
 
-    source_path = _resolve_upload_path(sermon_asset.storage_key, sermon_asset.filename)
+    source_path = _resolve_upload_path(
+        sermon_asset.storage_key, sermon_asset.filename,
+        getattr(sermon_asset, "storage_backend", "local"),
+    )
+    _source_is_temp = is_s3_temp_path(source_path)
     if not source_path.exists():
         raise HTTPException(status_code=404, detail="Sermon master file is missing on disk")
 
@@ -511,11 +514,20 @@ async def export_clip(
     project_name = _safe_filename_fragment(project.title if project else c.project_id)
     download_name = f"{project_name}_clip-{clip_number:02d}{ext}"
 
+    # Schedule cleanup of both the export output and any S3 temp download
+    cleanup_paths = [str(output_path)]
+    if _source_is_temp:
+        cleanup_paths.append(str(source_path))
+
+    def _cleanup_all() -> None:
+        for p in cleanup_paths:
+            _delete_file(p)
+
     return FileResponse(
         path=output_path,
         filename=download_name,
         media_type=sermon_asset.mime_type or "video/mp4",
-        background=BackgroundTask(_delete_file, str(output_path)),
+        background=BackgroundTask(_cleanup_all),
     )
 
 
