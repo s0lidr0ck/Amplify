@@ -244,6 +244,31 @@ async def create_member(
 # DELETE /api/admin/users/{user_id}  (deactivate)
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# POST /api/admin/archive-assets  (manual S3 archival trigger)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/archive-assets")
+async def trigger_archive_assets(
+    current_user: UserContext = Depends(_require_super_admin),
+    max_age_days: int = 14,
+):
+    """Manually trigger S3 archival of local media assets older than *max_age_days* days.
+
+    The daily background loop runs this automatically; this endpoint is useful
+    for testing or forcing an early archival run.
+    """
+    from app.lib.storage import archive_old_assets
+
+    result = await archive_old_assets(max_age_days=max_age_days)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# DELETE /api/admin/users/{user_id}  (deactivate)
+# ---------------------------------------------------------------------------
+
 @router.delete("/users/{user_id}", status_code=204)
 async def deactivate_user(
     user_id: str,
