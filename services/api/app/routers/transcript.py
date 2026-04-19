@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.db import async_session, get_db
 from app.lib.job_events import append_job_event, set_job_status
+from app.lib.storage import ensure_local_file, is_s3_temp_path
 from app.lib.transcript_analysis import generate_transcript_analysis_artifacts, get_analysis_artifact_status
 from app.models import MediaAsset, ProcessingJob, Project, Transcript
 
@@ -78,11 +79,14 @@ async def _create_placeholder_transcript(
     await db.flush()
 
 
-def _resolve_upload_path(storage_key: str, filename: str) -> Path:
-    upload_dir = Path(settings.upload_dir)
-    if not upload_dir.is_absolute():
-        upload_dir = _PROJECT_ROOT / upload_dir
-    return upload_dir / storage_key / filename
+def _resolve_upload_path(storage_key: str, filename: str, storage_backend: str = "local") -> Path:
+    """Resolve the local path for an asset, downloading from S3 if needed.
+
+    Thin wrapper around :func:`app.lib.storage.ensure_local_file` kept for
+    backwards-compatibility with callers that import this function directly
+    (e.g. automation.py).
+    """
+    return ensure_local_file(storage_key, filename, storage_backend)
 
 
 async def _run_local_transcription(job_id: str, project_id: str, asset_id: str, transcript_scope: str = "sermon"):
@@ -132,9 +136,13 @@ async def _run_local_transcription(job_id: str, project_id: str, asset_id: str, 
             await db.flush()
             await db.commit()
 
-            source_path = _resolve_upload_path(asset.storage_key, asset.filename)
+            source_path = _resolve_upload_path(
+                asset.storage_key, asset.filename,
+                getattr(asset, "storage_backend", "local"),
+            )
             if not source_path.exists():
                 raise FileNotFoundError(f"Media file not found: {source_path}")
+            _source_is_temp = is_s3_temp_path(source_path)
 
             def run_transcription() -> dict:
                 model = WhisperModel("base", device="cpu", compute_type="int8")
@@ -268,6 +276,9 @@ async def _run_local_transcription(job_id: str, project_id: str, asset_id: str, 
                     logger=analysis_logger,
                     progress_callback=analysis_progress,
                 )
+            # Clean up S3 temp download now that transcription is complete
+            if _source_is_temp:
+                source_path.unlink(missing_ok=True)
 
             await set_job_status(
                 db,
@@ -325,7 +336,11 @@ async def _run_artifact_generation(job_id: str, transcript_id: str):
             if not asset:
                 raise ValueError(f"Sermon asset {transcript.asset_id} not found")
 
-            source_path = _resolve_upload_path(asset.storage_key, asset.filename)
+            source_path = _resolve_upload_path(
+                asset.storage_key, asset.filename,
+                getattr(asset, "storage_backend", "local"),
+            )
+            _source_is_temp2 = is_s3_temp_path(source_path)
 
             await set_job_status(
                 db,
@@ -412,6 +427,10 @@ async def _run_artifact_generation(job_id: str, transcript_id: str):
 
             if error_holder.get("error"):
                 raise error_holder["error"]
+
+            # Clean up S3 temp download
+            if _source_is_temp2:
+                source_path.unlink(missing_ok=True)
 
             await set_job_status(
                 db,
