@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     api_url: str = "http://localhost:8000"
     cors_origins: list[str] = Field(
         default=[
+            "https://amplify.a1-8.com",
             "http://localhost:3000",
             "http://localhost:3001",
             "http://127.0.0.1:3000",
@@ -45,7 +46,25 @@ class Settings(BaseSettings):
         ],
         validation_alias=AliasChoices("CORS_ORIGINS", "CORS_ORIGIN"),
     )
-    cors_origin_regex: str = r"http://(localhost|127\.0\.0\.1)(:\d+)?$"
+    # The production app, local development, and Vercel preview deployments —
+    # whose hostname changes on every push, so they cannot be listed.
+    #
+    # amplify.a1-8.com is here rather than in cors_origins above because
+    # CORS_ORIGINS is set in the environment on every deployment, and an
+    # environment value REPLACES the default rather than adding to it. A
+    # production domain listed only in that default is a domain that is
+    # allowed nowhere it matters. Nothing sets CORS_ORIGIN_REGEX, so this
+    # applies everywhere.
+    #
+    # The team slug is what makes the Vercel half safe. Anyone can deploy to
+    # vercel.app, so `amplify-.*\.vercel\.app` would hand CORS to a stranger
+    # who named their project "amplify-evil". Vercel team slugs are globally
+    # unique and this one is ours. Keep the anchors and keep the slug.
+    cors_origin_regex: str = (
+        r"^(http://(localhost|127\.0\.0\.1)(:\d+)?"
+        r"|https://amplify\.a1-8\.com"
+        r"|https://[a-z0-9-]+-a18-s-projects\.vercel\.app)$"
+    )
     database_url: str = "postgresql+asyncpg://amplify:amplify@localhost:5432/amplify"
     redis_url: str = "redis://localhost:6379/0"
     s3_bucket: str = "amplify"

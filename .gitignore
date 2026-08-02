@@ -24,6 +24,17 @@ uploads/
 .env
 .env.local
 .env.*.local
+# config.py and the worker both load .env.txt, so it holds real keys — the
+# database URL, the publishing tokens, JWT_SECRET. It was NOT covered by the
+# patterns above, which meant a plain `git add -A` staged it. Nothing has ever
+# committed it; this is what keeps that true.
+.env.txt
+
+# Working data pulled from other systems, not part of the app.
+ASN_Guide.csv
+profilesListAll.txt
+showsList.txt
+tmp-*.log
 
 # IDE
 .idea/
