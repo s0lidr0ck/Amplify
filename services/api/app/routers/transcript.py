@@ -14,13 +14,15 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.lib.auth_deps import ApprovedUser
+from app.lib.scoped_route import ScopedRoute, require_body_project
 from app.config import settings
 from app.db import async_session, get_db
 from app.lib.job_events import append_job_event, set_job_status
 from app.lib.transcript_analysis import generate_transcript_analysis_artifacts, get_analysis_artifact_status
 from app.models import MediaAsset, ProcessingJob, Project, Transcript
 
-router = APIRouter(prefix="/api/transcript", tags=["transcript"])
+router = APIRouter(prefix="/api/transcript", tags=["transcript"], route_class=ScopedRoute)
 
 logger = logging.getLogger(__name__)
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
@@ -513,13 +515,14 @@ def _format_progress_time(seconds: float) -> str:
 @router.post("/start", response_model=StartTranscriptionResponse)
 async def start_transcription(
     body: StartTranscriptionBody,
+    user: ApprovedUser,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
     """Start sermon transcription job."""
-    result = await db.execute(select(Project).where(Project.id == body.project_id))
-    if not result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Project not found")
+    # 404 if it is not this church's project, indistinguishable from one
+    # that does not exist.
+    await require_body_project(db, body.project_id, user)
 
     allowed_asset_kind = "sermon_master" if body.transcript_scope == "sermon" else "final_reel"
     result = await db.execute(

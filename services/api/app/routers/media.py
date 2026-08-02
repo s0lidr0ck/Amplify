@@ -7,6 +7,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.lib.scoped_route import ScopedRoute
 from app.config import settings
 from app.db import get_db
 from app.lib import media_tokens
@@ -14,7 +15,7 @@ from app.lib.auth_deps import ApprovedUser, approved_user, current_user
 from app.lib.scoping import require_owned
 from app.models import MediaAsset, User
 
-router = APIRouter(prefix="/api/media", tags=["media"])
+router = APIRouter(prefix="/api/media", tags=["media"], route_class=ScopedRoute)
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 

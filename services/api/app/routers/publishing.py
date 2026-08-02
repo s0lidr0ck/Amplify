@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.lib.scoped_route import ScopedRoute
 from app.config import settings
 from app.db import get_db
 from app.lib.facebook_publishing import (
@@ -44,7 +45,7 @@ from app.lib.youtube_publishing import (
 )
 from app.models import MediaAsset, Project, ProjectContentDraft
 
-router = APIRouter(prefix="/api/publishing", tags=["publishing"])
+router = APIRouter(prefix="/api/publishing", tags=["publishing"], route_class=ScopedRoute)
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
 

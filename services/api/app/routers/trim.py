@@ -8,10 +8,12 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.lib.auth_deps import ApprovedUser
+from app.lib.scoped_route import ScopedRoute, require_body_project
 from app.db import get_db
 from app.models import MediaAsset, ProcessingJob, Project, TrimOperation
 
-router = APIRouter(prefix="/api/trim", tags=["trim"])
+router = APIRouter(prefix="/api/trim", tags=["trim"], route_class=ScopedRoute)
 
 
 class TrimRequestBody(BaseModel):
@@ -31,6 +33,7 @@ class TrimResponse(BaseModel):
 @router.post("/start", response_model=TrimResponse)
 async def start_trim(
     body: TrimRequestBody,
+    user: ApprovedUser,
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -40,9 +43,9 @@ async def start_trim(
     """
     from app.config import settings
 
-    result = await db.execute(select(Project).where(Project.id == body.project_id))
-    if not result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Project not found")
+    # 404 if it is not this church's project, indistinguishable from one
+    # that does not exist.
+    await require_body_project(db, body.project_id, user)
 
     result = await db.execute(select(MediaAsset).where(MediaAsset.id == body.source_asset_id))
     source = result.scalar_one_or_none()

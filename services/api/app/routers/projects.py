@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, Upl
 from sqlalchemy import cast, delete, exists, or_, select, String
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.lib.scoped_route import ScopedRoute
 from app.config import settings
 from app.db import get_db
 from app.lib.auth_deps import ApprovedUser
@@ -30,7 +31,7 @@ from app.models import (
 from app.queue import get_queue
 from app.schemas import ProjectCreate, ProjectDraftRead, ProjectDraftWrite, ProjectRead, StartYoutubeImportBody
 
-router = APIRouter(prefix="/api/projects", tags=["projects"])
+router = APIRouter(prefix="/api/projects", tags=["projects"], route_class=ScopedRoute)
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 

@@ -7,9 +7,10 @@ from typing import Any
 from fastapi import APIRouter
 from pydantic import BaseModel
 
+from app.lib.scoped_route import ScopedRoute
 from app.lib.prompt_settings import list_prompt_settings, update_prompt_overrides
 
-router = APIRouter(prefix="/api/settings", tags=["settings"])
+router = APIRouter(prefix="/api/settings", tags=["settings"], route_class=ScopedRoute)
 
 
 class PromptOverridesRequest(BaseModel):

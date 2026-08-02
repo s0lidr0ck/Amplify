@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from starlette.responses import StreamingResponse
 
+from app.lib.scoped_route import ScopedRoute
 from app.lib.content_generation import (
     build_blog_post_prompt,
     build_facebook_post_prompt,
@@ -32,7 +33,7 @@ from app.lib.content_generation import (
 )
 from app.lib.llm import LlmError, call_llm_generate
 
-router = APIRouter(prefix="/api/content", tags=["content"])
+router = APIRouter(prefix="/api/content", tags=["content"], route_class=ScopedRoute)
 
 
 class GenerationBase(BaseModel):

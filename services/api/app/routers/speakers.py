@@ -6,12 +6,13 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.lib.scoped_route import ScopedRoute
 from app.db import get_db
 from app.models import Project, Speaker
 from app.lib.auth_deps import ApprovedUser
 from app.schemas import SpeakerCreate, SpeakerRead, SpeakerUpdate
 
-router = APIRouter(prefix="/api/speakers", tags=["speakers"])
+router = APIRouter(prefix="/api/speakers", tags=["speakers"], route_class=ScopedRoute)
 
 
 @router.get("", response_model=list[SpeakerRead])

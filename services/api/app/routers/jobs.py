@@ -7,12 +7,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.lib.scoped_route import ScopedRoute
 from app.db import get_db
 from app.lib.job_events import append_job_event
 from app.models import ProcessingJob, ProcessingJobEvent
 from app.schemas import ProcessingJobRead
 
-router = APIRouter(prefix="/api/jobs", tags=["jobs"])
+router = APIRouter(prefix="/api/jobs", tags=["jobs"], route_class=ScopedRoute)
 
 
 @router.get("/{job_id}", response_model=ProcessingJobRead)

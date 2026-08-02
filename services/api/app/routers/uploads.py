@@ -10,11 +10,13 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.lib.auth_deps import ApprovedUser
+from app.lib.scoped_route import ScopedRoute, require_body_project
 from app.config import settings
 from app.db import get_db
 from app.models import MediaAsset, Project
 
-router = APIRouter(prefix="/api/uploads", tags=["uploads"])
+router = APIRouter(prefix="/api/uploads", tags=["uploads"], route_class=ScopedRoute)
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 _TMP_UPLOAD_DIRNAME = "_multipart"
@@ -118,15 +120,16 @@ async def _mark_replaced_assets(project_id: str, asset_kind: str, db: AsyncSessi
 @router.post("/request", response_model=RequestUploadResponse)
 async def request_upload(
     body: RequestUploadBody,
+    user: ApprovedUser,
     db: AsyncSession = Depends(get_db),
 ):
     """
     Request a signed URL for direct upload to object storage.
     Client uploads via PUT to the returned URL, then calls confirm_upload.
     """
-    result = await db.execute(select(Project).where(Project.id == body.project_id))
-    if not result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Project not found")
+    # 404 if it is not this church's project, indistinguishable from one
+    # that does not exist.
+    await require_body_project(db, body.project_id, user)
 
     asset_id = str(uuid.uuid4())
     storage_key = f"projects/{body.project_id}/source/{asset_id}"
@@ -155,11 +158,12 @@ async def request_upload(
 @router.post("/local/start", response_model=StartLocalUploadResponse)
 async def start_local_upload(
     body: StartLocalUploadBody,
+    user: ApprovedUser,
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(Project).where(Project.id == body.project_id))
-    if not result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Project not found")
+    # 404 if it is not this church's project, indistinguishable from one
+    # that does not exist.
+    await require_body_project(db, body.project_id, user)
     if not body.filename.strip():
         raise HTTPException(status_code=400, detail="Filename is required")
     if body.file_size_bytes <= 0:
@@ -217,6 +221,7 @@ async def upload_local_part(
 async def complete_local_upload(
     upload_id: str,
     body: CompleteLocalUploadBody,
+    user: ApprovedUser,
     db: AsyncSession = Depends(get_db),
 ):
     meta = _load_upload_meta(upload_id)
@@ -231,7 +236,7 @@ async def complete_local_upload(
     if received_parts != expected_parts:
         raise HTTPException(status_code=400, detail="Upload is missing one or more chunks")
 
-    project = await db.get(Project, body.project_id)
+    project = await require_body_project(db, body.project_id, user)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
