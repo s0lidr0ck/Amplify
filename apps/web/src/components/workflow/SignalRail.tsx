@@ -8,11 +8,14 @@ import { workflowStages, type WorkflowStage } from "@/lib/workflow";
  * The signal rail — Amplify's signature.
  *
  * One sermon enters, is refined in sequence, then fans out into everything
- * derived from it. That shape is the product, so the navigation draws it
+ * derived from it. That shape is the workflow, so the navigation draws it
  * rather than listing it: a straight run for the steps that must happen in
  * order, and a fan for the outputs that do not.
  *
- * The same shape is the mark, shrunk. Seeing one should explain the other.
+ * This is deliberately NOT the mark. The mark says what the product does —
+ * the same message, louder — and this says what today's work looks like.
+ * An earlier version made them the same shape, which sounded tidy and meant
+ * the logo had to carry a project-management diagram.
  *
  * Why the fan is real and not decoration: the ordered steps genuinely block
  * each other — you cannot transcribe before you trim — while clips, the reel,
