@@ -1,5 +1,6 @@
 "use client";
 
+import { Mark } from "@/brand/Mark";
 import { useAuthActions, useAuthToken } from "@convex-dev/auth/react";
 import { useConvexAuth } from "convex/react";
 import { useEffect, useRef, useState } from "react";
@@ -102,33 +103,35 @@ export function HubGate({ children }: { children: React.ReactNode }) {
 
   if (isLoading || exchange === "busy") {
     return (
-      <div className="grid min-h-screen place-items-center text-sm text-slate-500">
+      <div className="grid min-h-screen place-items-center text-sm text-muted">
         Signing you in…
       </div>
     );
   }
 
   return (
-    <div className="grid min-h-screen place-items-center bg-slate-50 p-6">
-      <div className="grid w-full max-w-sm gap-4 rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
-        <div className="flex items-baseline gap-2">
-          <span className="text-xl font-extrabold tracking-tight text-slate-900">
+    <div className="grid min-h-screen place-items-center bg-background p-6">
+      <div className="grid w-full max-w-sm gap-4 rounded-2xl border border-border bg-surface p-7 shadow-sm">
+        <div className="flex items-center gap-2.5">
+          <span className="text-brand">
+            <Mark size={26} title="Amplify" />
+          </span>
+          <span className="font-display text-xl font-semibold tracking-tight text-ink">
             Amplify
           </span>
-          <span className="text-xs text-slate-400">by A1:8</span>
         </div>
         {exchange === "failed" && (
-          <p className="text-sm text-red-600">
+          <p className="text-sm text-danger">
             That sign-in link expired. Continue below to get a fresh one.
           </p>
         )}
         <button
           onClick={bounceToHub}
-          className="rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-700"
+          className="rounded-lg bg-ink px-4 py-2.5 text-sm font-medium text-white hover:bg-ink/85"
         >
           Continue with A1:8 Home
         </button>
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-muted">
           One account for Study, Crew, UpScreen, and the whole A1:8 family.
         </p>
       </div>

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { Mark } from "@/brand/Mark";
 import { Badge } from "@/components/ui/Badge";
 import { classNames } from "./utils";
 import type { GlobalRailChildItem, GlobalRailItem } from "./types";
@@ -94,6 +95,23 @@ export function GlobalRail({
         className
       )}
     >
+      {/* The lockup, always. AppShell passes showBrandCard={false}, so until
+          now the product's name appeared nowhere in its own chrome — the
+          header was an empty bar with a button pushed to the right of it.
+          The mark is the signal split: one sermon in, a week of content out,
+          which is the same shape the workflow rail draws at full size. */}
+      <Link
+        href="/"
+        className="mb-5 flex items-center gap-2.5 rounded-xl px-1 py-1 transition-colors hover:bg-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+      >
+        <span className="text-brand">
+          <Mark size={26} title="Amplify" />
+        </span>
+        <span className="font-display text-xl font-semibold tracking-tight text-ink">
+          {brand}
+        </span>
+      </Link>
+
       {showBrandCard ? (
         <div className="rounded-[1.5rem] border border-border/80 bg-surface px-4 py-4 shadow-card">
           <div className="flex items-start justify-between gap-3">

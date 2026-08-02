@@ -1,11 +1,14 @@
 import type { Config } from 'tailwindcss';
 
 const config: Config = {
-  content: [
-    './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
-    './src/components/**/*.{js,ts,jsx,tsx,mdx}',
-    './src/app/**/*.{js,ts,jsx,tsx,mdx}',
-  ],
+  // Everything under src/, not a list of three directories.
+  //
+  // The narrow globs silently broke every screen outside them: src/auth/ and
+  // src/brand/ were not scanned, so their utilities were never generated and
+  // the sign-in page rendered with no padding, no gaps and no width. Valid
+  // markup, clean types, successful build, visibly broken page — nothing
+  // fails when a class is missing, it simply is not there.
+  content: ['./src/**/*.{js,ts,jsx,tsx,mdx}'],
   theme: {
     extend: {
       colors: {
@@ -45,8 +48,12 @@ const config: Config = {
         },
       },
       fontFamily: {
-        sans: ['Aptos', '"Segoe UI Variable"', '"Trebuchet MS"', 'system-ui', 'sans-serif'],
-        display: ['"Iowan Old Style"', '"Palatino Linotype"', 'Georgia', 'serif'],
+        // Loaded via next/font in app/layout.tsx, so they are subset and
+        // self-hosted rather than depending on what the operating system
+        // happens to ship.
+        sans: ['var(--font-body)', 'system-ui', 'sans-serif'],
+        display: ['var(--font-display)', 'var(--font-body)', 'sans-serif'],
+        mono: ['var(--font-mono)', 'ui-monospace', 'monospace'],
       },
       boxShadow: {
         soft: 'var(--shadow-soft)',

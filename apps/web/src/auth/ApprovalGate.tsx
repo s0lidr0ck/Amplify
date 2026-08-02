@@ -1,5 +1,6 @@
 "use client";
 
+import { Mark } from "@/brand/Mark";
 import { useQuery } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
@@ -36,7 +37,7 @@ export function ApprovalGate({ children }: { children: React.ReactNode }) {
 
   if (isLoading) {
     return (
-      <div className="grid min-h-screen place-items-center text-sm text-slate-500">
+      <div className="grid min-h-screen place-items-center text-sm text-muted">
         Loading…
       </div>
     );
@@ -49,10 +50,10 @@ export function ApprovalGate({ children }: { children: React.ReactNode }) {
     return (
       <div className="grid min-h-screen place-items-center p-6">
         <div className="grid max-w-sm gap-2 text-center">
-          <p className="text-sm font-medium text-slate-900">
+          <p className="text-sm font-medium text-ink">
             Can&rsquo;t reach Amplify right now.
           </p>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-muted">
             This is usually temporary. Refresh in a moment.
           </p>
         </div>
@@ -64,30 +65,35 @@ export function ApprovalGate({ children }: { children: React.ReactNode }) {
 
   const suspended = data.plan === "suspended";
   return (
-    <div className="grid min-h-screen place-items-center bg-slate-50 p-6">
-      <div className="grid w-full max-w-md gap-3 rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
-        <span className="text-xl font-extrabold tracking-tight text-slate-900">
-          Amplify
-        </span>
+    <div className="grid min-h-screen place-items-center bg-background p-6">
+      <div className="grid w-full max-w-md gap-3 rounded-2xl border border-border bg-surface p-7 shadow-sm">
+        <div className="flex items-center gap-2.5">
+          <span className="text-brand">
+            <Mark size={26} title="Amplify" />
+          </span>
+          <span className="font-display text-xl font-semibold tracking-tight text-ink">
+            Amplify
+          </span>
+        </div>
         {suspended ? (
           <>
-            <p className="text-sm text-slate-900">
+            <p className="text-sm text-ink">
               This account&rsquo;s access has been paused.
             </p>
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-muted">
               Get in touch and we&rsquo;ll sort it out.
             </p>
           </>
         ) : (
           <>
-            <p className="text-sm text-slate-900">
+            <p className="text-sm text-ink">
               You&rsquo;re signed in — Amplify is invite-only while we get it
               ready.
             </p>
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-muted">
               Your request is with us. We&rsquo;ll email{" "}
               {data.email ? (
-                <span className="font-medium text-slate-700">{data.email}</span>
+                <span className="font-medium text-ink">{data.email}</span>
               ) : (
                 "you"
               )}{" "}
@@ -95,7 +101,7 @@ export function ApprovalGate({ children }: { children: React.ReactNode }) {
             </p>
           </>
         )}
-        <p className="border-t border-slate-100 pt-3 text-xs text-slate-400">
+        <p className="border-t border-border pt-3 text-xs text-muted/70">
           Signed in as {data.name || data.email || "your A1:8 account"}
         </p>
       </div>

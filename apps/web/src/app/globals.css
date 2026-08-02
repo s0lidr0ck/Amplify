@@ -3,34 +3,68 @@
 @tailwind utilities;
 
 @layer base {
+  /* ---------------------------------------------------------------------
+     Amplify's palette.
+
+     Cool paper, not cream. The previous ground was a warm #F7F3ED with a
+     terracotta accent — a combination so common in generated interfaces that
+     it reads as "no one chose this". Everything here is deliberately on the
+     cool side of neutral so the one warm thing on screen is the signal.
+
+     ONE accent, and it means something. Rose is the family colour Amplify
+     was already assigned in the A1:8 launcher, and here it is reserved for
+     what is live or active right now. If rose appears on a screen, something
+     is happening. Steps that are done are drawn in plain ink; steps not yet
+     reachable are outlined. Filled / rose / outline — three states, no
+     colour spent on decoration.
+
+     Token NAMES are unchanged from the previous system on purpose: every
+     page in the app already consumes them, so the values alone carry the
+     redesign and nothing has to be rewritten to receive it.
+     --------------------------------------------------------------------- */
   :root {
-    --background: 38 33% 96%;
-    --background-alt: 35 43% 99%;
+    /* Ground and surfaces — cool, close together, low drama. */
+    --background: 240 20% 98%;
+    --background-alt: 0 0% 100%;
     --surface: 0 0% 100%;
-    --surface-strong: 38 27% 94%;
-    --surface-tint: 42 60% 97%;
-    --surface-operator: 36 32% 98%;
-    --surface-band: 28 55% 98%;
-    --surface-band-strong: 194 45% 97%;
-    --border: 28 18% 82%;
-    --border-strong: 28 16% 72%;
-    --text: 220 24% 16%;
-    --text-muted: 215 14% 41%;
-    --brand: 17 88% 55%;
-    --brand-strong: 12 77% 42%;
-    --brand-soft: 18 100% 96%;
-    --accent: 194 63% 36%;
-    --accent-soft: 194 70% 95%;
-    --success: 148 48% 34%;
-    --success-soft: 140 44% 94%;
-    --warning: 34 82% 44%;
-    --warning-soft: 41 100% 93%;
-    --danger: 0 65% 47%;
-    --danger-soft: 0 86% 96%;
-    --info: 212 67% 46%;
-    --info-soft: 214 100% 95%;
-    --shadow-soft: 0 18px 50px -28px rgba(31, 41, 55, 0.28);
-    --shadow-card: 0 16px 40px -28px rgba(15, 23, 42, 0.28);
+    --surface-strong: 240 16% 96%;
+    --surface-tint: 350 100% 99%;
+    --surface-operator: 240 24% 99%;
+    --surface-band: 240 18% 97%;
+    --surface-band-strong: 240 22% 95%;
+
+    --border: 240 14% 91%;
+    --border-strong: 240 12% 83%;
+
+    /* Ink carries a slight violet cast — a nod to the A1:8 parent without
+       spending the parent's colour, which has to stay the family's alone. */
+    --text: 250 24% 11%;
+    --text-muted: 245 9% 45%;
+
+    /* The signal. #f43f5e. Live, active, happening now — nothing else. */
+    --brand: 350 89% 60%;
+    --brand-strong: 347 77% 50%;
+    --brand-soft: 350 100% 97%;
+
+    /* Secondary, for things that are informative rather than active. */
+    --accent: 250 30% 38%;
+    --accent-soft: 250 60% 97%;
+
+    /* States. Deliberately desaturated: on a quiet ground they do not need
+       to shout, and shouting would compete with the signal. */
+    --success: 158 64% 30%;
+    --success-soft: 152 45% 96%;
+    --warning: 32 75% 42%;
+    --warning-soft: 40 90% 95%;
+    --danger: 350 70% 45%;
+    --danger-soft: 350 90% 97%;
+    --info: 240 30% 42%;
+    --info-soft: 240 60% 97%;
+
+    /* Shadows sit on cool ground, so they are cool too. Warm shadows on a
+       cool surface are the fastest way to make a UI look muddy. */
+    --shadow-soft: 0 16px 44px -30px rgba(20, 20, 32, 0.30);
+    --shadow-card: 0 10px 30px -24px rgba(20, 20, 32, 0.28);
   }
 
   * {
@@ -43,10 +77,9 @@
 
   body {
     @apply min-h-screen bg-background text-ink antialiased;
-    background-image:
-      radial-gradient(circle at top left, hsl(var(--brand-soft)) 0, transparent 34%),
-      linear-gradient(180deg, hsl(var(--background-alt)), hsl(var(--background)));
-    background-attachment: fixed;
+    /* Flat. The previous ground carried a terracotta radial wash, which made
+       every page's top-left corner the most saturated thing on it — competing
+       with whatever the operator actually needed to look at. */
   }
 
   a {
