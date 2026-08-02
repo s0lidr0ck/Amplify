@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": [
+      "vite/client",
+      "vitest/globals"
+    ],
+    "paths": {
+      "@convex/api": [
+        "../../../Study/convex/_generated/api"
+      ],
+      "@convex/dataModel": [
+        "../../../Study/convex/_generated/dataModel"
+      ],
+      "@/*": [
+        "./src/*"
+      ]
+    },
+    "baseUrl": "."
+  },
+  "include": [
+    "src"
+  ]
+}

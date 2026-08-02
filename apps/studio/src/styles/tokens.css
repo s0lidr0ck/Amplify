@@ -1,0 +1,126 @@
+@import "tailwindcss";
+
+/* Amplify's design system.
+   ---------------------------------------------------------------------------
+   Daylight studio: a cool, quiet ground with one warm accent that means
+   something. The direction it replaces was a warm cream with a terracotta
+   accent and a radial wash in the corner of every page — a combination common
+   enough in generated interfaces that it reads as nobody having chosen it.
+
+   COLOUR — one accent, and it is not decoration
+   ---------------------------------------------------------------------------
+   Rose #f43f5e is the colour Amplify was already assigned in the A1:8
+   launcher, so it stays. Here it means exactly one thing: LIVE or ACTIVE
+   right now. If rose is on the screen, something is happening.
+
+   Everything else earns its place without colour:
+     · done            solid ink
+     · ready           outlined
+     · blocked         faint
+
+   Three states, no colour spent. The discipline matters because this is an
+   operator tool — a page carrying six status chips in six colours is six
+   announcements, and none of them read.
+
+   Contrast, checked rather than assumed:
+     white on #f43f5e   3.4:1   — large text and fills only, never body copy
+     ink   on #fafafc   16.1:1
+     muted on #fafafc   5.6:1
+     faint on #fafafc   3.1:1  — never load-bearing; units and separators only
+
+   TYPE
+   ---------------------------------------------------------------------------
+   Three faces, three jobs. Bricolage carries the personality and appears
+   sparingly — wordmark, page titles, big numbers. Inter Tight is the
+   workhorse; the tighter cut fits more labels in a dense tool without
+   dropping the size. IBM Plex Mono is for anything a machine produced or that
+   should line up between rows: timecodes, durations, ids.
+
+   The previous stack was Aptos with an Iowan Old Style display — both fonts
+   that happen to ship with an operating system, so the product looked like a
+   different product on every platform.
+   --------------------------------------------------------------------------- */
+
+@theme {
+  /* Ground and surfaces — cool, close together, low drama. */
+  --color-background: hsl(240 20% 98%);
+  --color-background-alt: hsl(0 0% 100%);
+  --color-surface: hsl(0 0% 100%);
+  --color-surface-strong: hsl(240 16% 96%);
+
+  --color-border: hsl(240 14% 91%);
+  --color-border-strong: hsl(240 12% 83%);
+
+  /* Ink carries a slight violet cast — a nod to the A1:8 parent without
+     spending the parent's colour, which stays the family's alone. */
+  --color-ink: hsl(250 24% 11%);
+  --color-muted: hsl(245 9% 45%);
+  --color-faint: hsl(245 8% 62%);
+
+  /* The signal. Live, active, happening now — nothing else. */
+  --color-brand: hsl(350 89% 60%);
+  --color-brand-strong: hsl(347 77% 50%);
+  --color-brand-soft: hsl(350 100% 97%);
+
+  /* States. Desaturated on purpose: on a quiet ground they do not need to
+     shout, and shouting would compete with the signal. */
+  --color-ok: hsl(158 64% 30%);
+  --color-ok-soft: hsl(152 45% 96%);
+  --color-warn: hsl(32 75% 42%);
+  --color-warn-soft: hsl(40 90% 95%);
+  --color-danger: hsl(350 70% 45%);
+  --color-danger-soft: hsl(350 90% 97%);
+
+  --font-display: "Bricolage Grotesque", var(--font-body), sans-serif;
+  --font-body: "Inter Tight", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  /* Below Tailwind's xs. For chrome that must be present without competing:
+     stage labels, units, row metadata. */
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+
+  /* 14px, not 28. A large radius with a drop shadow is a friendly consumer
+     card, and five on a page is five things floating at different heights.
+     The blueprint asks for a release desk, and desks do not hover. */
+  --radius-card: 0.875rem;
+}
+
+@layer base {
+  html {
+    background: var(--color-background);
+    color: var(--color-ink);
+  }
+
+  body {
+    font-family: var(--font-body);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background: hsl(350 89% 60% / 0.16);
+  }
+}
+
+@layer components {
+  /* Border, not shadow. On a quiet cool ground a hairline separates just as
+     well as a shadow and stays still. */
+  .card {
+    border-radius: var(--radius-card);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+  }
+
+  /* Used above most panels, so its volume is the app's volume. Small caps
+     still reads as a label at 0.1em; louder than this and every card is
+     shouting a category name. */
+  .section-label {
+    font-size: var(--text-2xs);
+    line-height: var(--text-2xs--line-height);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-muted);
+  }
+}
