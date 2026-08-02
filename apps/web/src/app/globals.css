@@ -120,11 +120,13 @@
     @apply rounded-xl border border-border bg-[hsl(var(--surface-band-strong))];
   }
 
-  /* Used in 31 files, so its volume is the app's volume. Small caps still
-     reads as a label at 0.12em; at 0.24em and semibold it was shouting a
-     category name above every single card. */
+  /* Used in 31 files, so its volume is the app's volume — which cuts both
+     ways. At 0.24em semibold it shouted a category above every card; at
+     11px faint it had disappeared, and a label you cannot read is not a
+     quieter label, it is a missing one. Small caps, readable weight, muted
+     rather than faint. */
   .section-label {
-    @apply text-2xs font-medium uppercase tracking-[0.12em] text-faint;
+    @apply text-2xs font-semibold uppercase tracking-[0.1em] text-muted;
   }
 }
 

@@ -50,7 +50,7 @@ export function ProjectTopBar({
   return (
     <div className="grid gap-3 border-b border-border pb-4">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h1 className="font-display text-2xl font-semibold tracking-tight text-ink">
+        <h1 className="font-display text-[1.7rem] font-bold leading-tight tracking-tight text-ink">
           {title ?? "Untitled sermon"}
         </h1>
         {/* Mono, because it is a fact rather than a phrase — and it lines up

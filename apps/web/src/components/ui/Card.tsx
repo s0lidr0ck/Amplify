@@ -32,10 +32,13 @@ export function CardHeader({
       <div className="space-y-1.5">
         {eyebrow ? <p className="section-label">{eyebrow}</p> : null}
         <div className="space-y-1">
-          {/* Was text-xl. Every card had a 20px heading, so nothing on a page
-              was more important than anything else — and the page's own title
-              had nothing left to be bigger than. */}
-          <h2 className="font-display text-base font-semibold text-ink">{title}</h2>
+          {/* Was 20px, which left the page's own 24px title nothing to
+              outrank. Went to 16px, which flattened the page instead — a card
+              title has to win against its own body text. 18px sits between,
+              and the display face gives it weight the size does not have to. */}
+          <h2 className="font-display text-lg font-semibold tracking-tight text-ink">
+            {title}
+          </h2>
           {description ? <p className="max-w-2xl text-sm text-muted">{description}</p> : null}
         </div>
       </div>
