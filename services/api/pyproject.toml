@@ -34,3 +34,10 @@ dev = ["pytest>=7.4.0", "httpx>=0.26.0", "pytest-asyncio>=0.23.0"]
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Every test here is async. Requiring an explicit marker on each one is noise
+# that eventually gets forgotten, and a forgotten marker is a test that
+# silently passes without ever running.
+asyncio_mode = "auto"
