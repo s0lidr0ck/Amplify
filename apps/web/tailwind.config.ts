@@ -21,6 +21,7 @@ const config: Config = {
         'border-strong': 'hsl(var(--border-strong) / <alpha-value>)',
         ink: 'hsl(var(--text) / <alpha-value>)',
         muted: 'hsl(var(--text-muted) / <alpha-value>)',
+        faint: 'hsl(var(--text-faint) / <alpha-value>)',
         brand: {
           DEFAULT: 'hsl(var(--brand) / <alpha-value>)',
           strong: 'hsl(var(--brand-strong) / <alpha-value>)',
@@ -46,6 +47,11 @@ const config: Config = {
           DEFAULT: 'hsl(var(--info) / <alpha-value>)',
           soft: 'hsl(var(--info-soft) / <alpha-value>)',
         },
+      },
+      fontSize: {
+        // Below Tailwind's xs. For chrome that has to be present without
+        // competing: stage labels, units, row metadata.
+        '2xs': ['0.6875rem', { lineHeight: '1rem' }],
       },
       fontFamily: {
         // Loaded via next/font in app/layout.tsx, so they are subset and

@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/layout/AppShell";
 import { InspectorPanel, type GlobalRailChildItem } from "@/components/shell";
 import { Button, LinkButton } from "@/components/ui/Button";
+import { ProjectTopBar } from "@/components/workflow/ProjectTopBar";
 import { projects } from "@/lib/api";
 import {
   getWorkspaceContextFromPathname,
@@ -103,30 +104,26 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
         </>
       }
       projectRailItems={projectRailItems}
+      topBar={
+        <ProjectTopBar
+          projectId={projectId}
+          title={project?.title}
+          speaker={project?.speaker_display_name ?? project?.speaker}
+          sermonDate={project?.sermon_date}
+          status={project?.status}
+        />
+      }
       railContext={
-        <div className="rounded-[1.5rem] border border-border/80 bg-surface px-4 py-4 shadow-card">
-          <p className="section-label">Active Project</p>
-          <h2 className="mt-2 truncate font-display text-2xl font-semibold tracking-tight text-ink">
-            {project?.title ?? "Project Workspace"}
-          </h2>
-          <p className="mt-2 text-sm leading-6 text-muted">
+        <div className="rounded-[1.25rem] border border-border/80 bg-surface px-4 py-3.5">
+          <p className="section-label">Where you are</p>
+          <p className="mt-1.5 text-sm font-medium text-ink">
+            {currentSubview?.label ?? currentWorkspace?.label ?? "Overview"}
+          </p>
+          <p className="mt-1.5 text-sm leading-6 text-muted">
             {currentSubview?.description ??
               currentWorkspace?.description ??
               "Persistent shell for ingest, generation, publishing, and analytics."}
           </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <span className="rounded-full bg-brand-soft px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-brand-strong">
-              {currentWorkspace?.label ?? "Overview"}
-            </span>
-            {project?.status ? (
-              <span className="rounded-full bg-info-soft px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-info">
-                {project.status}
-              </span>
-            ) : null}
-            <span className="rounded-full bg-surface-strong px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted">
-              {project?.speaker_display_name ?? project?.speaker ?? "Speaker pending"}
-            </span>
-          </div>
         </div>
       }
     >

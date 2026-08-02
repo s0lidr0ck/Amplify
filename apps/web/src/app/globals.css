@@ -40,6 +40,9 @@
        spending the parent's colour, which has to stay the family's alone. */
     --text: 250 24% 11%;
     --text-muted: 245 9% 45%;
+    /* A third step below muted, for text that should be findable but never
+       read first: units, separators, timestamps on a row you are scanning. */
+    --text-faint: 245 8% 62%;
 
     /* The signal. #f43f5e. Live, active, happening now — nothing else. */
     --brand: 350 89% 60%;
