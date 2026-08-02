@@ -13,10 +13,10 @@ import {
   type PublishingDraft,
   type ReelDraft,
 } from "@/lib/projectDrafts";
+import { stageStates, type StageProgress } from "@/lib/stageGating";
 import { workflowStages } from "@/lib/workflow";
 import { SignalRail } from "./SignalRail";
 
-type StepState = "done" | "now" | "ready" | "locked";
 
 export function ProjectWorkflowNav({ projectId }: { projectId: string }) {
   const pathname = usePathname();
@@ -99,78 +99,30 @@ export function ProjectWorkflowNav({ projectId }: { projectId: string }) {
     });
   }, [pathname, projectId, reelAsset, reelThumbnailAsset]);
 
-  const sourceDone = Boolean(sourceAsset);
-  const trimDone = Boolean(sermonAsset);
-  const transcriptDone = Boolean(transcriptData?.approved_at);
-  const sermonThumbnailDone = draftSignals.sermonThumbnailReady || Boolean(sermonThumbnailAsset);
-  const clipsDone = clipCandidates.length > 0;
-  const reelDone = draftSignals.reelPackageReady;
-  const reelThumbnailDone = draftSignals.reelThumbnailReady;
-  const titleDescDone = draftSignals.titleDescReady;
-  const textPostDone = draftSignals.textPostReady;
-  const blogDone = draftSignals.blogReady;
-  const metadataDone = draftSignals.metadataReady;
-  const publishingDone = draftSignals.publishingDone;
-
-  const stageStatus: Record<string, StepState> = {
-    source: sourceDone ? "done" : currentStageHref === "source" ? "now" : "ready",
-    trim: trimDone ? "done" : currentStageHref === "trim" ? "now" : sourceDone ? "ready" : "locked",
-    transcript:
-      transcriptDone ? "done" : currentStageHref === "transcript" ? "now" : trimDone ? "ready" : "locked",
-    "title-desc":
-      titleDescDone
-        ? "done"
-        : currentStageHref === "title-desc"
-          ? "now"
-          : transcriptDone
-            ? "ready"
-            : "locked",
-    "sermon-thumbnail":
-      sermonThumbnailDone
-        ? "done"
-        : currentStageHref === "sermon-thumbnail"
-          ? "now"
-          : titleDescDone
-            ? "ready"
-            : "locked",
-    clips:
-      clipsDone
-        ? "done"
-        : currentStageHref === "clips"
-          ? "now"
-          : sermonThumbnailDone
-            ? "ready"
-            : "locked",
-    reel: reelDone ? "done" : currentStageHref === "reel" ? "now" : clipsDone ? "ready" : "locked",
-    "reel-thumbnail":
-      reelThumbnailDone
-        ? "done"
-        : currentStageHref === "reel-thumbnail"
-          ? "now"
-          : reelDone
-            ? "ready"
-            : "locked",
-    blog: blogDone ? "done" : currentStageHref === "blog" ? "now" : reelThumbnailDone ? "ready" : "locked",
-    "text-post":
-      textPostDone
-        ? "done"
-        : currentStageHref === "text-post"
-          ? "now"
-          : blogDone
-            ? "ready"
-            : "locked",
-    metadata:
-      metadataDone ? "done" : currentStageHref === "metadata" ? "now" : textPostDone ? "ready" : "locked",
-    publishing:
-      publishingDone
-        ? "done"
-        : currentStageHref === "publishing"
-          ? "now"
-          : metadataDone || draftSignals.publishingReady
-            ? "ready"
-            : "locked",
-    analytics: currentStageHref === "analytics" ? "now" : publishingDone ? "ready" : "locked",
+  // Gating lives in lib/stageGating, pure and tested. It used to be a
+  // hand-rolled chain right here, and it was one strict line through all
+  // thirteen stages — so the blog post was locked until a reel thumbnail
+  // existed, which it has never needed. That is an order somebody had to pick
+  // when modelling a fan as a queue, not a dependency.
+  //
+  // This component's only job now is turning what the API says into the
+  // plain booleans that module reasons about.
+  const progress: StageProgress = {
+    source: Boolean(sourceAsset),
+    trim: Boolean(sermonAsset),
+    transcript: Boolean(transcriptData?.approved_at),
+    titleDesc: draftSignals.titleDescReady,
+    sermonThumbnail: draftSignals.sermonThumbnailReady || Boolean(sermonThumbnailAsset),
+    clips: clipCandidates.length > 0,
+    reel: draftSignals.reelPackageReady,
+    reelThumbnail: draftSignals.reelThumbnailReady,
+    blog: draftSignals.blogReady,
+    textPost: draftSignals.textPostReady,
+    metadata: draftSignals.metadataReady,
+    published: draftSignals.publishingDone,
   };
+
+  const stageStatus = stageStates(progress, currentStageHref);
 
   // The state computation above is unchanged; only what it renders is.
   //

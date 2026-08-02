@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 
+import type { StageState, StageVerdict } from "@/lib/stageGating";
 import { workflowStages, type WorkflowStage } from "@/lib/workflow";
 
 /**
@@ -23,17 +24,22 @@ import { workflowStages, type WorkflowStage } from "@/lib/workflow";
  * list of twelve tabs said those two facts were the same thing. They are not,
  * and the operator plans their afternoon around the difference.
  *
- * Three states, no colour spent on decoration:
- *   done    solid ink        — behind you
- *   now     rose, the signal — the only rose on the screen
- *   ready   outlined         — reachable
- *   locked  faint            — something upstream is missing
+ * Four states, one colour:
+ *   done     solid ink        — behind you
+ *   now      rose, the signal — the only rose on the screen
+ *   ready    outlined         — your choice whether to do it next
+ *   blocked  faint            — genuinely cannot start, and says why
+ *
+ * "blocked" is rare on purpose. Gating lives in lib/stageGating and only
+ * covers real dependencies, so most of the middle of a project is "ready" at
+ * once rather than queued behind an invented order.
  */
-
-export type StageState = "done" | "now" | "ready" | "locked";
 
 /** Steps that must happen in order, before anything can be derived. */
 const TRUNK = ["source", "trim", "transcript"] as const;
+
+/** And the far end, where the outputs come back together. */
+const GATHER = ["publishing", "analytics"] as const;
 
 function dotClass(state: StageState): string {
   switch (state) {
@@ -44,7 +50,7 @@ function dotClass(state: StageState): string {
       return "bg-brand border-brand ring-4 ring-brand/15";
     case "ready":
       return "bg-surface border-border-strong";
-    case "locked":
+    case "blocked":
       return "bg-surface border-border";
   }
 }
@@ -57,20 +63,21 @@ function labelClass(state: StageState): string {
       return "text-ink font-semibold";
     case "ready":
       return "text-ink/75";
-    case "locked":
-      return "text-muted/60";
+    case "blocked":
+      return "text-faint";
   }
 }
 
 function StageLink({
   stage,
-  state,
+  verdict,
   projectId,
 }: {
   stage: WorkflowStage;
-  state: StageState;
+  verdict: StageVerdict;
   projectId: string;
 }) {
+  const state = verdict.state;
   const content = (
     <>
       <span
@@ -85,14 +92,15 @@ function StageLink({
 
   const shared = "flex items-center gap-2 rounded-full px-2.5 py-1.5 transition-colors";
 
-  // A locked step is not a broken link, it is a step whose turn has not come.
-  // Rendering it as a disabled span rather than an anchor keeps it out of the
-  // tab order, so keyboard users are not walked through six dead stops.
-  if (state === "locked") {
+  // A blocked step is not a broken link, it is one whose inputs do not exist
+  // yet. Rendered as a span rather than an anchor so it stays out of the tab
+  // order — keyboard users are not walked through dead stops — and the title
+  // says what is actually missing instead of "not available".
+  if (state === "blocked") {
     return (
       <span
         className={`${shared} cursor-default`}
-        title={`${stage.label} — finish the steps before it first`}
+        title={verdict.reason ? `${stage.label} — ${verdict.reason}` : stage.label}
       >
         {content}
       </span>
@@ -110,15 +118,25 @@ function StageLink({
   );
 }
 
+const UNKNOWN: StageVerdict = { state: "blocked", reason: "Not available yet" };
+
 export function SignalRail({
   projectId,
   stageStatus,
 }: {
   projectId: string;
-  stageStatus: Record<string, StageState>;
+  stageStatus: Record<string, StageVerdict>;
 }) {
-  const trunk = workflowStages.filter((s) => (TRUNK as readonly string[]).includes(s.href));
-  const fan = workflowStages.filter((s) => !(TRUNK as readonly string[]).includes(s.href));
+  const inTrunk = (h: string) => (TRUNK as readonly string[]).includes(h);
+  const inGather = (h: string) => (GATHER as readonly string[]).includes(h);
+
+  const trunk = workflowStages.filter((s) => inTrunk(s.href));
+  const fan = workflowStages.filter((s) => !inTrunk(s.href) && !inGather(s.href));
+  // Ordered by GATHER rather than by the stage list, so publish always
+  // precedes results however the list is later rearranged.
+  const gather = (GATHER as readonly string[])
+    .map((h) => workflowStages.find((s) => s.href === h))
+    .filter((s): s is WorkflowStage => Boolean(s));
 
   return (
     <nav aria-label="Project workflow" className="w-full overflow-x-auto">
@@ -129,7 +147,7 @@ export function SignalRail({
             <li key={stage.href} className="flex items-center">
               <StageLink
                 stage={stage}
-                state={stageStatus[stage.href] ?? "locked"}
+                verdict={stageStatus[stage.href] ?? UNKNOWN}
                 projectId={projectId}
               />
               {i < trunk.length - 1 && (
@@ -151,9 +169,32 @@ export function SignalRail({
             <li key={stage.href}>
               <StageLink
                 stage={stage}
-                state={stageStatus[stage.href] ?? "locked"}
+                verdict={stageStatus[stage.href] ?? UNKNOWN}
                 projectId={projectId}
               />
+            </li>
+          ))}
+        </ol>
+
+        {/* The gather. Separated because these are not more siblings: they
+            consume whatever the fan produced, and publish is the one place
+            where waiting is real again. */}
+        <div aria-hidden className="flex items-center self-stretch px-1">
+          <span className="h-px w-3 bg-border" />
+          <span className="size-1.5 rounded-full bg-border-strong" />
+        </div>
+
+        <ol className="flex items-center gap-1">
+          {gather.map((stage, i) => (
+            <li key={stage.href} className="flex items-center">
+              <StageLink
+                stage={stage}
+                verdict={stageStatus[stage.href] ?? UNKNOWN}
+                projectId={projectId}
+              />
+              {i < gather.length - 1 && (
+                <span aria-hidden className="h-px w-4 bg-border" />
+              )}
             </li>
           ))}
         </ol>

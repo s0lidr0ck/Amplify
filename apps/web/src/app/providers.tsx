@@ -3,6 +3,7 @@
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ConvexReactClient, useConvexAuth, useQuery } from "convex/react";
+import { usePathname } from "next/navigation";
 import { makeFunctionReference } from "convex/server";
 import { useEffect, useRef, useState } from "react";
 
@@ -83,11 +84,28 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <ConvexAuthProvider client={convex}>
       <QueryClientProvider client={queryClient}>
-        <HubGate>
-          <ProfileSync />
-          <ApprovalGate>{children}</ApprovalGate>
-        </HubGate>
+        <Gated>{children}</Gated>
       </QueryClientProvider>
     </ConvexAuthProvider>
+  );
+}
+
+/**
+ * Sign-in and approval, except on design previews.
+ *
+ * TEMPORARY exception for /rail-preview, which exists to look at component
+ * states without a session or a running API. It renders no real data — it
+ * builds its own — so nothing is exposed by letting it through. Remove it and
+ * the route together.
+ */
+function Gated({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  if (pathname?.startsWith("/rail-preview")) return <>{children}</>;
+
+  return (
+    <HubGate>
+      <ProfileSync />
+      <ApprovalGate>{children}</ApprovalGate>
+    </HubGate>
   );
 }
