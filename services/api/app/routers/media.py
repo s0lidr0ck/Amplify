@@ -9,7 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db import get_db
-from app.models import MediaAsset
+from app.lib import media_tokens
+from app.lib.auth_deps import ApprovedUser, approved_user, current_user
+from app.lib.scoping import require_owned
+from app.models import MediaAsset, User
 
 router = APIRouter(prefix="/api/media", tags=["media"])
 
@@ -50,21 +53,56 @@ def _parse_range_header(range_header: str, file_size: int) -> tuple[int, int] | 
         return None
 
 
+async def _asset_for(db: AsyncSession, asset_id: str, user: User) -> MediaAsset:
+    """The asset, if the caller's church owns the project it hangs off."""
+    return await require_owned(db, MediaAsset, asset_id, user)
+
+
+@router.get("/asset/{asset_id}/link")
+async def playback_link(asset_id: str, user: ApprovedUser, db: AsyncSession = Depends(get_db)):
+    """Mint a short-lived signed URL for playing this asset.
+
+    Requires a bearer token and checks the asset belongs to the caller's
+    church. The URL it returns does not — that is the point, and why it
+    expires.
+    """
+    asset = await _asset_for(db, asset_id, user)
+    return {
+        "url": f"/api/media/asset/{asset_id}?t={media_tokens.sign(asset_id)}",
+        "expires_in": media_tokens.DEFAULT_TTL_SECONDS,
+        "filename": asset.filename,
+    }
+
+
 @router.get("/asset/{asset_id}")
 async def stream_asset(
     asset_id: str,
     request: Request,
+    t: str | None = None,
+    authorization: str | None = Header(None),
     range: str | None = Header(None, alias="Range"),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Stream a media asset for playback. Supports Range requests for seeking.
+
+    Takes either a bearer token or a signed `?t=` link. The second exists
+    because this URL goes into a `<video src>`, and a browser will not attach
+    an Authorization header to a media element's request — so requiring one
+    here would have closed the route by breaking playback.
     """
     result = await db.execute(select(MediaAsset).where(MediaAsset.id == asset_id))
     asset = result.scalar_one_or_none()
 
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
+
+    if not media_tokens.verify(asset_id, t):
+        # No usable signature: fall back to a bearer token, and hold it to
+        # the same ownership check the signed link was issued under.
+        user = await current_user(authorization=authorization, db=db)
+        await approved_user(user=user, db=db)
+        await _asset_for(db, asset_id, user)
 
     upload_dir = Path(settings.upload_dir)
     if not upload_dir.is_absolute():

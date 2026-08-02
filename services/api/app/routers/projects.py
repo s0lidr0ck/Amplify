@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db import get_db
+from app.lib.auth_deps import ApprovedUser
 from app.lib.job_events import append_job_event
 from app.models import (
     ClipAnalysisRun,
@@ -33,7 +34,9 @@ router = APIRouter(prefix="/api/projects", tags=["projects"])
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
-DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000001"
+# The organisation every request used to be assumed to belong to. It is gone:
+# the caller's own organisation now comes from their verified token, which is
+# what stops one church reading another's work.
 
 
 def _excerpt_match(text: str | None, search: str, *, radius: int = 90) -> str | None:
@@ -145,6 +148,7 @@ def _match_target_for_field(project_id: str, field: str) -> str:
 
 @router.get("/library")
 async def library_projects(
+    user: ApprovedUser,
     db: AsyncSession = Depends(get_db),
     q: str | None = None,
     speaker: str | None = None,
@@ -162,7 +166,9 @@ async def library_projects(
     status_filter = (status or "").strip()
     source_filter = (source_type or "").strip()
 
-    project_query = select(Project).where(Project.organization_id == DEFAULT_ORG_ID)
+    project_query = select(Project).where(
+        Project.organization_id == user.organization_id
+    )
     if speaker_filter:
         project_query = project_query.where(
             or_(
@@ -405,18 +411,16 @@ async def _queue_youtube_import(
 @router.post("", response_model=ProjectRead)
 async def create_project(
     body: ProjectCreate,
+    user: ApprovedUser,
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new sermon project."""
-    # Ensure default org exists
-    org_result = await db.execute(select(Organization).where(Organization.id == DEFAULT_ORG_ID))
-    if not org_result.scalar_one_or_none():
-        db.add(Organization(id=DEFAULT_ORG_ID, name="Default", slug="default"))
-        await db.flush()
-
+    # The organisation is the caller's own. It is guaranteed to exist: the
+    # dependency that produced this user either found their row or created it
+    # alongside an organisation.
     project = Project(
         id=str(uuid.uuid4()),
-        organization_id=DEFAULT_ORG_ID,
+        organization_id=user.organization_id,
         title=body.title,
         speaker=body.speaker,
         speaker_display_name=body.speaker_display_name or body.speaker,
@@ -435,13 +439,14 @@ async def create_project(
 
 @router.get("", response_model=list[ProjectRead])
 async def list_projects(
+    user: ApprovedUser,
     db: AsyncSession = Depends(get_db),
     limit: int = 50,
 ):
     """List projects for the organization."""
     result = await db.execute(
         select(Project)
-        .where(Project.organization_id == DEFAULT_ORG_ID)
+        .where(Project.organization_id == user.organization_id)
         .order_by(Project.sermon_date.desc(), Project.created_at.desc())
         .limit(limit)
     )
