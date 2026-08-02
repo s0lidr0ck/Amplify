@@ -9,6 +9,7 @@ which grants nothing. This script is how that queue gets worked.
     python -m scripts.access approve <org-id> --plan starter
     python -m scripts.access suspend <org-id>     # turn access off
     python -m scripts.access name <org-id> "Grace Fellowship"
+    python -m scripts.access link <email> <hub-user-id>   # pre-hub accounts
 
 A script rather than an admin page, deliberately: an approval UI is a
 permanent surface with its own auth story, and the queue is currently short
@@ -104,6 +105,43 @@ async def cmd_suspend(args) -> int:
     return await _set_plan(args.org_id, "suspended")
 
 
+async def cmd_link(args) -> int:
+    """Attach an existing local user to a hub identity.
+
+    Needed once per account that predates hub sign-in. Without it, that
+    person signs in, the lookup by hub id finds nothing, and they are handed
+    a brand-new church — leaving their real one, and everything in it,
+    behind a login they can no longer reach.
+
+    The hub id comes from the hub's own users table:
+        npx convex data users --limit 1000   (in the Study checkout)
+    """
+    async with async_session() as db:
+        user = await db.scalar(select(User).where(User.email == args.email))
+        if user is None:
+            print(f"No user with email {args.email}.")
+            return 1
+        if user.hub_user_id and user.hub_user_id != args.hub_user_id:
+            print(
+                f"Refusing: {args.email} is already linked to {user.hub_user_id}. "
+                "Clear it deliberately if that is wrong."
+            )
+            return 1
+        clash = await db.scalar(
+            select(User).where(
+                User.hub_user_id == args.hub_user_id, User.id != user.id
+            )
+        )
+        if clash is not None:
+            print(f"Refusing: hub id {args.hub_user_id} is already on user {clash.id}.")
+            return 1
+        user.hub_user_id = args.hub_user_id
+        await db.commit()
+        org = await db.get(Organization, user.organization_id)
+        print(f"{args.email} -> {args.hub_user_id}  (church: {org.name if org else '?'})")
+        return 0
+
+
 async def cmd_name(args) -> int:
     async with async_session() as db:
         org = await db.get(Organization, args.org_id)
@@ -138,6 +176,10 @@ def main() -> int:
     rename.add_argument("org_id")
     rename.add_argument("name")
 
+    link = sub.add_parser("link", help="attach a pre-hub account to a hub identity")
+    link.add_argument("email")
+    link.add_argument("hub_user_id")
+
     args = parser.parse_args()
     handler = {
         "list": cmd_list,
@@ -145,6 +187,7 @@ def main() -> int:
         "approve": cmd_approve,
         "suspend": cmd_suspend,
         "name": cmd_name,
+        "link": cmd_link,
     }[args.command]
     return asyncio.run(handler(args))
 
