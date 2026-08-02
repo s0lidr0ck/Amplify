@@ -8,6 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
+from worker.api_client import internal_headers
 from worker.config import settings
 
 # services/worker/worker/tasks -> services (same as API's media/projects routers)
@@ -29,7 +30,7 @@ async def trim_sermon(ctx: dict, job_id: str, trim_op_id: str):
     api_url = settings.api_url.rstrip("/")
 
     async def update_job(status: str, message: str, error_text: str | None = None):
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=10.0, headers=internal_headers()) as client:
             await client.post(
                 f"{api_url}/api/internal/jobs/{job_id}/update",
                 json={
@@ -118,7 +119,7 @@ async def trim_sermon(ctx: dict, job_id: str, trim_op_id: str):
 
         duration_seconds = float(end_seconds - start_seconds)
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=60.0, headers=internal_headers()) as client:
             r = await client.post(
                 f"{api_url}/api/internal/trim-complete",
                 json={

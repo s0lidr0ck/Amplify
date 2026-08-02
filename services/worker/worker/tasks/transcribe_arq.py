@@ -8,6 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
+from worker.api_client import internal_headers
 from worker.config import settings
 from worker.tasks.transcribe import transcribe_sermon as _transcribe_sync
 
@@ -42,7 +43,7 @@ async def transcribe_sermon(ctx: dict, job_id: str):
         }
         if progress_percent is not None:
             payload["progress_percent"] = progress_percent
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=10.0, headers=internal_headers()) as client:
             await client.post(
                 f"{api_url}/api/internal/jobs/{job_id}/update",
                 json=payload,
@@ -137,7 +138,7 @@ async def transcribe_sermon(ctx: dict, job_id: str):
             pass  # Best effort
 
         # Call internal API to create transcript (ensure UUIDs are strings for JSON)
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=60.0, headers=internal_headers()) as client:
             r = await client.post(
                 f"{api_url}/api/internal/transcript",
                 json={

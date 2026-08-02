@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from yt_dlp import YoutubeDL
 
+from worker.api_client import internal_headers
 from worker.config import settings
 
 _SERVICES_ROOT = Path(__file__).resolve().parent.parent.parent.parent
@@ -41,7 +42,7 @@ async def download_youtube_source(ctx: dict, job_id: str, asset_id: str, source_
         }
         if progress_percent is not None:
             payload["progress_percent"] = progress_percent
-        async with httpx.AsyncClient(timeout=20.0) as client:
+        async with httpx.AsyncClient(timeout=20.0, headers=internal_headers()) as client:
             await client.post(f"{api_url}/api/internal/jobs/{job_id}/update", json=payload)
 
     try:
@@ -145,7 +146,7 @@ async def download_youtube_source(ctx: dict, job_id: str, asset_id: str, source_
         mime_type = mimetypes.guess_type(file_path.name)[0] or "video/mp4"
         await update_job("running", "Registering imported source...", progress_percent=95)
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=60.0, headers=internal_headers()) as client:
             response = await client.post(
                 f"{api_url}/api/internal/youtube-import-complete",
                 json={

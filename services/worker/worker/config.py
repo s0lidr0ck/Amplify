@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     database_url: str = "postgresql+asyncpg://amplify:amplify@localhost:5432/amplify"
     api_url: str = "http://localhost:8000"
+    # Shared with the API, which refuses unauthenticated calls to
+    # /api/internal/*. Both processes already read this same variable, so
+    # nothing new has to be distributed — but if they ever disagree, jobs run
+    # to completion and then fail to file their results.
+    jwt_secret: str = "change-me-in-production"
     upload_dir: str = "uploads"
     s3_bucket: str = "amplify"
     s3_access_key: str = ""
