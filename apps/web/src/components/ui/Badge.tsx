@@ -24,7 +24,11 @@ export function Badge({
   return (
     <span
       className={classNames(
-        "inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em]",
+        // There are ~150 of these across the app. Uppercase at 0.2em
+        // tracking turned every one into a headline, and a page carrying six
+        // status chips read as six announcements rather than six facts.
+        // Sentence case, tighter, lighter — still a chip, no longer a shout.
+        "inline-flex items-center rounded-md px-2 py-0.5 text-2xs font-medium",
         toneClasses[tone],
         className
       )}

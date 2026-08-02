@@ -10,7 +10,7 @@ export function Card({
   ...props
 }: HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={classNames("surface-card p-6", className)} {...props}>
+    <div className={classNames("surface-card p-5", className)} {...props}>
       {children}
     </div>
   );
@@ -28,11 +28,14 @@ export function CardHeader({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-      <div className="space-y-2">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="space-y-1.5">
         {eyebrow ? <p className="section-label">{eyebrow}</p> : null}
         <div className="space-y-1">
-          <h2 className="text-xl font-semibold text-ink">{title}</h2>
+          {/* Was text-xl. Every card had a 20px heading, so nothing on a page
+              was more important than anything else — and the page's own title
+              had nothing left to be bigger than. */}
+          <h2 className="font-display text-base font-semibold text-ink">{title}</h2>
           {description ? <p className="max-w-2xl text-sm text-muted">{description}</p> : null}
         </div>
       </div>

@@ -95,28 +95,36 @@
 }
 
 @layer components {
+  /* Border, not shadow; 14px, not 28px.
+     A 1.5rem radius with a drop shadow is a friendly consumer card, and five
+     of them on a page is five things floating at different heights. On a
+     quiet cool ground a hairline border separates just as well and stays
+     still. The blueprint asks for a release desk, and desks do not hover. */
   .surface-card {
-    @apply rounded-[1.5rem] border border-border/80 bg-surface shadow-card sm:rounded-3xl;
+    @apply rounded-xl border border-border bg-surface;
   }
 
   .operator-card {
-    @apply rounded-[1.25rem] border border-border/80 bg-surface shadow-card;
+    @apply rounded-xl border border-border bg-surface;
   }
 
   .surface-panel {
-    @apply rounded-[1.25rem] border border-border/80 bg-surface backdrop-blur sm:rounded-2xl;
+    @apply rounded-xl border border-border bg-surface;
   }
 
   .workspace-band {
-    @apply rounded-[1.25rem] border border-border/70 bg-[hsl(var(--surface-band))] sm:rounded-2xl;
+    @apply rounded-xl border border-border bg-[hsl(var(--surface-band))];
   }
 
   .workspace-band-strong {
-    @apply rounded-[1.25rem] border border-border/70 bg-[hsl(var(--surface-band-strong))] sm:rounded-2xl;
+    @apply rounded-xl border border-border bg-[hsl(var(--surface-band-strong))];
   }
 
+  /* Used in 31 files, so its volume is the app's volume. Small caps still
+     reads as a label at 0.12em; at 0.24em and semibold it was shouting a
+     category name above every single card. */
   .section-label {
-    @apply text-xs font-semibold uppercase tracking-[0.24em] text-muted;
+    @apply text-2xs font-medium uppercase tracking-[0.12em] text-faint;
   }
 }
 
