@@ -49,11 +49,33 @@ function AuthTokenBridge() {
 export function HubGate({ children }: { children: React.ReactNode }) {
   const { isLoading, isAuthenticated } = useConvexAuth();
   const { signIn } = useAuthActions();
-  // Starts "none" rather than reading the URL, because this component is
-  // rendered on the server first and there is no window there. The effect
-  // below corrects it before anything is shown.
-  const [exchange, setExchange] = useState<"none" | "busy" | "failed">("none");
+  // Read the URL synchronously, exactly as the Vite original does.
+  //
+  // This started as "none", corrected to "busy" inside the effect below, on
+  // the reasoning that there is no window during the server render. That
+  // introduced a race the original does not have: effects in the same commit
+  // close over the render's state, so the bounce effect further down saw
+  // "none" even though an exchange had just started, and could fire — sending
+  // the browser back to the hub mid-exchange and burning the one-time code.
+  //
+  // The lazy initializer is safe here. `typeof window` guards the server, and
+  // useConvexAuth().isLoading is true on the first render either way, so both
+  // server and client render "Signing you in…" and there is no mismatch to
+  // hydrate around.
+  const [exchange, setExchange] = useState<"none" | "busy" | "failed">(() =>
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).has("ssoCode")
+      ? "busy"
+      : "none",
+  );
   const ran = useRef(false);
+  // Belt and braces for the same failure. Once a code has been seen in this
+  // page load, nothing may bounce — regardless of how the state settles, and
+  // after replaceState has already stripped the code from the URL.
+  const sawCode = useRef(
+    typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).has("ssoCode"),
+  );
 
   useEffect(() => {
     if (ran.current) return;
@@ -61,7 +83,6 @@ export function HubGate({ children }: { children: React.ReactNode }) {
     const params = new URLSearchParams(window.location.search);
     const code = params.get("ssoCode");
     if (!code) return;
-    setExchange("busy");
     params.delete("ssoCode");
     const query = params.toString();
     const cleanUrl =
@@ -89,6 +110,8 @@ export function HubGate({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (isLoading || isAuthenticated || exchange !== "none") return;
+    // Arrived holding a code: the exchange owns this page load.
+    if (sawCode.current) return;
     if (hasHint() && !sessionStorage.getItem("a18_bounced")) bounceToHub();
   }, [isLoading, isAuthenticated, exchange]);
 
