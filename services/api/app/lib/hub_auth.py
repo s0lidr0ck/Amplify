@@ -18,6 +18,14 @@ What is deliberately checked, beyond the signature:
   thing bounding the damage from a leaked token.
 - **Subject present.** Everything downstream keys off it; a missing subject
   must not travel onward as None.
+
+Two things about Convex Auth's tokens are load-bearing here, both read off
+its `generateToken` rather than assumed:
+
+- It writes **no `kid`** into the header — only `{alg: "RS256"}`. Key
+  selection therefore has to work without one.
+- The subject is **`"<userId>|<sessionId>"`**, not a bare user id. Only the
+  first half identifies the person.
 """
 
 from __future__ import annotations
@@ -41,6 +49,10 @@ HUB_JWKS_URL = f"{HUB_ISSUER}/.well-known/jwks.json"
 # audience claim. Checked so a token minted for some other Convex application
 # on the same deployment cannot be replayed here.
 HUB_AUDIENCE = "convex"
+
+# Convex Auth's TOKEN_SUB_CLAIM_DIVIDER: it writes the subject as
+# "<userId>|<sessionId>" rather than a bare user id.
+SUBJECT_DIVIDER = "|"
 
 _JWKS_TIMEOUT_SECONDS = 5.0
 
@@ -84,11 +96,14 @@ async def _refresh_jwks() -> None:
 def _sole_key() -> dict[str, Any] | None:
     """The only published key, when there is exactly one.
 
-    `kid` selects among several keys; with one key there is nothing to select
-    and the header may legitimately omit it. Falling back here costs no
-    safety — the signature, issuer, audience and expiry are all still checked
-    against that key — and it keeps this service working whatever Convex Auth
-    chooses to put in the header. The hub publishes a single key today.
+    This is not a fallback, it is the normal path: Convex Auth signs with
+    `setProtectedHeader({alg: "RS256"})` and writes no `kid` at all, while
+    the hub publishes exactly one key. `kid` selects among several keys, so
+    with one key there is nothing to select.
+
+    It costs no safety — signature, issuer, audience and expiry are all still
+    checked against that key. If the hub ever publishes a second key, tokens
+    without a `kid` start being refused rather than guessed at.
     """
     return next(iter(_jwks_cache.values())) if len(_jwks_cache) == 1 else None
 
@@ -151,4 +166,13 @@ async def verify_hub_token(token: str) -> str:
     subject = claims.get("sub")
     if not subject or not isinstance(subject, str):
         raise HubAuthError("token carries no subject")
-    return subject
+
+    # Convex Auth packs two things into the subject: "<userId>|<sessionId>".
+    # Only the first identifies the person — the session half changes every
+    # time they sign in, on a new device, or when a token refreshes. Storing
+    # the whole subject would mint a fresh Amplify user on each sign-in and
+    # strand the previous one's work.
+    user_id = subject.split(SUBJECT_DIVIDER, 1)[0].strip()
+    if not user_id:
+        raise HubAuthError("token subject carries no user id")
+    return user_id

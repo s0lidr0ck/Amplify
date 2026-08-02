@@ -14,6 +14,7 @@ from app.routers import (
     content,
     dev,
     jobs,
+    me,
     media,
     projects,
     publishing,
@@ -66,6 +67,9 @@ async def global_exception_handler(request, exc):
     return JSONResponse(status_code=500, content={"detail": str(exc)})
 
 
+# Registered first: it is the only route an unapproved visitor may reach, and
+# the one the front end asks before deciding what to render.
+app.include_router(me.router)
 app.include_router(projects.router)
 app.include_router(speakers.router)
 app.include_router(media.router)

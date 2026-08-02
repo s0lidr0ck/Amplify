@@ -22,6 +22,15 @@ class Organization(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     slug: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     timezone: Mapped[str] = mapped_column(String(50), default="UTC")
+    # What this church may do. See app/lib/plans.py: "pending" grants
+    # nothing, so a new sign-up waits in a queue rather than arriving inside
+    # the product. Subscriptions will set this too.
+    plan: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="pending", server_default="pending"
+    )
+    approved_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -31,9 +40,20 @@ class User(Base):
 
     id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=uuid4_str)
     organization_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("organizations.id"), nullable=False)
-    email: Mapped[str] = mapped_column(String(255), nullable=False)
+    # The A1:8 hub's user id — the only durable link between a verified
+    # session and this row. Amplify holds no passwords of its own.
+    hub_user_id: Mapped[Optional[str]] = mapped_column(
+        String(255), unique=True, index=True, nullable=True
+    )
+    # Nullable because the hub's token carries no email claim: a row is
+    # created from the identity we can verify, and the address is filled in
+    # afterwards from the user's hub profile.
+    email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # Vestigial. Sign-in moved to the hub; no new row will ever set this.
     password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Nullable for the same reason as email — provisioning knows the hub id
+    # and nothing else about the person yet.
+    name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     role: Mapped[str] = mapped_column(String(50), default="member")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

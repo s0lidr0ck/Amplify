@@ -114,6 +114,29 @@ async def test_a_token_with_no_subject_is_refused(rsa_keypair):
 
 
 @pytest.mark.asyncio
+async def test_the_session_half_of_the_subject_is_discarded(rsa_keypair):
+    """Convex Auth writes the subject as "<userId>|<sessionId>". Keeping the
+    whole thing would mint a new Amplify user on every sign-in, on every
+    device, and strand the previous one's projects."""
+    token = make_token(rsa_keypair, sub="k57abc123|session-xyz")
+    assert await verify_hub_token(token) == "k57abc123"
+
+
+@pytest.mark.asyncio
+async def test_the_same_person_on_two_devices_is_one_user(rsa_keypair):
+    phone = make_token(rsa_keypair, sub="k57abc123|session-phone")
+    laptop = make_token(rsa_keypair, sub="k57abc123|session-laptop")
+    assert await verify_hub_token(phone) == await verify_hub_token(laptop)
+
+
+@pytest.mark.asyncio
+async def test_a_subject_that_is_only_a_divider_is_refused(rsa_keypair):
+    token = make_token(rsa_keypair, sub="|session-xyz")
+    with pytest.raises(HubAuthError):
+        await verify_hub_token(token)
+
+
+@pytest.mark.asyncio
 async def test_a_token_without_a_kid_still_verifies_against_a_lone_key(rsa_keypair):
     """`kid` picks among several keys. The hub publishes one, so a header
     that omits it is not ambiguous — and the signature is still checked."""
