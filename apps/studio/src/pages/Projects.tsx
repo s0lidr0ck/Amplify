@@ -33,25 +33,23 @@ function todayLocal(): string {
   return `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}`;
 }
 
-function NewSermon({ churchId }: { churchId: Id<"churches"> }) {
+function NewSermon({
+  churchId,
+  open,
+  setOpen,
+}: {
+  churchId: Id<"churches">;
+  open: boolean;
+  setOpen: (open: boolean) => void;
+}) {
   const createProject = useMutation(api.amplify.createProject);
-  const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [speaker, setSpeaker] = useState("");
   const [sermonDate, setSermonDate] = useState(todayLocal());
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  if (!open) {
-    return (
-      <button
-        onClick={() => setOpen(true)}
-        className="rounded-lg bg-ink px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-ink/85 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-      >
-        Add a sermon
-      </button>
-    );
-  }
+  if (!open) return null;
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -135,9 +133,19 @@ function NewSermon({ churchId }: { churchId: Id<"churches"> }) {
   );
 }
 
-export function ProjectsPage({ churchId }: { churchId: string }) {
+export function ProjectsPage({
+  churchId,
+  churches,
+  onChooseChurch,
+}: {
+  churchId: string;
+  churches: { churchId: string; name: string }[];
+  onChooseChurch: (id: string) => void;
+}) {
   const id = churchId as Id<"churches">;
   const projects = useQuery(api.amplify.listProjects, { churchId: id });
+  const here = churches.find((c) => c.churchId === churchId);
+  const [adding, setAdding] = useState(false);
 
   return (
     <div className="mx-auto grid max-w-4xl gap-5 px-5 py-8">
@@ -150,8 +158,42 @@ export function ProjectsPage({ churchId }: { churchId: string }) {
             Amplify
           </span>
         </div>
-        <NewSermon churchId={id} />
+        <div className="flex items-center gap-2.5">
+          {/* Only when there is a real choice. One church needs no chooser,
+              and offering one is a step that never had an answer — but with
+              two, silently taking the first files a sermon under the wrong
+              church and says nothing, which is how the first one added to
+              this rebuild ended up in the wrong place. */}
+          {churches.length > 1 ? (
+            <label className="flex items-center gap-1.5">
+              <span className="sr-only">Church</span>
+              <select
+                value={churchId}
+                onChange={(e) => onChooseChurch(e.target.value)}
+                className="rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand"
+              >
+                {churches.map((c) => (
+                  <option key={c.churchId} value={c.churchId}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : here ? (
+            // One church: state it rather than offering it, so what you are
+            // adding to is never a guess.
+            <span className="text-2xs text-muted">{here.name}</span>
+          ) : null}
+          <button
+            onClick={() => setAdding((v) => !v)}
+            className="rounded-lg bg-ink px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-ink/85 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+          >
+            Add a sermon
+          </button>
+        </div>
       </header>
+
+      <NewSermon churchId={id} open={adding} setOpen={setAdding} />
 
       {projects === undefined ? (
         <p className="text-sm text-muted">Loading…</p>
