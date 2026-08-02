@@ -5,6 +5,8 @@ import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { getMediaPlaybackUrl, projects } from "@/lib/api";
+import { authHeaders } from "@/lib/authToken";
+import { useSignedPlaybackUrl } from "@/lib/useSignedPlaybackUrl";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -28,7 +30,10 @@ function isImageAsset(asset: VisualAsset) {
 }
 
 async function downloadAsset(asset: NonNullable<VisualAsset>) {
-  const response = await fetch(getMediaPlaybackUrl(asset.id));
+  // A fetch can carry the token, so no signature is needed here.
+  const response = await fetch(getMediaPlaybackUrl(asset.id), {
+    headers: authHeaders(),
+  });
   if (!response.ok) {
     const text = await response.text();
     throw new Error(text || `Download failed with status ${response.status}`);
@@ -53,6 +58,10 @@ function AssetCard({
 }) {
   const [downloadError, setDownloadError] = useState("");
   const [isDownloading, setIsDownloading] = useState(false);
+  // Signed, because an <img>/<video> src cannot carry an Authorization
+  // header. playback_url, when the API supplies one, already is.
+  const signedUrl = useSignedPlaybackUrl(asset?.playback_url ? null : asset?.id);
+  const previewUrl = asset?.playback_url ?? signedUrl;
 
   return (
     <Card>
@@ -95,7 +104,7 @@ function AssetCard({
             <div className="overflow-hidden rounded-[1.5rem] border border-border/80 bg-background-alt">
               {isImageAsset(asset) ? (
                 <Image
-                  src={asset.playback_url ?? getMediaPlaybackUrl(asset.id)}
+                  src={previewUrl ?? ""}
                   alt={asset.filename}
                   width={960}
                   height={540}
@@ -104,7 +113,7 @@ function AssetCard({
                 />
               ) : (
                 <video
-                  src={asset.playback_url ?? getMediaPlaybackUrl(asset.id)}
+                  src={previewUrl ?? ""}
                   controls
                   className="aspect-video w-full bg-black"
                 />

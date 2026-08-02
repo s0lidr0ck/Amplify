@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { clips, content, jobs, projects, transcript, trim, getMediaPlaybackUrl } from "@/lib/api";
+import { clips, content, jobs, projects, transcript, trim } from "@/lib/api";
+import { useSignedPlaybackUrl } from "@/lib/useSignedPlaybackUrl";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -278,7 +279,8 @@ export default function TrimPage() {
   const safeEnd = useFullFile ? duration : Math.min(endSeconds, duration);
   const safeStart = useFullFile ? 0 : Math.max(0, Math.min(startSeconds, safeEnd - 1));
   const selectedDuration = Math.max(0, safeEnd - safeStart);
-  const playbackUrl = sourceAsset ? getMediaPlaybackUrl(sourceAsset.id) : null;
+  // Signed, because a <video src> cannot carry an Authorization header.
+  const playbackUrl = useSignedPlaybackUrl(sourceAsset?.id);
 
   const seekToTime = (time: number) => {
     const video = videoRef.current;

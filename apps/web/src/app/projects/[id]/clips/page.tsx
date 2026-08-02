@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { clips, getMediaPlaybackUrl, jobs, projects, transcript } from "@/lib/api";
+import { clips, jobs, projects, transcript } from "@/lib/api";
+import { useSignedPlaybackUrl } from "@/lib/useSignedPlaybackUrl";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -275,7 +276,8 @@ export default function ClipsPage() {
     generateArtifactsMutation.isPending ||
       (artifactJob && artifactJob.status !== "completed" && artifactJob.status !== "failed")
   );
-  const playbackUrl = sermonAsset ? getMediaPlaybackUrl(sermonAsset.id) : null;
+  // Signed, because a <video src> cannot carry an Authorization header.
+  const playbackUrl = useSignedPlaybackUrl(sermonAsset?.id);
   const activeCandidate = selectedCandidateDetail ?? selectedCandidate;
   const editorialScores = activeCandidate?.analysis_payload?.editorial_scores ?? {};
   const featureScores = activeCandidate?.analysis_payload?.feature_scores ?? {};

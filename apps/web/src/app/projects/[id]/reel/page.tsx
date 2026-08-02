@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { API_BASE, getMediaPlaybackUrl, jobs, projects, transcript, uploads } from "@/lib/api";
+import { authHeaders } from "@/lib/authToken";
+import { useSignedPlaybackUrl } from "@/lib/useSignedPlaybackUrl";
 import { loadProjectDraft, saveProjectDraft, type ReelDraft } from "@/lib/projectDrafts";
 import { streamNdjson } from "@/lib/streaming";
 import { ActivityLog } from "@/components/workflow/ActivityLog";
@@ -221,6 +223,8 @@ export default function ReelPage() {
   });
 
   const transcriptText = transcriptData?.raw_text || transcriptData?.cleaned_text || "";
+  // Signed, because a <video src> cannot carry an Authorization header.
+  const reelPlaybackUrl = useSignedPlaybackUrl(reelAsset?.id);
   const currentReelTranscript = reelTranscript?.asset_id === reelAsset?.id ? reelTranscript : null;
   const reelTranscriptText = currentReelTranscript?.cleaned_text || currentReelTranscript?.raw_text || "";
 
@@ -381,7 +385,10 @@ export default function ReelPage() {
     setUploadError("");
     setIsDownloadingReel(true);
     try {
-      const response = await fetch(getMediaPlaybackUrl(reelAsset.id));
+      // A fetch can carry the token, so no signature is needed here.
+      const response = await fetch(getMediaPlaybackUrl(reelAsset.id), {
+        headers: authHeaders(),
+      });
       if (!response.ok) {
         const text = await response.text();
         throw new Error(text || `Download failed with status ${response.status}`);
@@ -549,7 +556,7 @@ export default function ReelPage() {
                   </div>
                 </div>
                 <video
-                  src={getMediaPlaybackUrl(reelAsset.id)}
+                  src={reelPlaybackUrl ?? undefined}
                   controls
                   className="aspect-video w-full rounded-2xl bg-black"
                 />

@@ -1,8 +1,30 @@
+import { authHeaders } from "./authToken";
+
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-/** URL for streaming a media asset (video/audio playback). */
+/**
+ * URL for streaming a media asset.
+ *
+ * Deliberately unauthenticated, and only usable once the API has signed it.
+ * This URL ends up in a `<video src>`, and a browser will not attach an
+ * Authorization header to a media element's request — so the capability has
+ * to travel in the URL. Call `getSignedPlaybackUrl` to get one.
+ */
 export function getMediaPlaybackUrl(assetId: string): string {
   return `${API_BASE}/api/media/asset/${assetId}`;
+}
+
+/**
+ * Ask the API for a short-lived signed URL for this asset.
+ *
+ * The request carries the bearer token and the API checks the asset belongs
+ * to your church; the URL it returns does not, which is why it expires.
+ */
+export async function getSignedPlaybackUrl(assetId: string): Promise<string> {
+  const { url } = await api<{ url: string; expires_in: number }>(
+    `/api/media/asset/${assetId}/link`,
+  );
+  return `${API_BASE}${url}`;
 }
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
@@ -11,10 +33,12 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
     headers: isFormData
       ? {
+          ...authHeaders(),
           ...init?.headers,
         }
       : {
           "Content-Type": "application/json",
+          ...authHeaders(),
           ...init?.headers,
         },
   });
@@ -35,6 +59,7 @@ export async function download(path: string, init?: RequestInit): Promise<void> 
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
+      ...authHeaders(),
       ...init?.headers,
     },
   });
