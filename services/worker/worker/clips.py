@@ -1,14 +1,21 @@
 """Cutting a clip out of the sermon.
 
-Separate from jobs.py because this one re-encodes, and everything about it
-follows from that. A trim is a slice of an existing file and copies streams;
-a clip changes the frame, so every pixel is new.
+A clip is a slice of the master and nothing else: same frame, same codec,
+same pixels, just shorter. The streams are copied, so the cut is lossless
+and takes seconds rather than minutes.
 
-Vertical, because the platforms these go to are vertical. A 16:9 sermon
-cropped to 9:16 loses two thirds of its width, so the crop has to be chosen
-rather than taken from the middle: on a locked-off sermon camera the preacher
-is rarely centred, and centre-cropping cuts a pulpit in half about as often
-as it works.
+It used to crop to 9:16 and re-encode, on the theory that the platforms
+these go to are vertical. They are, but reframing a sermon is an editorial
+decision — which of three people on a stage the shot should follow — and a
+centre crop guesses at it, badly, while throwing away two thirds of the
+width and every pixel of quality along with it. The reframing belongs in an
+editor, where somebody can see what they are doing. This just gets them the
+right thirty seconds to work with.
+
+The one cost of copying is that a cut can only land on a keyframe, so the
+start moves to the nearest one before the mark — a second or two early on a
+typical stream. Early is the right direction: it keeps the whole hook and
+adds a beat of run-up, where late would clip the first word.
 """
 
 from __future__ import annotations
@@ -23,35 +30,6 @@ from worker.loop import handles
 
 logger = logging.getLogger(__name__)
 
-#: 1080x1920. The platforms accept more, but nothing gains from it — the
-#: source is a 1080p sermon camera, so anything larger is upscaled nothing.
-WIDTH, HEIGHT = 1080, 1920
-
-
-def _crop_filter(focus: str) -> str:
-    """Where in the 16:9 frame the 9:16 window sits.
-
-    Expressed as a fraction of the leftover width so it holds whatever the
-    source resolution turns out to be — hard-coding pixel offsets breaks the
-    day somebody uploads 4K.
-    """
-    x = {
-        "left": "0",
-        "centre": "(iw-ow)/2",
-        "center": "(iw-ow)/2",
-        "right": "iw-ow",
-    }.get(focus, "(iw-ow)/2")
-
-    return (
-        # Crop to 9:16 at full height, then scale to the target. Cropping
-        # before scaling keeps the sharpest pixels: the other order scales
-        # the whole frame and throws most of it away afterwards.
-        f"crop=ih*9/16:ih:{x}:0,"
-        f"scale={WIDTH}:{HEIGHT}:flags=lanczos,"
-        f"setsar=1"
-    )
-
-
 @handles("clip_export")
 def clip_export(hub: Hub, job: Job, scratch: Path) -> list[dict[str, object]]:
     """Cut one clip and upload it."""
@@ -65,8 +43,6 @@ def clip_export(hub: Hub, job: Job, scratch: Path) -> list[dict[str, object]]:
     end = float(payload.get("endSeconds", 0))
     if end <= start:
         raise ValueError("The end of a clip must come after its start")
-
-    focus = str(payload.get("focus", "centre"))
 
     # Read straight from S3 rather than downloading first.
     #
@@ -83,78 +59,37 @@ def clip_export(hub: Hub, job: Job, scratch: Path) -> list[dict[str, object]]:
     hub.progress(job, 5, "Reading the sermon")
     url, _ = hub.download_url(job, str(asset_id))
 
-    # What shape is it already?
-    #
-    # The old cutter cropped to 9:16 and re-encoded every clip, whatever came
-    # in. On a sermon filmed on a phone — which is most of them — the source
-    # is already vertical, so that crop is a no-op and the re-encode is pure
-    # loss: an h264 file decoded and re-compressed for nothing, slowly.
-    #
-    # You genuinely cannot make a vertical reel out of a 16:9 recording
-    # without re-encoding, so that path stays. It is just no longer the only
-    # one.
-    frame = probe_frame(url)
-    already_vertical = bool(frame and frame[1] >= frame[0])
-
+    hub.progress(job, 25, "Cutting")
     output = scratch / "clip.mp4"
-    if already_vertical:
-        hub.progress(job, 25, "Cutting (copying the stream)")
-        _run(
-            [
-                "ffmpeg", "-y",
-                "-reconnect", "1", "-reconnect_streamed", "1",
-                "-reconnect_delay_max", "5",
-                "-ss", str(start),
-                "-i", url,
-                "-t", str(end - start),
-                # No filter, no encoder. The bytes are copied across, so the
-                # clip is bit-for-bit the sermon and the cut costs seconds
-                # instead of minutes.
-                #
-                # The cost is that a copy can only cut on a keyframe, so the
-                # start lands on the nearest one before the mark — up to a
-                # couple of seconds early on a typical stream. Early is the
-                # right direction to be wrong in: it keeps the whole hook and
-                # adds a beat of run-up, where late would clip the first word.
-                "-c", "copy",
-                "-avoid_negative_ts", "make_zero",
-                "-movflags", "+faststart",
-                str(output),
-            ],
-            job,
-            hub,
-        )
-    else:
-        hub.progress(job, 25, "Cutting (reframing to vertical)")
-        _run(
-            [
-                "ffmpeg", "-y",
-                # Keep trying if the connection wobbles: a stream that dies
-                # halfway leaves a truncated clip rather than an error.
-                "-reconnect", "1", "-reconnect_streamed", "1",
-                "-reconnect_delay_max", "5",
-                # -ss before -i seeks by index; the extra -ss after would be
-                # frame-accurate but decodes from the last keyframe every
-                # time, and on a forty-minute file that is minutes per clip.
-                "-ss", str(start),
-                "-i", url,
-                "-t", str(end - start),
-                "-vf", _crop_filter(focus),
-                # Re-encoding is unavoidable on this path, so the settings
-                # are chosen rather than defaulted: veryfast keeps a batch of
-                # eight clips to minutes, and CRF 20 is visually clean here.
-                "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
-                "-pix_fmt", "yuv420p",
-                # Faststart puts the index at the front so the file plays
-                # while it downloads. Without it a phone waits for the whole
-                # thing.
-                "-movflags", "+faststart",
-                "-c:a", "aac", "-b:a", "128k", "-ac", "2",
-                str(output),
-            ],
-            job,
-            hub,
-        )
+    _run(
+        [
+            "ffmpeg", "-y",
+            # Keep trying if the connection wobbles: a stream that dies
+            # halfway leaves a truncated clip rather than an error.
+            "-reconnect", "1", "-reconnect_streamed", "1",
+            "-reconnect_delay_max", "5",
+            # -ss before -i seeks by index rather than decoding up to the
+            # mark, which on a forty-minute master is the difference between
+            # a second and a minute.
+            "-ss", str(start),
+            "-i", url,
+            "-t", str(end - start),
+            # No filter and no encoder: the streams are copied straight
+            # across, so the clip is the sermon's own pixels and the whole
+            # cut costs seconds.
+            "-c", "copy",
+            # A copied cut can start on a negative timestamp when the seek
+            # lands mid-GOP; without this some players open on a frozen
+            # frame or refuse the file outright.
+            "-avoid_negative_ts", "make_zero",
+            # Index at the front, so the file plays while it downloads
+            # rather than after.
+            "-movflags", "+faststart",
+            str(output),
+        ],
+        job,
+        hub,
+    )
 
     if not output.exists() or output.stat().st_size == 0:
         raise RuntimeError("ffmpeg finished but produced no clip")
