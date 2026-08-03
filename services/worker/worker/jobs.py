@@ -164,8 +164,15 @@ def transcribe(hub: Hub, job: Job, scratch: Path) -> list[dict[str, object]]:
     # fifteen seconds on `small` has no business loading large-v3 by
     # default; a job may still ask for a specific model when it matters.
     model_name = payload.get("model") or settings.whisper_model
-    hub.log(job, f"Transcribing with {model_name}")
-    model = WhisperModel(model_name, device="auto", compute_type="auto")
+    hub.log(
+        job,
+        f"Transcribing with {model_name} on {settings.whisper_device}",
+    )
+    model = WhisperModel(
+        model_name,
+        device=settings.whisper_device,
+        compute_type=settings.whisper_compute_type,
+    )
     segments, info = model.transcribe(str(audio), vad_filter=True)
 
     collected: list[dict[str, object]] = []

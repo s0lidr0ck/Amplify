@@ -26,7 +26,7 @@ import tempfile
 import time
 from pathlib import Path
 
-DEFAULT_MODELS = ["small", "medium"]
+DEFAULT_MODELS = ["small", "medium", "large-v3"]
 
 # Words worth checking by eye when comparing two transcripts. A model that is
 # a little slower but gets these right is the cheaper model in the end.
@@ -57,19 +57,28 @@ def extract_audio(source: Path, into: Path) -> tuple[Path, float]:
     return audio, float(probe.stdout.strip())
 
 
-def run_model(name: str, audio: Path) -> dict:
+def run_model(name: str, audio: Path, device: str, compute_type: str) -> dict:
     from faster_whisper import WhisperModel
 
     load_started = time.monotonic()
-    model = WhisperModel(name, device="auto", compute_type="auto")
+    model = WhisperModel(name, device=device, compute_type=compute_type)
     load_seconds = time.monotonic() - load_started
 
-    started = time.monotonic()
-    segments, _info = model.transcribe(str(audio), vad_filter=True)
-    # faster-whisper is lazy: the work happens as the generator is consumed,
-    # so timing must wrap the consumption, not the call.
-    text = " ".join(s.text.strip() for s in segments)
-    seconds = time.monotonic() - started
+    # Twice, and only the second one counts.
+    #
+    # The first model to run on a cold GPU pays for CUDA context creation and
+    # cuDNN autotuning on behalf of the whole benchmark — enough to make
+    # `small` look five times slower than `medium`, which is nonsense. Whoever
+    # goes first would otherwise be punished for going first.
+    seconds = 0.0
+    text = ""
+    for run in range(2):
+        started = time.monotonic()
+        segments, _info = model.transcribe(str(audio), vad_filter=True)
+        # faster-whisper is lazy: the work happens as the generator is
+        # consumed, so the timer must wrap the consumption, not the call.
+        text = " ".join(s.text.strip() for s in segments)
+        seconds = time.monotonic() - started
 
     peak_mb = None
     try:
@@ -112,6 +121,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("source", type=Path, help="A real sermon file")
     parser.add_argument("--models", default=",".join(DEFAULT_MODELS))
+    parser.add_argument("--device", default="auto", help="auto | cuda | cpu")
+    parser.add_argument(
+        "--compute-type",
+        default="auto",
+        help="auto | float16 (GPU) | int8 (CPU). float16 is the usual GPU choice.",
+    )
     args = parser.parse_args()
 
     if not args.source.exists():
@@ -119,7 +134,8 @@ def main() -> int:
         return 1
 
     models = [m.strip() for m in args.models.split(",") if m.strip()]
-    print(f"cores: {os.cpu_count()}")
+    print(f"cores: {os.cpu_count()}  device: {args.device}  "
+          f"compute: {args.compute_type}")
 
     with tempfile.TemporaryDirectory(prefix="bench-") as scratch:
         print("extracting audio…")
@@ -130,7 +146,7 @@ def main() -> int:
         for name in models:
             print(f"running {name}… ", end="", flush=True)
             try:
-                r = run_model(name, audio)
+                r = run_model(name, audio, args.device, args.compute_type)
             except Exception as exc:
                 print(f"failed: {exc}")
                 continue
@@ -141,15 +157,15 @@ def main() -> int:
             return 1
 
         print(f"\n{'model':>10} {'transcribe':>11} {'load':>7} {'×realtime':>10} "
-              f"{'words':>7} {'peak RAM':>9}")
-        print("-" * 60)
+              f"{'words':>7} {'host RAM':>14}")
+        print("-" * 68)
         for r in results:
             # The number that decides whether a queue keeps up: a 40-minute
             # sermon at 20× realtime is two minutes of work.
             realtime = duration / r["seconds"] if r["seconds"] else 0
             ram = f"{r['peak_mb']:.0f} MB" if r["peak_mb"] else "—"
             print(f"{r['model']:>10} {r['seconds']:>10.1f}s {r['load_seconds']:>6.1f}s "
-                  f"{realtime:>9.1f}× {r['words']:>7} {ram:>9}")
+                  f"{realtime:>9.1f}× {r['words']:>7} {ram:>14}")
 
         print("\nAt this rate a 40-minute sermon takes:")
         for r in results:

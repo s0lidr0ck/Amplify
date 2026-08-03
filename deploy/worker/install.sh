@@ -48,10 +48,24 @@ if [ ! -d "$APP_DIR/venv" ]; then
   python3 -m venv "$APP_DIR/venv"
 fi
 "$APP_DIR/venv/bin/pip" install --quiet --upgrade pip
-if [ -f "$REPO_DIR/services/worker/requirements.txt" ]; then
-  "$APP_DIR/venv/bin/pip" install --quiet -r "$REPO_DIR/services/worker/requirements.txt"
+"$APP_DIR/venv/bin/pip" install --quiet -r "$REPO_DIR/services/worker/requirements.txt"
+
+# CUDA, if there is a card. faster-whisper reaches these through
+# LD_LIBRARY_PATH rather than a system CUDA install — the same arrangement
+# the AutoQC worker on this box already proved, so both are wrong or right
+# together instead of failing in different ways.
+GPU_LIBS=""
+if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L >/dev/null 2>&1; then
+  say "     GPU found — installing CUDA runtime libraries"
+  "$APP_DIR/venv/bin/pip" install --quiet     nvidia-cublas-cu12 nvidia-cuda-nvrtc-cu12     nvidia-cuda-runtime-cu12 nvidia-cudnn-cu12
+  SP="$APP_DIR/venv/lib/python3.*/site-packages/nvidia"
+  GPU_LIBS=$(printf '%s' "$(echo $SP/cublas/lib):$(echo $SP/cuda_nvrtc/lib):$(echo $SP/cuda_runtime/lib):$(echo $SP/cudnn/lib)")
+  WHISPER_DEVICE=cuda
+  WHISPER_COMPUTE=float16
 else
-  "$APP_DIR/venv/bin/pip" install --quiet httpx pydantic pydantic-settings faster-whisper
+  say "     No GPU — the worker will transcribe on CPU"
+  WHISPER_DEVICE=cpu
+  WHISPER_COMPUTE=int8
 fi
 
 say "4/6  Worker code"
@@ -75,12 +89,28 @@ HUB_URL=https://hushed-chinchilla-210.convex.site
 # polling silently and 401ing forever.
 AMPLIFY_WORKER_SECRET=
 
-# Which Whisper model. Benchmark before changing it:
+# Which Whisper model, and on what.
+#
+# Measured on this box (RTX PRO 2000, 78-second clip, warm):
+#   small     30.8x realtime   ~1.3 min for a 40-minute sermon
+#   medium    19.5x realtime   ~2.1 min
+#   large-v3   7.7x realtime   ~5.2 min
+#
+# large-v3 is four times slower and still finishes a sermon in five minutes,
+# which is nothing for something that happens once a week. It earns that on
+# accuracy: on the test clip `medium` heard "God is holding" where the
+# preacher said "God is holy and" — a sentence that means nothing, in a
+# published blog post. It also punctuates properly, which matters when the
+# output is prose rather than captions.
+#
+# Re-measure before changing it:
 #   /opt/amplify-worker/venv/bin/python bench_whisper.py <a real sermon>
-# Speed is the easy half — the cost of a smaller model is misheard names and
-# scripture references, and that text gets published.
-WHISPER_MODEL=small
+WHISPER_MODEL=large-v3
+WHISPER_DEVICE=__DEVICE__
+WHISPER_COMPUTE_TYPE=__COMPUTE__
+LD_LIBRARY_PATH=__GPULIBS__
 ENV
+  sed -i "s|__DEVICE__|$WHISPER_DEVICE|; s|__COMPUTE__|$WHISPER_COMPUTE|; s|__GPULIBS__|$GPU_LIBS|"     "$CONF_DIR/worker.env"
   chmod 0640 "$CONF_DIR/worker.env"
   chown root:amplify "$CONF_DIR/worker.env"
   echo "  wrote $CONF_DIR/worker.env — the secret is still blank"

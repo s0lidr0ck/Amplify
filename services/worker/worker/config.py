@@ -40,7 +40,13 @@ class Settings(BaseSettings):
     # nothing; the cost is accuracy on names and scripture references, which
     # is exactly the text that gets published. Benchmark before choosing:
     # services/worker/bench_whisper.py
-    whisper_model: str = "small"
+    whisper_model: str = "large-v3"
+    # "cuda" or "cpu", and the matching compute type. Stated rather than
+    # auto-detected: on a box that shares its GPU with other work, silently
+    # falling back to CPU turns a five-minute job into an hour and nothing
+    # says so.
+    whisper_device: str = "auto"
+    whisper_compute_type: str = "auto"
     upload_dir: str = "uploads"
     s3_bucket: str = "amplify"
     s3_access_key: str = ""
