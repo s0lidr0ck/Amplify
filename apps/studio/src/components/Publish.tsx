@@ -61,6 +61,10 @@ export function Publish({ projectId }: { projectId: Id<"amplifyProjects"> }) {
   const mark = useMutation(api.amplifyPublish.mark);
   const playbackUrl = useAction(api.amplifyMedia.playbackUrl);
   const [busy, setBusy] = useState<string | null>(null);
+  const shareToken = useQuery(api.amplifyShare.linkFor, { projectId });
+  const createLink = useMutation(api.amplifyShare.createLink);
+  const revokeLink = useMutation(api.amplifyShare.revoke);
+  const [copied, setCopied] = useState(false);
 
   if (!drafts || !assets || publications === undefined) return null;
 
@@ -101,6 +105,47 @@ export function Publish({ projectId }: { projectId: Id<"amplifyProjects"> }) {
           written from it.
         </p>
       )}
+
+      {/* Before any of it goes out, the person who preached it usually wants
+          to read it — and he has no login. Without this the review happens
+          by pasting six things into a text message, which is how the wrong
+          version gets approved. */}
+      <div className="flex flex-wrap items-center gap-2.5 rounded-xl bg-surface-strong px-3.5 py-2.5">
+        <span className="text-[0.8125rem] text-muted">
+          {shareToken
+            ? "Anyone with the link can read the writing."
+            : "Send it to the pastor to check first."}
+        </span>
+        {shareToken ? (
+          <div className="ml-auto flex items-center gap-2.5">
+            <button
+              onClick={() => {
+                void navigator.clipboard.writeText(
+                  `${window.location.origin}/share/${shareToken}`,
+                );
+                setCopied(true);
+                window.setTimeout(() => setCopied(false), 2000);
+              }}
+              className="rounded-lg bg-ink px-3 py-1.5 text-2xs font-medium text-white hover:bg-ink/85"
+            >
+              {copied ? "Copied" : "Copy the link"}
+            </button>
+            <button
+              onClick={() => void revokeLink({ projectId })}
+              className="text-2xs text-muted underline hover:text-ink"
+            >
+              Turn it off
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => void createLink({ projectId })}
+            className="ml-auto rounded-lg bg-ink px-3 py-1.5 text-2xs font-medium text-white hover:bg-ink/85"
+          >
+            Make a link
+          </button>
+        )}
+      </div>
 
       <ul className="-mx-5 -mb-5 border-t border-border">
         {TARGETS.map((target) => {

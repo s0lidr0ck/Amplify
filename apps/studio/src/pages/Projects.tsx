@@ -46,6 +46,9 @@ function NewSermon({
   const createProject = useMutation(api.amplify.createProject);
   const [title, setTitle] = useState("");
   const [speaker, setSpeaker] = useState("");
+  const speakers = useQuery(api.amplifyLibrary.speakers, {
+    churchId: churchId as Id<"churches">,
+  });
   const [sermonDate, setSermonDate] = useState(todayLocal());
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -93,12 +96,24 @@ function NewSermon({
         </label>
         <label className="grid gap-1">
           <span className="text-2xs text-muted">Speaker</span>
+          {/* Suggestions, not a dropdown. Churches have guests, and a
+              required list makes filing a guest sermon a small bureaucratic
+              event. But free text drifts — the same preacher becomes
+              "Bro. Cory", "Cory Sanders" and "cory", and then no filter
+              finds all three. A datalist offers the history and still lets
+              anyone type a name that has never been used. */}
           <input
             value={speaker}
             onChange={(e) => setSpeaker(e.target.value)}
             placeholder="Who preached it"
+            list="known-speakers"
             className={field}
           />
+          <datalist id="known-speakers">
+            {(speakers ?? []).map((s) => (
+              <option key={s.name} value={s.name} />
+            ))}
+          </datalist>
         </label>
         <label className="grid gap-1">
           <span className="text-2xs text-muted">Date preached</span>

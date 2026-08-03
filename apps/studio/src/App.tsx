@@ -10,6 +10,7 @@ import { LibraryPage } from "./pages/Library";
 import { ProjectPage } from "./pages/Project";
 import { ProjectsPage } from "./pages/Projects";
 import { SettingsPage } from "./pages/Settings";
+import { SharedPage } from "./pages/Shared";
 
 /**
  * Amplify — stage two.
@@ -38,9 +39,22 @@ function Waiting({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <HubGate>
-      <Inside />
-    </HubGate>
+    // The router sits OUTSIDE the sign-in gate so one route can escape it.
+    // A pastor opening a share link has no account and is not going to make
+    // one; a link that redirects him to sign in is a link that does nothing.
+    <BrowserRouter>
+      <Routes>
+        <Route path="/share/:token" element={<SharedPage />} />
+        <Route
+          path="*"
+          element={
+            <HubGate>
+              <Inside />
+            </HubGate>
+          }
+        />
+      </Routes>
+    </BrowserRouter>
   );
 }
 
@@ -78,29 +92,21 @@ function Inside() {
   const current = churches.find((c) => c.churchId === churchId) ?? churches[0];
 
   return (
-    <BrowserRouter>
+    // No Router here — App owns the only one, so that the share route can sit
+    // outside the sign-in gate. Two Routers is a blank white page and an
+    // exception that names neither of them.
+    <Shell church={current} churches={churches} onChooseChurch={chooseChurch}>
       {/* One bar for every page. Each screen used to invent its own header,
           so moving between them felt like leaving the product — and the
           sermon page showed no church at all, which is the one thing here
           that is expensive to get wrong. */}
-      <Shell church={current} churches={churches} onChooseChurch={chooseChurch}>
-        <Routes>
-          <Route
-            path="/projects"
-            element={<ProjectsPage churchId={churchId} />}
-          />
-          <Route path="/projects/:id" element={<ProjectPage />} />
-          <Route
-            path="/library"
-            element={<LibraryPage churchId={churchId} />}
-          />
-          <Route
-            path="/settings"
-            element={<SettingsPage churchId={churchId} />}
-          />
-          <Route path="*" element={<Navigate to="/projects" replace />} />
-        </Routes>
-      </Shell>
-    </BrowserRouter>
+      <Routes>
+        <Route path="/projects" element={<ProjectsPage churchId={churchId} />} />
+        <Route path="/projects/:id" element={<ProjectPage />} />
+        <Route path="/library" element={<LibraryPage churchId={churchId} />} />
+        <Route path="/settings" element={<SettingsPage churchId={churchId} />} />
+        <Route path="*" element={<Navigate to="/projects" replace />} />
+      </Routes>
+    </Shell>
   );
 }
