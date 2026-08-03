@@ -3,80 +3,56 @@ import { api } from "@convex/api";
 import type { Id } from "@convex/dataModel";
 import { useState } from "react";
 
+import { errorText } from "../lib/errorText";
+
 /**
- * Everything for one sermon, gathered in the order it goes out.
+ * Sending it out.
  *
- * This does not post for you. Posting to YouTube, Instagram, TikTok and
- * Facebook needs an app registration and an OAuth token per platform per
- * church, and those are the church's to obtain — a button here that
- * pretended otherwise would be a lie with a spinner on it.
+ * Two ways, one list. Where the church has connected the account, Amplify
+ * posts it and records what came back. Where it hasn't, somebody posts it by
+ * hand and ticks it off — and that tick stays whether or not anything is
+ * connected, because the question a media team cannot answer on a Tuesday is
+ * "did anybody put the reel up?", and the usual answer is a group chat.
  *
- * What it does is remove the part that actually wastes the time: hunting for
- * the right caption, the right file, and the right thumbnail brief across
- * six screens on a Monday morning. One place, in publishing order, with the
- * copy one press away and a record of what has already gone out — so the
- * question "did anyone post the reel?" has an answer.
+ * What can go where is decided on the server, not here. It used to be a list
+ * of required pieces in this file and a second list in the backend, and the
+ * moment those two disagree the button lies about what it is going to post.
  */
 
-type Target = {
-  id: string;
-  label: string;
-  /** What you need in hand before this one can go out. */
-  needs: string[];
-  note: string;
+/** What each row is, in a sentence, when there is nothing more urgent to say. */
+const NOTES: Record<string, string> = {
+  youtube: "The full sermon, with its title and description.",
+  facebook: "The short written version.",
+  instagram: "The clip, as a reel.",
+  tiktok: "The clip.",
+  blog: "The long-form write-up, for your website.",
 };
 
-const TARGETS: Target[] = [
-  {
-    id: "youtube",
-    label: "YouTube",
-    needs: ["sermon_master", "youtube_packaging"],
-    note: "The full sermon, with its title and description.",
-  },
-  {
-    id: "blog",
-    label: "Website",
-    needs: ["blog_post"],
-    note: "The long-form write-up.",
-  },
-  {
-    id: "reel",
-    label: "Reels & Shorts",
-    needs: ["clip", "reel"],
-    note: "The clip, with a caption per platform.",
-  },
-  {
-    id: "social",
-    label: "Text post",
-    needs: ["facebook_post"],
-    note: "The short version.",
-  },
-];
-
 export function Publish({ projectId }: { projectId: Id<"amplifyProjects"> }) {
-  const drafts = useQuery(api.amplifyDrafts.list, { projectId });
-  const assets = useQuery(api.amplifyMedia.listAssets, { projectId });
-  const transcript = useQuery(api.amplifyTranscripts.summary, { projectId });
+  const rows = useQuery(api.amplifyPublish.readiness, { projectId });
   const publications = useQuery(api.amplifyPublish.list, { projectId });
+  const transcript = useQuery(api.amplifyTranscripts.summary, { projectId });
+  const assets = useQuery(api.amplifyMedia.listAssets, { projectId });
+
   const mark = useMutation(api.amplifyPublish.mark);
+  const send = useMutation(api.amplifyPublish.send);
   const playbackUrl = useAction(api.amplifyMedia.playbackUrl);
+
   const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const shareToken = useQuery(api.amplifyShare.linkFor, { projectId });
   const createLink = useMutation(api.amplifyShare.createLink);
   const revokeLink = useMutation(api.amplifyShare.revoke);
   const [copied, setCopied] = useState(false);
 
-  if (!drafts || !assets || publications === undefined) return null;
+  if (!rows || publications === undefined || !assets) return null;
 
-  const have = new Set<string>([
-    ...drafts.filter((d) => d.status === "ready").map((d) => d.kind),
-    ...assets.map((a) => a.kind),
-  ]);
   const done = new Map(publications.map((p) => [p.target, p]));
+  const out = publications.filter((p) => p.status === "posted").length;
   const approved = transcript?.approved ?? false;
 
-  const download = async (kind: string) => {
-    const asset = assets.find((a) => a.kind === kind);
+  const openFile = async (kind: string) => {
+    const asset = assets.find((a) => a.kind === kind && a.status === "ready");
     if (!asset) return;
     setBusy(kind);
     try {
@@ -92,7 +68,7 @@ export function Publish({ projectId }: { projectId: Id<"amplifyProjects"> }) {
       <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
         <p className="card-title">Publishing</p>
         <span className="data">
-          {done.size} of {TARGETS.length} out
+          {out} of {rows.length} out
         </span>
       </div>
 
@@ -147,75 +123,126 @@ export function Publish({ projectId }: { projectId: Id<"amplifyProjects"> }) {
         )}
       </div>
 
+      {error && <p className="text-[0.8125rem] text-danger">{error}</p>}
+
       <ul className="-mx-5 -mb-5 border-t border-border">
-        {TARGETS.map((target) => {
-          const missing = target.needs.filter((n) => !have.has(n));
-          const out = done.get(target.id);
-          const file = target.needs.find(
-            (n) => n === "sermon_master" || n === "clip",
-          );
+        {rows.map((row) => {
+          const record = done.get(row.destination);
+          const sending = record?.status === "sending";
+          const posted = record?.status === "posted";
+          const failed = record?.status === "failed";
+          const file =
+            row.destination === "youtube"
+              ? "sermon_master"
+              : row.destination === "instagram" || row.destination === "tiktok"
+                ? "clip"
+                : null;
 
           return (
             <li
-              key={target.id}
+              key={row.destination}
               className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-border px-5 py-3.5 last:border-0"
             >
-              <div className="flex-1">
-                <p className="text-[0.9375rem] font-semibold text-ink">
-                  {target.label}
+              <div className="min-w-0 flex-1">
+                <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.9375rem] font-semibold text-ink">
+                  {row.label}
+                  {posted && record.automatic && (
+                    <span className="rounded-md bg-ok-soft px-2 py-0.5 text-2xs font-medium text-ok">
+                      posted by Amplify
+                    </span>
+                  )}
+                  {sending && (
+                    // The only rose on this card, and only while something is
+                    // genuinely in flight.
+                    <span className="rounded-md bg-brand-soft px-2 py-0.5 text-2xs font-medium text-brand-strong">
+                      sending
+                    </span>
+                  )}
                 </p>
                 <p className="text-[0.8125rem] text-muted">
-                  {missing.length > 0
-                    ? // Named, not counted. "Missing 2 things" sends somebody
-                      // looking; naming them sends them to the right button.
-                      `Still needs the ${missing
-                        .map(
-                          (m) =>
-                            ({
-                              sermon_master: "trimmed sermon",
-                              youtube_packaging: "title and description",
-                              blog_post: "blog post",
-                              facebook_post: "text post",
-                              clip: "clip cut",
-                              reel: "reel captions",
-                            })[m] ?? m,
-                        )
-                        .join(" and the ")}`
-                    : out
-                      ? `Marked as posted ${new Date(out.publishedAt).toLocaleDateString()}`
-                      : target.note}
+                  {failed
+                    ? // The platform's own words. "Publishing failed" sends
+                      // somebody to the wrong place.
+                      (record.error ?? "That didn't go through.")
+                    : posted
+                      ? record.publishedAt
+                        ? `Posted ${new Date(record.publishedAt).toLocaleDateString()}`
+                        : "Posted"
+                      : sending
+                        ? "Amplify is uploading it now."
+                        : (row.reason ?? NOTES[row.destination] ?? "")}
                 </p>
               </div>
 
-              {missing.length === 0 && (
-                <div className="flex items-center gap-2.5">
-                  {file && have.has(file) && (
-                    <button
-                      disabled={busy === file}
-                      onClick={() => void download(file)}
-                      className="text-2xs text-muted underline hover:text-ink disabled:opacity-40"
-                    >
-                      {busy === file ? "Opening…" : "Open the file"}
-                    </button>
-                  )}
+              <div className="flex flex-wrap items-center gap-2.5">
+                {posted && record.externalUrl && (
+                  <a
+                    href={record.externalUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-2xs text-muted underline hover:text-ink"
+                  >
+                    See it
+                  </a>
+                )}
+                {file && assets.some((a) => a.kind === file && a.status === "ready") && (
+                  <button
+                    disabled={busy === file}
+                    onClick={() => void openFile(file)}
+                    className="text-2xs text-muted underline hover:text-ink disabled:opacity-40"
+                  >
+                    {busy === file ? "Opening…" : "Open the file"}
+                  </button>
+                )}
+
+                {/* Posting for you is the better answer where it is
+                    available, so it gets the solid button; the manual tick
+                    stays beside it, quiet, for everywhere it isn't. */}
+                {row.canPost && !posted && !sending && (
+                  <button
+                    disabled={busy === row.destination}
+                    onClick={async () => {
+                      setBusy(row.destination);
+                      setError(null);
+                      try {
+                        await send({ projectId, destination: row.destination });
+                      } catch (e) {
+                        setError(errorText(e, "Couldn't send that"));
+                      } finally {
+                        setBusy(null);
+                      }
+                    }}
+                    className="rounded-lg bg-ink px-3 py-1.5 text-2xs font-medium text-white transition-colors hover:bg-ink/85 disabled:opacity-40"
+                  >
+                    {busy === row.destination
+                      ? "Sending…"
+                      : failed
+                        ? "Try again"
+                        : "Post it"}
+                  </button>
+                )}
+
+                {!sending && (
                   <button
                     onClick={() =>
                       void mark({
                         projectId,
-                        target: target.id,
-                        posted: !out,
+                        target: row.destination,
+                        posted: !posted,
                       })
                     }
                     className={`rounded-lg px-3 py-1.5 text-2xs font-medium transition-colors ${
-                      out
+                      posted
                         ? "bg-ok-soft text-ok hover:bg-surface-strong"
-                        : "bg-ink text-white hover:bg-ink/85"
+                        : row.canPost
+                          ? "border border-border bg-surface text-muted hover:border-border-strong hover:text-ink"
+                          : "bg-ink text-white hover:bg-ink/85"
                     }`}
                   >
-                    {out ? "Posted" : "Mark as posted"}
+                    {posted ? "Posted" : "Mark as posted"}
                   </button>
-                </div>
-              )}
+                )}
+              </div>
             </li>
           );
         })}

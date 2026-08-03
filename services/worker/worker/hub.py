@@ -18,6 +18,7 @@ job it already holds.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import socket
@@ -174,6 +175,45 @@ class Hub:
             "upload-url", {"jobId": job.job_id, "kind": kind, "filename": filename}
         )
         return data["uploadUrl"], data["storageKey"]
+
+    # ── credentials ─────────────────────────────────────────────────────────
+
+    def credential(self, job: Job, platform: str) -> dict[str, Any]:
+        """The church's credential for one platform, for this job only.
+
+        Asked for at the moment of use rather than handed over with the job.
+        A claimed job sits in this process for as long as the upload takes —
+        up to an hour for a sermon master — and a refresh token that rides
+        along with it ends up in a log line, a traceback, or a queue row
+        somebody dumps while debugging.
+
+        Convex checks two things: the shared secret, and that this worker
+        still holds the claim. A container that went stale and lost its job
+        to somebody else gets nothing.
+        """
+        try:
+            data = self._post("credential", {"jobId": job.job_id, "platform": platform})
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 401:
+                # Either the connection was removed after this job was queued,
+                # or the claim went stale and somebody else has the job. Both
+                # read the same from here, and both are fixed the same way.
+                raise RuntimeError(
+                    f"There's no {platform} connection for this church any "
+                    "more. Connect it in Settings and send it again."
+                ) from exc
+            raise
+        try:
+            return json.loads(data["secretJson"])
+        except (KeyError, ValueError) as exc:
+            # Deliberately does not quote the value. This string reaches the
+            # job log, which people paste into chat.
+            raise RuntimeError(
+                f"The saved {platform} connection isn't readable as JSON. "
+                "Reconnect it in Settings."
+            ) from exc
+
+    # ── files ───────────────────────────────────────────────────────────────
 
     def upload_file(self, job: Job, kind: str, path: str, content_type: str) -> str:
         """Send a finished file to S3 and return its key."""
