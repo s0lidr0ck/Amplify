@@ -7,6 +7,7 @@ import { useChurch } from "./auth/useChurch";
 import { Mark } from "./brand/Mark";
 import { ProjectPage } from "./pages/Project";
 import { ProjectsPage } from "./pages/Projects";
+import { SettingsPage } from "./pages/Settings";
 
 /**
  * Amplify — stage two.
@@ -86,6 +87,10 @@ function Inside() {
           }
         />
         <Route path="/projects/:id" element={<ProjectPage />} />
+        <Route
+          path="/settings"
+          element={<SettingsPage churchId={churchId} />}
+        />
         <Route path="*" element={<Navigate to="/projects" replace />} />
       </Routes>
     </BrowserRouter>

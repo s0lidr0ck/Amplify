@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { Mark } from "../brand/Mark";
+import { Outputs } from "../components/Outputs";
 import { formatBytes, uploadToS3, type UploadProgress } from "../lib/upload";
 
 /**
@@ -231,6 +232,8 @@ export function ProjectPage() {
           <SourceUpload projectId={projectId} />
         )}
       </div>
+
+      <Outputs projectId={projectId} />
 
       <Jobs projectId={projectId} />
     </div>

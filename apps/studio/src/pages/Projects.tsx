@@ -160,6 +160,12 @@ export function ProjectsPage({
           </span>
         </div>
         <div className="flex items-center gap-2.5">
+          <Link
+            to="/settings"
+            className="text-2xs text-muted underline hover:text-ink"
+          >
+            Settings
+          </Link>
           {/* Only when there is a real choice. One church needs no chooser,
               and offering one is a step that never had an answer — but with
               two, silently taking the first files a sermon under the wrong
