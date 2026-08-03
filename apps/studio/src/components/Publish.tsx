@@ -113,8 +113,8 @@ export function Publish({ projectId }: { projectId: Id<"amplifyProjects"> }) {
       <div className="flex flex-wrap items-center gap-2.5 rounded-xl bg-surface-strong px-3.5 py-2.5">
         <span className="text-[0.8125rem] text-muted">
           {shareToken
-            ? "Anyone with the link can read the writing."
-            : "Send it to the pastor to check first."}
+            ? "Anyone with the link can read the writing. Nothing else."
+            : "Send it to the pastor to check first — no login needed."}
         </span>
         {shareToken ? (
           <div className="ml-auto flex items-center gap-2.5">
