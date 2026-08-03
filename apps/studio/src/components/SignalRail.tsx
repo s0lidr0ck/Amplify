@@ -131,34 +131,42 @@ export function SignalRail({
           come off that one thing" — the earlier version used a fixed-height
           bracket, which rendered as a stray stub because a percentage
           height has nothing to be a percentage of inside a flex row. */}
+      {/* The fan and the gather share one rule, because they are one
+          movement: everything after the transcript hangs off this line, and
+          publishing is where the line ends. Drawing them as two detached
+          rows left Publish behind a horizontal dash that connected to
+          nothing — a stub floating in the margin, which reads as a rendering
+          fault rather than a step. */}
       <div className="flex items-stretch gap-3 pl-1">
         <span className="w-px shrink-0 bg-border-strong" aria-hidden />
-        <ul className="flex flex-wrap items-center gap-x-4 gap-y-2 py-0.5">
+        <div className="grid gap-2.5 py-0.5">
+          <ul className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            {FAN.map((stage) => (
+              <li key={stage.id}>
+                <Stage
+                  label={stage.label}
+                  verdict={at(stage.id)}
+                  onSelect={onSelect ? () => onSelect(stage.id) : undefined}
+                />
+              </li>
+            ))}
+          </ul>
 
-          {FAN.map((stage) => (
-            <li key={stage.id}>
-              <Stage
-                label={stage.label}
-                verdict={at(stage.id)}
-                onSelect={onSelect ? () => onSelect(stage.id) : undefined}
-              />
-            </li>
-          ))}
-        </ul>
+          {/* The hairline is the fan converging. Publishing is not a fifth
+              sibling — it is the one thing that needs all of them. */}
+          <ol className="flex flex-wrap items-center gap-3 border-t border-border pt-2.5">
+            {GATHER.map((stage) => (
+              <li key={stage.id}>
+                <Stage
+                  label={stage.label}
+                  verdict={at(stage.id)}
+                  onSelect={onSelect ? () => onSelect(stage.id) : undefined}
+                />
+              </li>
+            ))}
+          </ol>
+        </div>
       </div>
-
-      <ol className="flex flex-wrap items-center gap-3">
-        {GATHER.map((stage) => (
-          <li key={stage.id} className="flex items-center gap-3">
-            <span className="h-px w-5 bg-border" aria-hidden />
-            <Stage
-              label={stage.label}
-              verdict={at(stage.id)}
-              onSelect={onSelect ? () => onSelect(stage.id) : undefined}
-            />
-          </li>
-        ))}
-      </ol>
 
       {/* One reason at a time, and only when something is actually blocked.
           A list of every unmet dependency reads as a wall of refusals. */}

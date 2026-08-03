@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 
 import { Mark } from "../brand/Mark";
 import { nextStep, ProgressRail, type Progress } from "../components/Progress";
+import { errorText } from "../lib/errorText";
 
 /**
  * The sermon list, and adding one.
@@ -68,13 +69,7 @@ function NewSermon({
         setSpeaker("");
         setSermonDate(todayLocal());
       })
-      .catch((e: unknown) =>
-        setError(
-          e instanceof Error
-            ? e.message.replace(/^.*Error:\s*/, "")
-            : "Couldn't add that",
-        ),
-      )
+      .catch((e: unknown) => setError(errorText(e, "Couldn't add that")))
       .finally(() => setSaving(false));
   };
 

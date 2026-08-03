@@ -11,6 +11,7 @@ import { Publish } from "../components/Publish";
 import { SignalRail } from "../components/SignalRail";
 import { Transcript } from "../components/Transcript";
 import { Trim } from "../components/Trim";
+import { errorText } from "../lib/errorText";
 import { shortName } from "../lib/names";
 import { stageStates, type StageProgress } from "../lib/stageGating";
 import {
@@ -90,11 +91,7 @@ function SourceUpload({ projectId }: { projectId: Id<"amplifyProjects"> }) {
       if (began) {
         void abandonUpload({ projectId, ...began }).catch(() => {});
       }
-      setError(
-        e instanceof Error
-          ? e.message.replace(/^.*Error:\s*/, "")
-          : "Upload failed",
-      );
+      setError(errorText(e, "Upload failed"));
       setProgress(null);
     } finally {
       abortRef.current = null;

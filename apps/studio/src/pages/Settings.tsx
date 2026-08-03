@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { Mark } from "../brand/Mark";
+import { errorText } from "../lib/errorText";
 
 /**
  * How this church sounds, and the prompts it can change.
@@ -211,11 +212,7 @@ function Connections({ churchId }: { churchId: string }) {
                           });
                           close();
                         } catch (e) {
-                          setError(
-                            e instanceof Error
-                              ? e.message.replace(/^.*Error:\s*/, "")
-                              : "Couldn't save that",
-                          );
+                          setError(errorText(e, "Couldn't save that"));
                         } finally {
                           setSaving(false);
                         }

@@ -3,6 +3,7 @@ import { api } from "@convex/api";
 import type { Id } from "@convex/dataModel";
 import { useEffect, useRef, useState } from "react";
 
+import { errorText } from "../lib/errorText";
 import { hhmmss, TimeMark } from "./TimeMark";
 
 /**
@@ -333,11 +334,7 @@ export function Clips({
             try {
               await findClips({ projectId });
             } catch (e) {
-              setError(
-                e instanceof Error
-                  ? e.message.replace(/^.*Error:\s*/, "")
-                  : "Could not read the sermon for clips",
-              );
+              setError(errorText(e, "Could not read the sermon for clips"));
             } finally {
               setBusy(false);
             }

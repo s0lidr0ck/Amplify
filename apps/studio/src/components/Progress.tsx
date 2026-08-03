@@ -36,6 +36,7 @@ export function ProgressRail({
   className?: string;
 }) {
   const done = STAGES.filter((s) => progress?.[s.key]).length;
+  const next = nextStep(progress);
 
   return (
     <div
@@ -49,15 +50,25 @@ export function ProgressRail({
           : "Progress loading"
       }
     >
-      {STAGES.map((stage) => (
-        <span
-          key={stage.key}
-          title={stage.label}
-          className={`h-1.5 w-5 rounded-full transition-colors ${
-            progress?.[stage.key] ? "bg-brand" : "bg-border"
-          }`}
-        />
-      ))}
+      {STAGES.map((stage) => {
+        const isDone = Boolean(progress?.[stage.key]);
+        const isNext = progress !== undefined && !isDone && stage.next === next;
+
+        return (
+          <span
+            key={stage.key}
+            title={stage.label}
+            // Rose is this product's signal for "here, now" and nothing else
+            // — so exactly one segment per row can wear it, and it is the one
+            // somebody can act on. Filling every finished stage with it made
+            // four rose bars a row, which is four announcements and no
+            // signal. Done is ink; the rest is the ground.
+            className={`h-1.5 w-5 rounded-full transition-colors ${
+              isDone ? "bg-ink" : isNext ? "bg-brand" : "bg-border"
+            }`}
+          />
+        );
+      })}
     </div>
   );
 }
