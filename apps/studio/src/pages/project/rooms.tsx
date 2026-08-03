@@ -2,10 +2,11 @@ import { useOutletContext } from "react-router-dom";
 import type { Id } from "@convex/dataModel";
 
 import { Clips } from "../../components/Clips";
-import { Outputs } from "../../components/Outputs";
+import { PiecePage } from "../../components/PiecePage";
 import { Publish } from "../../components/Publish";
 import { Reels } from "../../components/Reels";
 import { Transcript } from "../../components/Transcript";
+import { WritingList } from "../../components/WritingList";
 import { STAGES, type StageSlug } from "../../lib/stages";
 
 /**
@@ -72,9 +73,15 @@ export function WritingRoom() {
   return (
     <div className="grid gap-5">
       <RoomHeading slug="writing" />
-      <Outputs projectId={projectId} />
+      <WritingList projectId={projectId} />
     </div>
   );
+}
+
+/** One piece of writing, on a page of its own. */
+export function WritingPieceRoom() {
+  const { projectId } = useRoom();
+  return <PiecePage projectId={projectId} />;
 }
 
 export function ClipsRoom() {

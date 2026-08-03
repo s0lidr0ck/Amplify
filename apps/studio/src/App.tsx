@@ -13,6 +13,7 @@ import {
   PublishRoom,
   SourceRoom,
   TranscriptRoom,
+  WritingPieceRoom,
   WritingRoom,
 } from "./pages/project/rooms";
 import { ProjectsPage } from "./pages/Projects";
@@ -117,6 +118,10 @@ function Inside() {
           <Route path="source" element={<SourceRoom />} />
           <Route path="transcript" element={<TranscriptRoom />} />
           <Route path="writing" element={<WritingRoom />} />
+          {/* Each piece is a place, so it can be linked to and returned to
+              — and so its actions have somewhere to live other than beside
+              four pieces they have nothing to do with. */}
+          <Route path="writing/:kind" element={<WritingPieceRoom />} />
           <Route path="clips" element={<ClipsRoom />} />
           <Route path="publish" element={<PublishRoom />} />
         </Route>

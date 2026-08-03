@@ -282,8 +282,13 @@ export function ProjectPage() {
     );
   }
 
-  const slug = location.pathname.split("/").pop() as StageSlug;
-  const current = STAGES.find((s) => s.slug === slug);
+  // Which room, from anywhere inside it. Taking the last path segment broke
+  // the moment a room got a child: /writing/blog_post reads as the room
+  // "blog_post", finds no such stage, and bounces you back out of the piece
+  // you just opened.
+  const segments = location.pathname.split("/");
+  const current = STAGES.find((s) => segments.includes(s.slug));
+  const slug = current?.slug as StageSlug;
 
   // Opened without saying where: go to the room that actually wants them.
   // Landing on Source every time means reading past finished work to reach

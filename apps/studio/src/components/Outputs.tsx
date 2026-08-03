@@ -33,7 +33,7 @@ type Piece = {
   needs?: string;
 };
 
-const PIECES: Piece[] = [
+export const PIECES: Piece[] = [
   {
     kind: "metadata",
     label: "Sermon details",
@@ -174,7 +174,7 @@ ${(current.tags ?? []).join(" ")}`,
 }
 
 /** Renders a draft's payload without pretending to know every shape. */
-function Preview({ payloadJson }: { payloadJson: string }) {
+export function Preview({ payloadJson }: { payloadJson: string }) {
   let parsed: unknown;
   try {
     parsed = JSON.parse(payloadJson);
@@ -235,7 +235,7 @@ function Preview({ payloadJson }: { payloadJson: string }) {
 /** Only the prose kinds are worth a plain textarea; the structured ones
  *  would turn into hand-edited JSON, which is a worse tool than the button
  *  that regenerates them. */
-function isProse(payloadJson: string): boolean {
+export function isProse(payloadJson: string): boolean {
   try {
     const o = JSON.parse(payloadJson) as Record<string, unknown>;
     return typeof o.markdown === "string" || typeof o.text === "string";
@@ -252,7 +252,7 @@ function isProse(payloadJson: string): boolean {
  * marks the draft as edited, which is what makes the warning before a
  * regeneration honest.
  */
-function DraftEditor({
+export function DraftEditor({
   draftId,
   payloadJson,
   onDone,
@@ -305,222 +305,3 @@ function DraftEditor({
   );
 }
 
-function PieceRow({
-  piece,
-  projectId,
-  draft,
-  have,
-}: {
-  piece: Piece;
-  projectId: Id<"amplifyProjects">;
-  draft: {
-    _id: Id<"amplifyDrafts">;
-    payloadJson: string;
-    status: string;
-    error: string | null;
-    editedByHuman: boolean;
-    updatedAt: number;
-  } | undefined;
-  /** Which kinds already exist, for the pieces built on other pieces. */
-  have: Set<string>;
-}) {
-  // Hooks cannot be conditional, so a piece with no generator of its own
-  // still names one — it just never calls it. The reel is made beside the
-  // clip it comes from, which is the only place the choice makes sense.
-  // Two modules produce these, so the row resolves its own action. The
-  // alternative — one module re-exporting everything — would make every
-  // generation import every other one.
-  const run = useAction(api.amplifyGenerate[piece.run ?? "metadata"]);
-  const thumbnailPrompt = useAction(api.amplifyGenerate.thumbnailPrompt);
-  const [busy, setBusy] = useState(false);
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [copying, setCopying] = useState(false);
-  const [copyNote, setCopyNote] = useState<string | null>(null);
-
-  const blocked = piece.needs !== undefined && !have.has(piece.needs);
-  const ready = draft?.status === "ready";
-
-  return (
-    <li className="grid gap-2 border-b border-border px-4 py-3 last:border-0">
-      <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-        <span className="text-[0.9375rem] font-semibold text-ink">{piece.label}</span>
-        {draft?.editedByHuman && (
-          <span className="text-2xs text-muted">edited</span>
-        )}
-        {draft?.status === "failed" && (
-          <span className="rounded-md bg-danger-soft px-2 py-0.5 text-2xs font-medium text-danger">
-            failed
-          </span>
-        )}
-
-        <div className="ml-auto flex items-center gap-2.5">
-          {ready && (
-            <button
-              onClick={() => setOpen(!open)}
-              className="text-2xs text-muted underline hover:text-ink"
-            >
-              {open ? "Hide" : "Read"}
-            </button>
-          )}
-          {piece.run === null ? null : (
-          <button
-            disabled={busy || blocked}
-            onClick={async () => {
-              setBusy(true);
-              try {
-                await run({ projectId });
-              } finally {
-                setBusy(false);
-              }
-            }}
-            // Weight follows what is left to do. Every row carried the same
-            // solid button, so seven pieces of writing meant seven identical
-            // black rectangles down the page — and the one thing that had
-            // not been written yet looked exactly like the six that had.
-            // Rewriting something finished is a second thought; it gets a
-            // second thought's weight.
-            className={`rounded-lg px-3 py-1.5 text-2xs font-medium transition-colors disabled:opacity-40 ${
-              ready
-                ? "border border-border bg-surface text-muted hover:border-border-strong hover:text-ink"
-                : "bg-ink text-white hover:bg-ink/85"
-            }`}
-          >
-            {busy ? "Writing…" : ready ? "Write again" : "Write"}
-          </button>
-          )}
-        </div>
-      </div>
-
-      {/* An instruction that stays after it has been followed reads as a
-          complaint. Once the piece exists, the row says what it is. */}
-      <p className="text-[0.8125rem] text-muted">
-        {blocked
-          ? `Write the ${
-              piece.needs === "blog_post" ? "blog post" : "title and description"
-            } first — this one is built from it.`
-          : ready && piece.run === null
-            ? "Made from a clip. Pick a different one to replace it."
-            : piece.blurb}
-      </p>
-
-      {/* The reason, not just the fact. It is the only thing that tells
-          anyone whether to retry or fix something. */}
-      {draft?.error && (
-        <p className="text-[0.8125rem] text-danger">{draft.error}</p>
-      )}
-
-      {piece.kind === "thumbnail_concepts" && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          {/* Tuning a prompt without seeing the filled-in version is
-              guesswork: the template is a third of it, and the rest is the
-              voice block, the church's wording, and six substitutions whose
-              sizes are capped in ways the template never mentions. */}
-          <button
-            disabled={copying}
-            onClick={async () => {
-              setCopying(true);
-              setCopyNote(null);
-              try {
-                const built = await thumbnailPrompt({ projectId });
-                await navigator.clipboard.writeText(built);
-                setCopyNote(
-                  `Copied — ${built.length.toLocaleString()} characters`,
-                );
-              } catch (e) {
-                setCopyNote(
-                  e instanceof Error
-                    ? e.message.slice(0, 140)
-                    : "Couldn't build the prompt",
-                );
-              } finally {
-                setCopying(false);
-                window.setTimeout(() => setCopyNote(null), 6000);
-              }
-            }}
-            className="text-2xs text-muted underline hover:text-ink disabled:opacity-40"
-          >
-            {copying ? "Building…" : "Copy the prompt sent to Claude"}
-          </button>
-          {copyNote && <span className="text-2xs text-faint">{copyNote}</span>}
-        </div>
-      )}
-
-      {/* The concepts are a brief for an image tool; this is where the
-          finished picture comes back, beside the sermon it was made for
-          rather than in a download folder. */}
-      {piece.kind === "thumbnail_concepts" && ready && (
-        <AttachImage projectId={projectId} kind="sermon_thumbnail" />
-      )}
-
-      {open && ready && draft && (
-        <div className="rounded-xl bg-surface-strong p-3.5">
-          {editing ? (
-            <DraftEditor
-              draftId={draft._id}
-              payloadJson={draft.payloadJson}
-              onDone={() => setEditing(false)}
-            />
-          ) : (
-            <>
-              <Preview payloadJson={draft.payloadJson} />
-              {isProse(draft.payloadJson) && (
-                <button
-                  onClick={() => setEditing(true)}
-                  className="mt-2.5 text-2xs text-muted underline hover:text-ink"
-                >
-                  Edit this
-                </button>
-              )}
-            </>
-          )}
-        </div>
-      )}
-    </li>
-  );
-}
-
-export function Outputs({ projectId }: { projectId: Id<"amplifyProjects"> }) {
-  const transcript = useQuery(api.amplifyTranscripts.summary, { projectId });
-  const drafts = useQuery(api.amplifyDrafts.list, { projectId });
-
-  const byKind = new Map((drafts ?? []).map((d) => [d.kind, d]));
-  const have = new Set(
-    (drafts ?? []).filter((d) => d.status === "ready").map((d) => d.kind),
-  );
-
-  return (
-    <div className="card grid gap-3 p-4">
-      <div className="flex flex-wrap items-baseline gap-2">
-        {/* No title. The room is called Writing; saying it twice in fourteen
-            vertical pixels of each other is the page talking to itself. */}
-        {transcript && (
-          <span className="data">
-            {transcript.wordCount.toLocaleString()} words of transcript
-          </span>
-        )}
-      </div>
-
-      {transcript === null ? (
-        // Says what is missing rather than offering four buttons that would
-        // each fail the same way.
-        <p className="text-sm text-muted">
-          Everything here is written from the transcript. Transcribe the
-          sermon first.
-        </p>
-      ) : (
-        <ul className="-mx-4 -mb-4 border-t border-border">
-          {PIECES.map((piece) => (
-            <PieceRow
-              key={piece.kind}
-              piece={piece}
-              projectId={projectId}
-              draft={byKind.get(piece.kind)}
-              have={have}
-            />
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
