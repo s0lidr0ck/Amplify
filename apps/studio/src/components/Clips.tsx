@@ -163,6 +163,8 @@ function ClipRow({
 }) {
   const enqueue = useMutation(api.amplifyWorker.enqueue);
   const discard = useMutation(api.amplifyClips.discard);
+  const packageReel = useAction(api.amplifyReel.packageReel);
+  const [packaging, setPackaging] = useState(false);
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -227,6 +229,25 @@ function ClipRow({
               className="text-2xs text-muted underline hover:text-ink"
             >
               {editing ? "Done" : "Adjust"}
+            </button>
+          )}
+          {/* Only offered on a clip that exists as a file. Packaging a
+              suggestion nobody has cut yet writes captions for a video that
+              may never be made. */}
+          {exported && (
+            <button
+              disabled={packaging}
+              onClick={async () => {
+                setPackaging(true);
+                try {
+                  await packageReel({ clipId: clip._id });
+                } finally {
+                  setPackaging(false);
+                }
+              }}
+              className="text-2xs text-muted underline hover:text-ink disabled:opacity-40"
+            >
+              {packaging ? "Writing…" : "Make it the reel"}
             </button>
           )}
           <button

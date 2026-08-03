@@ -17,7 +17,10 @@ type Piece = {
   kind: string;
   label: string;
   blurb: string;
+  /** null when the piece is produced elsewhere — the reel is made from a
+   *  clip, so its button lives beside the clip rather than here. */
   run:
+    | null
     | "metadata"
     | "blogPost"
     | "youtubePackaging"
@@ -51,6 +54,12 @@ const PIECES: Piece[] = [
     blurb: "A shorter version for social.",
     run: "facebookPost",
     needs: "blog_post",
+  },
+  {
+    kind: "reel",
+    label: "Reel",
+    blurb: "Pick a clip and press “Make it the reel”.",
+    run: null,
   },
   {
     kind: "thumbnail_concepts",
@@ -129,6 +138,110 @@ function Variants({ variants }: { variants: Record<string, string>[] }) {
   );
 }
 
+/**
+ * The reel package: one clip, written for four different places.
+ *
+ * Per platform rather than as one document, because that is how it gets
+ * used — somebody has Instagram open, copies the caption, moves on. A single
+ * blob would make them hunt for the right paragraph four times.
+ */
+function ReelPackage({ payload }: { payload: Record<string, unknown> }) {
+  const social = (payload.social ?? {}) as Record<
+    string,
+    { title?: string; description?: string; tags?: string[] }
+  >;
+  const graphics = (payload.graphics ?? {}) as {
+    concepts?: { punch_phrase?: string; visual_theme?: string; overlay_style?: string; notes?: string }[];
+  };
+  const PLATFORMS: [string, string][] = [
+    ["instagram", "Instagram"],
+    ["tiktok", "TikTok"],
+    ["youtube", "YouTube Shorts"],
+    ["facebook", "Facebook"],
+  ];
+  const [tab, setTab] = useState("instagram");
+  const current = social[tab];
+
+  return (
+    <div className="grid gap-3">
+      {typeof payload.hook === "string" && (
+        <p className="font-display text-base font-semibold leading-snug text-ink">
+          {payload.hook}
+        </p>
+      )}
+
+      <div className="flex flex-wrap gap-1">
+        {PLATFORMS.map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={`rounded-lg px-2.5 py-1 text-2xs font-medium transition-colors ${
+              tab === key
+                ? "bg-ink text-white"
+                : "text-muted hover:bg-surface-strong hover:text-ink"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {current ? (
+        <div className="grid gap-2 rounded-xl bg-surface p-3.5">
+          <p className="text-[0.9375rem] font-semibold leading-snug text-ink">
+            {current.title}
+          </p>
+          <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted">
+            {current.description}
+          </p>
+          {current.tags && current.tags.length > 0 && (
+            <p className="text-[0.8125rem] text-faint">
+              {current.tags.join("  ")}
+            </p>
+          )}
+          <button
+            onClick={() =>
+              void navigator.clipboard.writeText(
+                `${current.title}
+
+${current.description}
+
+${(current.tags ?? []).join(" ")}`,
+              )
+            }
+            className="justify-self-start text-2xs text-muted underline hover:text-ink"
+          >
+            Copy for {PLATFORMS.find(([k]) => k === tab)?.[1]}
+          </button>
+        </div>
+      ) : (
+        <p className="text-sm text-muted">Nothing written for this one.</p>
+      )}
+
+      {graphics.concepts && graphics.concepts.length > 0 && (
+        <div className="grid gap-2">
+          <p className="section-label">Graphics</p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {graphics.concepts.map((c, i) => (
+              <div key={i} className="grid gap-1 rounded-xl bg-surface p-3">
+                <p className="font-display text-sm font-bold leading-tight text-ink">
+                  {c.punch_phrase}
+                </p>
+                <p className="text-[0.8125rem] leading-snug text-muted">
+                  {c.visual_theme}
+                </p>
+                {c.overlay_style && (
+                  <p className="text-2xs text-faint">{c.overlay_style}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Renders a draft's payload without pretending to know every shape. */
 function Preview({ payloadJson }: { payloadJson: string }) {
   let parsed: unknown;
@@ -144,6 +257,11 @@ function Preview({ payloadJson }: { payloadJson: string }) {
   // useful thing to do with three directions is compare them — stacked in a
   // list they read as a sequence, and someone works down it instead of
   // choosing.
+  // The reel carries a clip and four platform packages.
+  if (obj.social && typeof obj.social === "object") {
+    return <ReelPackage payload={obj} />;
+  }
+
   if (Array.isArray(obj.variants)) {
     return <Variants variants={obj.variants as Record<string, string>[]} />;
   }
@@ -201,7 +319,10 @@ function PieceRow({
   /** Which kinds already exist, for the pieces built on other pieces. */
   have: Set<string>;
 }) {
-  const run = useAction(api.amplifyGenerate[piece.run]);
+  // Hooks cannot be conditional, so a piece with no generator of its own
+  // still names one — it just never calls it. The reel is made beside the
+  // clip it comes from, which is the only place the choice makes sense.
+  const run = useAction(api.amplifyGenerate[piece.run ?? "metadata"]);
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
 
@@ -230,6 +351,7 @@ function PieceRow({
               {open ? "Hide" : "Read"}
             </button>
           )}
+          {piece.run === null ? null : (
           <button
             disabled={busy || blocked}
             onClick={async () => {
@@ -244,15 +366,20 @@ function PieceRow({
           >
             {busy ? "Writing…" : ready ? "Write again" : "Write"}
           </button>
+          )}
         </div>
       </div>
 
+      {/* An instruction that stays after it has been followed reads as a
+          complaint. Once the piece exists, the row says what it is. */}
       <p className="text-[0.8125rem] text-muted">
         {blocked
           ? `Write the ${
               piece.needs === "blog_post" ? "blog post" : "title and description"
             } first — this one is built from it.`
-          : piece.blurb}
+          : ready && piece.run === null
+            ? "Made from a clip. Pick a different one to replace it."
+            : piece.blurb}
       </p>
 
       {/* The reason, not just the fact. It is the only thing that tells

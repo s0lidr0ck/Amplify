@@ -11,7 +11,11 @@ import { SignalRail } from "../components/SignalRail";
 import { Transcript } from "../components/Transcript";
 import { Trim } from "../components/Trim";
 import { stageStates, type StageProgress } from "../lib/stageGating";
-import { formatBytes, uploadToS3, type UploadProgress } from "../lib/upload";
+import {
+  formatBytes,
+  uploadInParts,
+  type UploadProgress,
+} from "../lib/multipart";
 
 /**
  * One sermon: what has been uploaded, and what the worker is doing about it.
@@ -22,7 +26,9 @@ import { formatBytes, uploadToS3, type UploadProgress } from "../lib/upload";
  */
 
 function SourceUpload({ projectId }: { projectId: Id<"amplifyProjects"> }) {
-  const requestUpload = useAction(api.amplifyMedia.requestUpload);
+  const beginUpload = useAction(api.amplifyUpload.begin);
+  const completeUpload = useAction(api.amplifyUpload.complete);
+  const abandonUpload = useAction(api.amplifyUpload.abandon);
   const recordAsset = useMutation(api.amplifyMedia.recordAsset);
   const [progress, setProgress] = useState<UploadProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -31,21 +37,41 @@ function SourceUpload({ projectId }: { projectId: Id<"amplifyProjects"> }) {
 
   const start = async (file: File) => {
     setError(null);
-    setProgress({ percent: 0, loaded: 0, total: file.size });
+    setProgress({
+      percent: 0,
+      loaded: 0,
+      total: file.size,
+      partsDone: 0,
+      partsTotal: 0,
+    });
+
+    let began: { uploadId: string; storageKey: string } | null = null;
     try {
-      // Two steps on purpose. The upload happens between them and might not
-      // finish; a row written first would claim media that does not exist.
-      const { uploadUrl, storageKey } = await requestUpload({
+      // In parts, not one PUT. A single PUT caps at 5 GB, cannot resume, and
+      // gets one connection's throughput — all three of which a two-hour
+      // service recording walks straight into.
+      const { uploadId, storageKey, partSize, urls } = await beginUpload({
         projectId,
         kind: "source_video",
         filename: file.name,
         contentType: file.type,
+        sizeBytes: file.size,
+      });
+      began = { uploadId, storageKey };
+
+      const { promise, abort } = uploadInParts(file, urls, partSize, setProgress);
+      abortRef.current = abort;
+      const etags = await promise;
+
+      await completeUpload({
+        projectId,
+        storageKey,
+        uploadId,
+        etags,
       });
 
-      const { promise, abort } = uploadToS3(uploadUrl, file, setProgress);
-      abortRef.current = abort;
-      await promise;
-
+      // Recorded only once S3 has assembled the object. A row written any
+      // earlier would claim media that does not exist yet.
       await recordAsset({
         projectId,
         kind: "source_video",
@@ -56,7 +82,17 @@ function SourceUpload({ projectId }: { projectId: Id<"amplifyProjects"> }) {
       setProgress(null);
       if (inputRef.current) inputRef.current.value = "";
     } catch (e) {
-      setError(e instanceof Error ? e.message.replace(/^.*Error:\s*/, "") : "Upload failed");
+      // Throw the parts away. Until the completion call they are billed
+      // storage that is not yet an object, and a cancelled upload leaving
+      // three gigabytes behind is a bill nobody can explain.
+      if (began) {
+        void abandonUpload({ projectId, ...began }).catch(() => {});
+      }
+      setError(
+        e instanceof Error
+          ? e.message.replace(/^.*Error:\s*/, "")
+          : "Upload failed",
+      );
       setProgress(null);
     } finally {
       abortRef.current = null;
@@ -64,14 +100,20 @@ function SourceUpload({ projectId }: { projectId: Id<"amplifyProjects"> }) {
   };
 
   if (progress) {
-    const pct = progress.percent ?? 0;
+    const pct = progress.percent;
     return (
       <div className="grid gap-2">
         <div className="flex items-baseline justify-between gap-3">
           <span className="text-sm text-ink">Uploading…</span>
           <span className="font-mono text-2xs text-muted">
             {formatBytes(progress.loaded)} of {formatBytes(progress.total)}
-            {progress.percent !== null ? ` · ${pct}%` : ""}
+            {/* The part count matters as much as the percentage: a stalled
+                percentage looks like a hang, "part 41 of 300" looks like a
+                slow connection, which is the truth. */}
+            {progress.partsTotal > 1
+              ? ` · part ${Math.min(progress.partsDone + 1, progress.partsTotal)} of ${progress.partsTotal}`
+              : ""}
+            {` · ${pct}%`}
           </span>
         </div>
         <div className="h-1.5 overflow-hidden rounded-full bg-surface-strong">
