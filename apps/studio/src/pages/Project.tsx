@@ -7,6 +7,7 @@ import { Link, useParams } from "react-router-dom";
 import { Mark } from "../brand/Mark";
 import { Outputs } from "../components/Outputs";
 import { SignalRail } from "../components/SignalRail";
+import { Transcript } from "../components/Transcript";
 import { Trim } from "../components/Trim";
 import { stageStates, type StageProgress } from "../lib/stageGating";
 import { formatBytes, uploadToS3, type UploadProgress } from "../lib/upload";
@@ -161,6 +162,17 @@ function Jobs({ projectId }: { projectId: Id<"amplifyProjects"> }) {
   );
 }
 
+/** Long filenames are common and unreadable — cameras and phones emit
+ *  hundred-character names. Keep both ends: the start says what it is, the
+ *  extension says what kind. The full name is on hover. */
+function shortName(name: string): string {
+  if (name.length <= 44) return name;
+  const dot = name.lastIndexOf(".");
+  const ext = dot > 0 ? name.slice(dot) : "";
+  const stem = dot > 0 ? name.slice(0, dot) : name;
+  return `${stem.slice(0, 28)}…${stem.slice(-8)}${ext}`;
+}
+
 /** What has actually been produced, in the shape the gating expects. */
 function Progress({ projectId }: { projectId: Id<"amplifyProjects"> }) {
   const assets = useQuery(api.amplifyMedia.listAssets, { projectId });
@@ -220,6 +232,7 @@ export function ProjectPage() {
     );
   }
 
+  const [retrim, setRetrim] = useState(false);
   const source = assets?.find((a) => a.kind === "source_video");
   const master = assets?.find((a) => a.kind === "sermon_master");
 
@@ -240,11 +253,15 @@ export function ProjectPage() {
         </div>
       </header>
 
+      <Progress projectId={projectId} />
+
       <div className="card grid gap-3 p-4">
         <p className="section-label">Source</p>
         {source ? (
           <div className="flex flex-wrap items-baseline gap-2">
-            <span className="text-sm text-ink">{source.filename}</span>
+            <span className="text-sm text-ink" title={source.filename}>
+              {shortName(source.filename)}
+            </span>
             {source.durationSeconds && (
               <span className="font-mono text-2xs text-muted">
                 {Math.round(source.durationSeconds / 60)} min
@@ -255,7 +272,13 @@ export function ProjectPage() {
                 void enqueue({
                   projectId,
                   jobType: "transcribe",
-                  payloadJson: JSON.stringify({ assetId: source._id }),
+                  // The sermon if one has been cut, the whole service
+                  // otherwise. Transcribing the source after a trim
+                  // describes the whole evening — worship, notices and
+                  // all — and every output written from it inherits it.
+                  payloadJson: JSON.stringify({
+                    assetId: (master ?? source)._id,
+                  }),
                 })
               }
               className="ml-auto rounded-lg bg-ink px-3 py-1.5 text-2xs font-medium text-white hover:bg-ink/85"
@@ -271,9 +294,15 @@ export function ProjectPage() {
       {/* Trim only appears once there is something to trim, and disappears
           once the sermon has been cut — a step that is finished is clutter,
           and the master is on the page above it. */}
-      {source && !master && (
-        <Trim projectId={projectId} sourceAssetId={source._id} />
+      {source && (!master || retrim) && (
+        <Trim
+          projectId={projectId}
+          sourceAssetId={source._id}
+          onQueued={() => setRetrim(false)}
+        />
       )}
+
+      <Transcript projectId={projectId} />
 
       <Outputs projectId={projectId} />
 
