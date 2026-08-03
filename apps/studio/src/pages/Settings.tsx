@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@convex/api";
 import type { Id } from "@convex/dataModel";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { Mark } from "../brand/Mark";
@@ -256,12 +256,33 @@ function PromptRow({
     editable: boolean;
     scope: string;
     sharedIsCustom: boolean;
+    inUse: boolean;
   };
 }) {
   const setPrompt = useMutation(api.amplifySettings.setPrompt);
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(prompt.template);
   const [saving, setSaving] = useState(false);
+
+  // Follow the saved value when it changes underneath us.
+  //
+  // `draft` is local, and it used to only ever be seeded when the row was
+  // opened. So "use the standard wording again" deleted the override on the
+  // server, the query pushed the shipped wording back down — and the
+  // textarea went on showing the custom text, with Save lit up ready to
+  // write it straight back. It looked exactly like a button that did
+  // nothing, and pressing Save afterwards undid the restore.
+  //
+  // Compared against the last value we took from the server rather than
+  // against the draft, so somebody's unsaved typing is only discarded when
+  // the saved value actually moved.
+  const fromServer = useRef(prompt.template);
+  useEffect(() => {
+    if (fromServer.current !== prompt.template) {
+      fromServer.current = prompt.template;
+      setDraft(prompt.template);
+    }
+  }, [prompt.template]);
 
   return (
     <li className="border-b border-border last:border-0">
@@ -299,6 +320,14 @@ function PromptRow({
         {prompt.sharedIsCustom && (
           <span className="rounded-md bg-brand-soft px-2 py-0.5 text-2xs font-medium text-brand-strong">
             changed
+          </span>
+        )}
+        {/* Louder than the sentence in the description, because the thing
+            worth knowing before you spend twenty minutes rewriting a prompt
+            is that nothing runs it. */}
+        {!prompt.inUse && (
+          <span className="rounded-md bg-warn-soft px-2 py-0.5 text-2xs font-medium text-warn">
+            not wired up
           </span>
         )}
         <span className="ml-auto text-2xs text-muted">{prompt.category}</span>
@@ -377,14 +406,20 @@ function PromptRow({
               </button>
               {(prompt.isOverridden || prompt.sharedIsCustom) && (
                 <button
-                  onClick={() =>
-                    void setPrompt({
-                      churchId: churchId as Id<"churches">,
-                      promptKey: prompt.key,
-                      template: "",
-                    })
-                  }
-                  className="text-2xs text-muted underline hover:text-ink"
+                  disabled={saving}
+                  onClick={async () => {
+                    setSaving(true);
+                    try {
+                      await setPrompt({
+                        churchId: churchId as Id<"churches">,
+                        promptKey: prompt.key,
+                        template: "",
+                      });
+                    } finally {
+                      setSaving(false);
+                    }
+                  }}
+                  className="text-2xs text-muted underline hover:text-ink disabled:opacity-40"
                 >
                   Use the standard wording again
                 </button>
