@@ -69,12 +69,20 @@ export function Shell({
             </>
           )}
 
-          <Link
-            to="/settings"
-            className="ml-auto text-xs text-muted transition-colors hover:text-ink"
-          >
-            Settings
-          </Link>
+          <nav className="ml-auto flex items-center gap-4">
+            <Link
+              to="/library"
+              className="text-xs text-muted transition-colors hover:text-ink"
+            >
+              Library
+            </Link>
+            <Link
+              to="/settings"
+              className="text-xs text-muted transition-colors hover:text-ink"
+            >
+              Settings
+            </Link>
+          </nav>
         </div>
       </header>
 

@@ -1,4 +1,4 @@
-import { useAction, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@convex/api";
 import type { Id } from "@convex/dataModel";
 import { useState } from "react";
@@ -25,7 +25,8 @@ type Piece = {
     | "blogPost"
     | "youtubePackaging"
     | "facebookPost"
-    | "thumbnailConcepts";
+    | "thumbnailConcepts"
+    | "reelThumbnail";
   needs?: string;
 };
 
@@ -67,6 +68,13 @@ const PIECES: Piece[] = [
     blurb: "Three directions to take to an image tool.",
     run: "thumbnailConcepts",
     needs: "youtube_packaging",
+  },
+  {
+    kind: "reel_thumbnail",
+    label: "Reel cover",
+    blurb: "Covers for the reel, framed vertical.",
+    run: "reelThumbnail",
+    needs: "reel",
   },
 ];
 
@@ -301,6 +309,79 @@ function Preview({ payloadJson }: { payloadJson: string }) {
   );
 }
 
+/** Only the prose kinds are worth a plain textarea; the structured ones
+ *  would turn into hand-edited JSON, which is a worse tool than the button
+ *  that regenerates them. */
+function isProse(payloadJson: string): boolean {
+  try {
+    const o = JSON.parse(payloadJson) as Record<string, unknown>;
+    return typeof o.markdown === "string" || typeof o.text === "string";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Fixing a draft by hand.
+ *
+ * Regenerating to change one sentence throws away the nine hundred words
+ * that were already right, so the obvious thing has to be possible. Saving
+ * marks the draft as edited, which is what makes the warning before a
+ * regeneration honest.
+ */
+function DraftEditor({
+  draftId,
+  payloadJson,
+  onDone,
+}: {
+  draftId: Id<"amplifyDrafts">;
+  payloadJson: string;
+  onDone: () => void;
+}) {
+  const edit = useMutation(api.amplifyDrafts.edit);
+  const parsed = JSON.parse(payloadJson) as Record<string, unknown>;
+  const field = typeof parsed.markdown === "string" ? "markdown" : "text";
+  const [body, setBody] = useState(String(parsed[field] ?? ""));
+  const [busy, setBusy] = useState(false);
+
+  return (
+    <div className="grid gap-2">
+      <textarea
+        rows={16}
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+        className="w-full resize-y rounded-xl border border-border bg-surface px-3.5 py-3 text-sm leading-relaxed text-ink focus:border-brand focus:outline-none"
+      />
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              await edit({
+                draftId,
+                payloadJson: JSON.stringify({ ...parsed, [field]: body }),
+              });
+              onDone();
+            } finally {
+              setBusy(false);
+            }
+          }}
+          className="rounded-lg bg-ink px-3 py-1.5 text-2xs font-medium text-white hover:bg-ink/85 disabled:opacity-40"
+        >
+          {busy ? "Saving…" : "Save"}
+        </button>
+        <button
+          onClick={onDone}
+          className="text-2xs text-muted underline hover:text-ink"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function PieceRow({
   piece,
   projectId,
@@ -310,6 +391,7 @@ function PieceRow({
   piece: Piece;
   projectId: Id<"amplifyProjects">;
   draft: {
+    _id: Id<"amplifyDrafts">;
     payloadJson: string;
     status: string;
     error: string | null;
@@ -322,9 +404,22 @@ function PieceRow({
   // Hooks cannot be conditional, so a piece with no generator of its own
   // still names one — it just never calls it. The reel is made beside the
   // clip it comes from, which is the only place the choice makes sense.
-  const run = useAction(api.amplifyGenerate[piece.run ?? "metadata"]);
+  // Two modules produce these, so the row resolves its own action. The
+  // alternative — one module re-exporting everything — would make every
+  // generation import every other one.
+  const generate = useAction(
+    api.amplifyGenerate[
+      (piece.run === "reelThumbnail" ? "metadata" : piece.run) ?? "metadata"
+    ],
+  );
+  const reelThumb = useAction(api.amplifyReel.reelThumbnail);
+  const run =
+    piece.run === "reelThumbnail"
+      ? (args: { projectId: Id<"amplifyProjects"> }) => reelThumb(args)
+      : generate;
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   const blocked = piece.needs !== undefined && !have.has(piece.needs);
   const ready = draft?.status === "ready";
@@ -390,7 +485,25 @@ function PieceRow({
 
       {open && ready && draft && (
         <div className="rounded-xl bg-surface-strong p-3.5">
-          <Preview payloadJson={draft.payloadJson} />
+          {editing ? (
+            <DraftEditor
+              draftId={draft._id}
+              payloadJson={draft.payloadJson}
+              onDone={() => setEditing(false)}
+            />
+          ) : (
+            <>
+              <Preview payloadJson={draft.payloadJson} />
+              {isProse(draft.payloadJson) && (
+                <button
+                  onClick={() => setEditing(true)}
+                  className="mt-2.5 text-2xs text-muted underline hover:text-ink"
+                >
+                  Edit this
+                </button>
+              )}
+            </>
+          )}
         </div>
       )}
     </li>

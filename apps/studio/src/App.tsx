@@ -6,6 +6,7 @@ import { HubGate } from "./auth/hubAuth";
 import { useChurch } from "./auth/useChurch";
 import { Mark } from "./brand/Mark";
 import { Shell } from "./components/Shell";
+import { LibraryPage } from "./pages/Library";
 import { ProjectPage } from "./pages/Project";
 import { ProjectsPage } from "./pages/Projects";
 import { SettingsPage } from "./pages/Settings";
@@ -89,6 +90,10 @@ function Inside() {
             element={<ProjectsPage churchId={churchId} />}
           />
           <Route path="/projects/:id" element={<ProjectPage />} />
+          <Route
+            path="/library"
+            element={<LibraryPage churchId={churchId} />}
+          />
           <Route
             path="/settings"
             element={<SettingsPage churchId={churchId} />}

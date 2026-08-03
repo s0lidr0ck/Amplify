@@ -7,9 +7,11 @@ import { Link, useParams } from "react-router-dom";
 import { Mark } from "../brand/Mark";
 import { Clips } from "../components/Clips";
 import { Outputs } from "../components/Outputs";
+import { Publish } from "../components/Publish";
 import { SignalRail } from "../components/SignalRail";
 import { Transcript } from "../components/Transcript";
 import { Trim } from "../components/Trim";
+import { shortName } from "../lib/names";
 import { stageStates, type StageProgress } from "../lib/stageGating";
 import {
   formatBytes,
@@ -205,24 +207,15 @@ function Jobs({ projectId }: { projectId: Id<"amplifyProjects"> }) {
   );
 }
 
-/** Long filenames are common and unreadable — cameras and phones emit
- *  hundred-character names. Keep both ends: the start says what it is, the
- *  extension says what kind. The full name is on hover. */
-function shortName(name: string): string {
-  if (name.length <= 44) return name;
-  const dot = name.lastIndexOf(".");
-  const ext = dot > 0 ? name.slice(dot) : "";
-  const stem = dot > 0 ? name.slice(0, dot) : name;
-  return `${stem.slice(0, 28)}…${stem.slice(-8)}${ext}`;
-}
-
 /** What has actually been produced, in the shape the gating expects. */
 function Progress({ projectId }: { projectId: Id<"amplifyProjects"> }) {
   const assets = useQuery(api.amplifyMedia.listAssets, { projectId });
   const transcript = useQuery(api.amplifyTranscripts.summary, { projectId });
   const drafts = useQuery(api.amplifyDrafts.list, { projectId });
+  const publications = useQuery(api.amplifyPublish.list, { projectId });
 
-  if (!assets || transcript === undefined || !drafts) return null;
+  if (!assets || transcript === undefined || !drafts || !publications)
+    return null;
 
   const has = (kind: string) => assets.some((a) => a.kind === kind);
   const wrote = (kind: string) =>
@@ -237,7 +230,7 @@ function Progress({ projectId }: { projectId: Id<"amplifyProjects"> }) {
     titleDesc: wrote("youtube_packaging"),
     blog: wrote("blog_post"),
     textPost: wrote("facebook_post"),
-    published: false,
+    published: publications.length > 0,
   };
 
   return <SignalRail states={stageStates(progress, null)} />;
@@ -391,6 +384,8 @@ export function ProjectPage() {
         masterAssetId={master?._id ?? null}
         hasTranscript={hasTranscript}
       />
+
+      <Publish projectId={projectId} />
 
       <Jobs projectId={projectId} />
       </div>

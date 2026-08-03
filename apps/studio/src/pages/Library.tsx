@@ -1,0 +1,176 @@
+import { useAction, useQuery } from "convex/react";
+import { api } from "@convex/api";
+import type { Id } from "@convex/dataModel";
+import { useState } from "react";
+import { Link } from "react-router-dom";
+
+import { shortName } from "../lib/names";
+
+/**
+ * A church's work, across every sermon.
+ *
+ * The sermon page answers "what is happening to this one". Nobody plans a
+ * week from that page — they want last month's clips, or the posts that are
+ * finished and still sitting here, and finding those one sermon at a time is
+ * how work gets forgotten rather than done.
+ *
+ * Two questions, in the order they are actually asked: what is ready and not
+ * out yet, then where is that file.
+ */
+
+const KINDS: [string, string][] = [
+  ["", "Everything"],
+  ["clip", "Clips"],
+  ["sermon_master", "Sermons"],
+  ["source_video", "Service recordings"],
+];
+
+const LABELS: Record<string, string> = {
+  metadata: "details",
+  blog_post: "blog post",
+  youtube_packaging: "title & description",
+  facebook_post: "text post",
+  reel: "reel",
+  thumbnail_concepts: "thumbnails",
+  reel_thumbnail: "reel cover",
+};
+
+function mins(seconds: number | null): string {
+  if (!seconds) return "";
+  return seconds < 90
+    ? `${Math.round(seconds)}s`
+    : `${Math.round(seconds / 60)} min`;
+}
+
+export function LibraryPage({ churchId }: { churchId: string }) {
+  const id = churchId as Id<"churches">;
+  const [kind, setKind] = useState("");
+  const waiting = useQuery(api.amplifyLibrary.waiting, { churchId: id });
+  const media = useQuery(api.amplifyLibrary.media, {
+    churchId: id,
+    kind: kind || undefined,
+  });
+  const playbackUrl = useAction(api.amplifyMedia.playbackUrl);
+  const [opening, setOpening] = useState<string | null>(null);
+
+  return (
+    <div className="mx-auto grid max-w-4xl gap-7 px-5 py-9">
+      <header>
+        <h1 className="font-display text-[2.125rem] font-bold leading-[1.15] tracking-[-0.02em] text-ink">
+          Library
+        </h1>
+        <p className="mt-1 text-sm text-muted">
+          Everything this church has made.
+        </p>
+      </header>
+
+      {/* First, because it is the question somebody actually opens this page
+          with on a Monday. */}
+      <section className="grid gap-3">
+        <div className="flex flex-wrap items-baseline gap-x-2.5">
+          <h2 className="card-title">Written and not out yet</h2>
+          {waiting && (
+            <span className="data">
+              {waiting.filter((w) => w.published === 0).length} sermons
+            </span>
+          )}
+        </div>
+
+        {waiting === undefined ? null : waiting.length === 0 ? (
+          <p className="text-sm text-muted">
+            Nothing written yet. Add a sermon and it will show up here.
+          </p>
+        ) : (
+          <ul className="card overflow-hidden">
+            {waiting.map((w) => (
+              <li key={w.projectId} className="border-b border-border last:border-0">
+                <Link
+                  to={`/projects/${w.projectId}`}
+                  className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-5 py-3.5 transition-colors hover:bg-surface-strong"
+                >
+                  <span className="text-[0.9375rem] font-semibold text-ink">
+                    {w.title}
+                  </span>
+                  <span className="data">{w.sermonDate}</span>
+                  <span className="text-[0.8125rem] text-muted">
+                    {w.ready.map((k) => LABELS[k] ?? k).join(", ")}
+                  </span>
+                  <span className="ml-auto">
+                    {w.published > 0 ? (
+                      <span className="rounded-md bg-ok-soft px-2 py-0.5 text-2xs font-medium text-ok">
+                        {w.published} out
+                      </span>
+                    ) : (
+                      <span className="text-2xs text-muted">nothing out</span>
+                    )}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="grid gap-3">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <h2 className="card-title">Media</h2>
+          <span className="flex overflow-hidden rounded-lg border border-border">
+            {KINDS.map(([value, label]) => (
+              <button
+                key={value}
+                onClick={() => setKind(value)}
+                className={`border-r border-border px-2.5 py-1 text-2xs font-medium transition-colors last:border-r-0 ${
+                  kind === value
+                    ? "bg-ink text-white"
+                    : "text-muted hover:bg-surface-strong hover:text-ink"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </span>
+          {media && <span className="data">{media.length} files</span>}
+        </div>
+
+        {media === undefined ? null : media.length === 0 ? (
+          <p className="text-sm text-muted">Nothing of that kind yet.</p>
+        ) : (
+          <ul className="card overflow-hidden">
+            {media.map((m) => (
+              <li
+                key={m._id}
+                className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-border px-5 py-3 last:border-0"
+              >
+                <span className="text-sm text-ink" title={m.filename}>
+                  {shortName(m.filename)}
+                </span>
+                <span className="data">{mins(m.durationSeconds)}</span>
+                <Link
+                  to={`/projects/${m.projectId}`}
+                  className="text-[0.8125rem] text-muted underline hover:text-ink"
+                >
+                  {m.projectTitle}
+                </Link>
+                <button
+                  disabled={opening === m._id}
+                  onClick={async () => {
+                    setOpening(m._id);
+                    try {
+                      const url = await playbackUrl({ assetId: m._id });
+                      window.open(url, "_blank", "noopener");
+                    } finally {
+                      setOpening(null);
+                    }
+                  }}
+                  className="ml-auto text-2xs text-muted underline hover:text-ink disabled:opacity-40"
+                >
+                  {opening === m._id ? "Opening…" : "Open"}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </div>
+  );
+}
