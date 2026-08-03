@@ -211,6 +211,11 @@ export function ProjectPage() {
   const assets = useQuery(api.amplifyMedia.listAssets, { projectId });
   const enqueue = useMutation(api.amplifyWorker.enqueue);
 
+  // Every hook must run on every render. This one sat below the
+  // loading and not-found returns, so the first render called four
+  // hooks and the second called five — React error #310.
+  const [retrim, setRetrim] = useState(false);
+
   if (project === undefined) {
     return (
       <div className="grid min-h-screen place-items-center text-sm text-muted">
@@ -232,7 +237,6 @@ export function ProjectPage() {
     );
   }
 
-  const [retrim, setRetrim] = useState(false);
   const source = assets?.find((a) => a.kind === "source_video");
   const master = assets?.find((a) => a.kind === "sermon_master");
 
@@ -283,8 +287,31 @@ export function ProjectPage() {
               }
               className="ml-auto rounded-lg bg-ink px-3 py-1.5 text-2xs font-medium text-white hover:bg-ink/85"
             >
-              Transcribe
+              {master ? "Transcribe the sermon" : "Transcribe"}
             </button>
+
+            {/* Which asset the writing will be built from, said plainly.
+                Before this, a sermon that had been trimmed looked exactly
+                like one that had not. */}
+            {master && (
+              <span className="w-full text-2xs text-muted">
+                Sermon cut out
+                {master.durationSeconds
+                  ? ` — ${Math.round(master.durationSeconds / 60)} min of ${
+                      source.durationSeconds
+                        ? `${Math.round(source.durationSeconds / 60)} min`
+                        : "the service"
+                    }`
+                  : ""}
+                .{" "}
+                <button
+                  onClick={() => setRetrim(true)}
+                  className="underline hover:text-ink"
+                >
+                  Trim it again
+                </button>
+              </span>
+            )}
           </div>
         ) : (
           <SourceUpload projectId={projectId} />
