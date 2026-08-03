@@ -6,6 +6,9 @@ import { Link, useParams } from "react-router-dom";
 
 import { Mark } from "../brand/Mark";
 import { Outputs } from "../components/Outputs";
+import { SignalRail } from "../components/SignalRail";
+import { Trim } from "../components/Trim";
+import { stageStates, type StageProgress } from "../lib/stageGating";
 import { formatBytes, uploadToS3, type UploadProgress } from "../lib/upload";
 
 /**
@@ -158,6 +161,37 @@ function Jobs({ projectId }: { projectId: Id<"amplifyProjects"> }) {
   );
 }
 
+/** What has actually been produced, in the shape the gating expects. */
+function Progress({ projectId }: { projectId: Id<"amplifyProjects"> }) {
+  const assets = useQuery(api.amplifyMedia.listAssets, { projectId });
+  const transcript = useQuery(api.amplifyTranscripts.summary, { projectId });
+  const drafts = useQuery(api.amplifyDrafts.list, { projectId });
+
+  if (!assets || transcript === undefined || !drafts) return null;
+
+  const has = (kind: string) => assets.some((a) => a.kind === kind);
+  const wrote = (kind: string) =>
+    drafts.some((d) => d.kind === kind && d.status === "ready");
+
+  const progress: StageProgress = {
+    source: has("source_video"),
+    trim: has("sermon_master"),
+    transcript: transcript !== null,
+    transcriptApproved: transcript?.approved ?? false,
+    metadata: wrote("metadata"),
+    titleDesc: wrote("youtube_packaging"),
+    blog: wrote("blog_post"),
+    textPost: wrote("facebook_post"),
+    published: false,
+  };
+
+  return (
+    <div className="card p-4">
+      <SignalRail states={stageStates(progress, null)} />
+    </div>
+  );
+}
+
 export function ProjectPage() {
   const { id } = useParams();
   const projectId = id as Id<"amplifyProjects">;
@@ -187,6 +221,7 @@ export function ProjectPage() {
   }
 
   const source = assets?.find((a) => a.kind === "source_video");
+  const master = assets?.find((a) => a.kind === "sermon_master");
 
   return (
     <div className="mx-auto grid max-w-3xl gap-5 px-5 py-8">
@@ -232,6 +267,13 @@ export function ProjectPage() {
           <SourceUpload projectId={projectId} />
         )}
       </div>
+
+      {/* Trim only appears once there is something to trim, and disappears
+          once the sermon has been cut — a step that is finished is clutter,
+          and the master is on the page above it. */}
+      {source && !master && (
+        <Trim projectId={projectId} sourceAssetId={source._id} />
+      )}
 
       <Outputs projectId={projectId} />
 
