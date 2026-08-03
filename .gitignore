@@ -43,3 +43,13 @@ npm-debug.log*
 .coverage
 htmlcov/
 .pytest_cache/
+
+# Local credential and data dumps. .env.txt held live AWS keys and was one
+# `git add -A` away from the remote; GitHub's push protection caught it,
+# which is not a control to rely on twice.
+.env.txt
+*.tsbuildinfo
+.vercel/
+ASN_Guide.csv
+profilesListAll.txt
+showsList.txt

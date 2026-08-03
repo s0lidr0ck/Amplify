@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import { Mark } from "../brand/Mark";
+import { nextStep, ProgressRail, type Progress } from "../components/Progress";
 
 /**
  * The sermon list, and adding one.
@@ -152,7 +153,17 @@ function NewSermon({
 export function ProjectsPage({ churchId }: { churchId: string }) {
   const id = churchId as Id<"churches">;
   const projects = useQuery(api.amplify.listProjects, { churchId: id });
+  // A second subscription rather than a fatter first one: the list must draw
+  // the moment the names arrive. Waiting on five sub-queries per sermon
+  // before showing anything would make the fast query as slow as the slow
+  // one, and the names are what somebody is looking for.
+  const progress = useQuery(api.amplifyProgress.forChurch, { churchId: id });
+  const byProject = new Map<string, Progress>(
+    (progress ?? []).map((p) => [p.projectId, p]),
+  );
   const [adding, setAdding] = useState(false);
+
+  const unfinished = (progress ?? []).filter((p) => !p.out).length;
 
   return (
     <div className="mx-auto grid max-w-4xl gap-6 px-5 py-9">
@@ -168,9 +179,12 @@ export function ProjectsPage({ churchId }: { churchId: string }) {
               ? " "
               : projects.length === 0
                 ? "Nothing here yet."
-                : `${projects.length} ${
-                    projects.length === 1 ? "sermon" : "sermons"
-                  }, newest first.`}
+                : // What's left, not what exists. A count of sermons is a
+                  // fact about the past; a count of unfinished ones is the
+                  // reason somebody opened this page.
+                  unfinished > 0
+                  ? `${unfinished} still ${unfinished === 1 ? "needs" : "need"} work.`
+                  : "Everything here has gone out."}
           </p>
         </div>
         <div className="flex items-center gap-2.5">
@@ -200,26 +214,54 @@ export function ProjectsPage({ churchId }: { churchId: string }) {
         </div>
       ) : (
         <ul className="card divide-y divide-border">
-          {projects.map((p) => (
-            <li key={p._id}>
-              <Link
-                to={`/projects/${p._id}`}
-                className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-4 py-3 transition-colors hover:bg-surface-strong"
-              >
-              <span className="font-medium text-ink">{p.title}</span>
-              {/* Mono so the dates line up between rows when scanning. */}
-              <span className="font-mono text-2xs text-muted">
-                {formatSermonDate(p.sermonDate)}
-              </span>
-              <span className="text-2xs text-muted">
-                {p.speakerDisplayName ?? p.speaker}
-              </span>
-              <span className="ml-auto rounded-md bg-surface-strong px-2 py-0.5 text-2xs font-medium text-muted">
-                {p.status.replace(/_/g, " ")}
-              </span>
-              </Link>
-            </li>
-          ))}
+          {projects.map((p) => {
+            const prog = byProject.get(p._id);
+            const next = nextStep(prog);
+
+            return (
+              <li key={p._id}>
+                <Link
+                  to={`/projects/${p._id}`}
+                  className="group flex items-center gap-4 px-4 py-3.5 transition-colors hover:bg-surface-strong focus-visible:outline focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-brand"
+                >
+                  <div className="min-w-0 flex-1">
+                    {/* The title carries the row. It was the same size and
+                        weight as the date and the speaker, so nothing in the
+                        list was easier to find than anything else. */}
+                    <p className="truncate font-display text-[1.0625rem] font-semibold leading-snug tracking-[-0.01em] text-ink">
+                      {p.title}
+                    </p>
+                    <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-2xs text-muted">
+                      {/* Mono so the dates line up down the column. */}
+                      <span className="data">
+                        {formatSermonDate(p.sermonDate)}
+                      </span>
+                      {(p.speakerDisplayName ?? p.speaker) && (
+                        <>
+                          <span
+                            className="h-2.5 w-px bg-border"
+                            aria-hidden
+                          />
+                          <span>{p.speakerDisplayName ?? p.speaker}</span>
+                        </>
+                      )}
+                    </p>
+                  </div>
+
+                  {/* On a phone the rail is the whole answer; the sentence
+                      needs room the row does not have. */}
+                  <div className="hidden shrink-0 sm:block sm:w-40 sm:text-right">
+                    <p
+                      className={`text-2xs ${next ? "text-muted" : "font-medium text-ok"}`}
+                    >
+                      {prog === undefined ? "" : (next ?? "Out the door")}
+                    </p>
+                  </div>
+                  <ProgressRail progress={prog} className="shrink-0" />
+                </Link>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
