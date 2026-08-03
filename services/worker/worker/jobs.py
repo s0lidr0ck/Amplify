@@ -20,6 +20,7 @@ from pathlib import Path
 
 import httpx
 
+from worker.config import settings
 from worker.hub import Hub, Job
 from worker.loop import handles
 
@@ -159,11 +160,12 @@ def transcribe(hub: Hub, job: Job, scratch: Path) -> list[dict[str, object]]:
     hub.progress(job, 25, "Transcribing — this takes a while")
     from faster_whisper import WhisperModel  # imported late: it loads a model
 
-    model = WhisperModel(
-        payload.get("model", "large-v3"),
-        device="auto",
-        compute_type="auto",
-    )
+    # The box decides, not this file. A machine doing five minutes of TV in
+    # fifteen seconds on `small` has no business loading large-v3 by
+    # default; a job may still ask for a specific model when it matters.
+    model_name = payload.get("model") or settings.whisper_model
+    hub.log(job, f"Transcribing with {model_name}")
+    model = WhisperModel(model_name, device="auto", compute_type="auto")
     segments, info = model.transcribe(str(audio), vad_filter=True)
 
     collected: list[dict[str, object]] = []

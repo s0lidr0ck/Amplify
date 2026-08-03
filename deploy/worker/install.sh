@@ -75,9 +75,11 @@ HUB_URL=https://hushed-chinchilla-210.convex.site
 # polling silently and 401ing forever.
 AMPLIFY_WORKER_SECRET=
 
-# Optional. Bigger is better and slower; large-v3 needs roughly 10 GB of RAM
-# on CPU. Drop to medium or small if this box is tight.
-WHISPER_MODEL=large-v3
+# Which Whisper model. Benchmark before changing it:
+#   /opt/amplify-worker/venv/bin/python bench_whisper.py <a real sermon>
+# Speed is the easy half — the cost of a smaller model is misheard names and
+# scripture references, and that text gets published.
+WHISPER_MODEL=small
 ENV
   chmod 0640 "$CONF_DIR/worker.env"
   chown root:amplify "$CONF_DIR/worker.env"

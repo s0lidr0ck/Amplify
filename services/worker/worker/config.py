@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     # Shared with the Convex deployment. The worker is a machine, not a user:
     # this says "I am the worker", never "I may touch this church".
     amplify_worker_secret: str = ""
+    # Which Whisper model this box runs. Smaller is faster and hungrier for
+    # nothing; the cost is accuracy on names and scripture references, which
+    # is exactly the text that gets published. Benchmark before choosing:
+    # services/worker/bench_whisper.py
+    whisper_model: str = "small"
     upload_dir: str = "uploads"
     s3_bucket: str = "amplify"
     s3_access_key: str = ""
