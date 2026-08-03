@@ -1,16 +1,11 @@
-"""Run the ARQ worker."""
+"""Run the worker.
 
-import asyncio
-from arq import run_worker
+It polls Convex for jobs. There is no Redis and no arq any more: those existed
+because FastAPI put work into a queue, and FastAPI is going away. Convex
+cannot reach into a container, so the container asks.
+"""
 
-from worker.main import WorkerSettings
+from worker.loop import main
 
 if __name__ == "__main__":
-    # Python 3.10+ requires an event loop to exist before run_worker creates the Worker
-    # (Worker.__init__ calls asyncio.get_event_loop()). Set it explicitly.
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        run_worker(WorkerSettings)
-    finally:
-        loop.close()
+    main()

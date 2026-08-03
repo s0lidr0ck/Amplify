@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     database_url: str = "postgresql+asyncpg://amplify:amplify@localhost:5432/amplify"
     api_url: str = "http://localhost:8000"
+    # Where the worker asks for work. Convex's HTTP host — the .site domain,
+    # not .cloud, which serves functions rather than HTTP routes.
+    hub_url: str = "https://hushed-chinchilla-210.convex.site"
+    # Shared with the Convex deployment. The worker is a machine, not a user:
+    # this says "I am the worker", never "I may touch this church".
+    amplify_worker_secret: str = ""
     upload_dir: str = "uploads"
     s3_bucket: str = "amplify"
     s3_access_key: str = ""
