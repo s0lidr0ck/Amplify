@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { Mark } from "../brand/Mark";
+import { Speakers } from "../components/Speakers";
 import { errorText } from "../lib/errorText";
 
 /**
@@ -257,6 +258,7 @@ function PromptRow({
     scope: string;
     sharedIsCustom: boolean;
     inUse: boolean;
+    unfillable: string[];
   };
 }) {
   const setPrompt = useMutation(api.amplifySettings.setPrompt);
@@ -330,6 +332,14 @@ function PromptRow({
             not wired up
           </span>
         )}
+        {/* The loudest chip on the row, because this one is actively
+            wrong — the prompt runs, produces a draft, and has a hole in it
+            where a name or a date was meant to be. */}
+        {prompt.unfillable.length > 0 && (
+          <span className="rounded-md bg-danger-soft px-2 py-0.5 text-2xs font-medium text-danger">
+            blank {prompt.unfillable.length === 1 ? "gap" : "gaps"}
+          </span>
+        )}
         <span className="ml-auto text-2xs text-muted">{prompt.category}</span>
       </button>
 
@@ -357,6 +367,32 @@ function PromptRow({
                 reads, so every church shares it. Here to read, not to edit.
               </p>
             ))}
+
+          {/* Before the box, because it is about the text already in it.
+              This is the failure the whole thing is built to prevent: a
+              placeholder nothing fills renders as nothing, the prompt still
+              runs, and the only trace is a sentence in the finished draft
+              that stops mid-way. */}
+          {prompt.unfillable.length > 0 && (
+            <p className="rounded-lg bg-danger-soft px-3 py-2 text-2xs leading-relaxed text-danger">
+              Nothing fills in{" "}
+              {prompt.unfillable.map((n, i) => (
+                <span key={n}>
+                  {i > 0 && ", "}
+                  <code className="font-mono">{`{{${n}}}`}</code>
+                </span>
+              ))}
+              , so {prompt.unfillable.length === 1 ? "it comes" : "they come"}{" "}
+              out blank. The names that work are{" "}
+              <code className="font-mono">{"{{speaker_name}}"}</code>,{" "}
+              <code className="font-mono">{"{{speaker_called}}"}</code> (what
+              your church calls them),{" "}
+              <code className="font-mono">{"{{date_preached}}"}</code>,{" "}
+              <code className="font-mono">{"{{transcript}}"}</code> and{" "}
+              <code className="font-mono">{"{{context_block}}"}</code>, which
+              is all three of the first ones written out for you.
+            </p>
+          )}
 
           {prompt.editable ? (
             <textarea
@@ -457,6 +493,12 @@ export function SettingsPage({ churchId }: { churchId: string }) {
 
       <section className="card p-5">
         <Voice churchId={churchId} />
+      </section>
+
+      {/* Under Voice, because it is the same kind of dial: both decide how
+          the writing sounds rather than what it says. */}
+      <section className="card p-5">
+        <Speakers churchId={churchId} />
       </section>
 
       <Connections churchId={churchId} />

@@ -27,31 +27,68 @@ function NewSermon({
   setOpen: (open: boolean) => void;
 }) {
   const createProject = useMutation(api.amplify.createProject);
+  const addSpeaker = useMutation(api.amplifySpeakers.add);
   const [title, setTitle] = useState("");
-  const [speaker, setSpeaker] = useState("");
-  const speakers = useQuery(api.amplifyLibrary.speakers, {
+  const speakers = useQuery(api.amplifySpeakers.list, {
     churchId: churchId as Id<"churches">,
   });
+  // The roster row chosen, or GUEST for somebody who is not on it.
+  const [chosen, setChosen] = useState("");
+  const [guest, setGuest] = useState("");
+  const [guestCalled, setGuestCalled] = useState("");
   const [sermonDate, setSermonDate] = useState(todayLocal());
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   if (!open) return null;
 
+  const GUEST = "__guest__";
+  const isGuest = chosen === GUEST;
+  const picked = (speakers ?? []).find((s) => s._id === chosen);
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSaving(true);
-    void createProject({ churchId, title, speaker, sermonDate })
-      .then(() => {
+
+    const speaker = isGuest ? guest : (picked?.name ?? "");
+    const speakerDisplayName = isGuest
+      ? guestCalled
+      : (picked?.displayName ?? "");
+
+    void (async () => {
+      try {
+        await createProject({
+          churchId,
+          title,
+          speaker,
+          speakerDisplayName,
+          sermonDate,
+        });
+        // A guest who gets written up once usually gets written up again.
+        // Adding them here means the roster grows from use rather than
+        // from somebody remembering to go and maintain it — and if they
+        // never preach again, the roster row costs nothing.
+        if (isGuest && guest.trim()) {
+          await addSpeaker({
+            churchId,
+            name: guest,
+            displayName: guestCalled,
+          }).catch(() => {});
+        }
         // No refetch: the list is a subscription and already has this row.
         setOpen(false);
         setTitle("");
-        setSpeaker("");
+        setChosen("");
+        setGuest("");
+        setGuestCalled("");
         setSermonDate(todayLocal());
-      })
-      .catch((e: unknown) => setError(errorText(e, "Couldn't add that")))
-      .finally(() => setSaving(false));
+      } catch (e) {
+        setError(errorText(e, "Couldn't add that"));
+      } finally {
+        setSaving(false);
+      }
+    })();
   };
 
   const field =
@@ -73,24 +110,25 @@ function NewSermon({
         </label>
         <label className="grid gap-1">
           <span className="text-2xs text-muted">Speaker</span>
-          {/* Suggestions, not a dropdown. Churches have guests, and a
-              required list makes filing a guest sermon a small bureaucratic
-              event. But free text drifts — the same preacher becomes
-              "Bro. Cory", "Cory Sanders" and "cory", and then no filter
-              finds all three. A datalist offers the history and still lets
-              anyone type a name that has never been used. */}
-          <input
-            value={speaker}
-            onChange={(e) => setSpeaker(e.target.value)}
-            placeholder="Who preached it"
-            list="known-speakers"
+          {/* A real list, because it carries something free text cannot:
+              what the church calls this person. That second name is what
+              reaches the writing, and typing a name into a box has no way
+              to say it. Guests still get through — they just say who they
+              are on the way past, which is how the list fills up. */}
+          <select
+            value={chosen}
+            onChange={(e) => setChosen(e.target.value)}
             className={field}
-          />
-          <datalist id="known-speakers">
+          >
+            <option value="">Who preached it</option>
             {(speakers ?? []).map((s) => (
-              <option key={s.name} value={s.name} />
+              <option key={s._id} value={s._id}>
+                {s.name}
+                {s.displayName !== s.name ? ` — ${s.displayName}` : ""}
+              </option>
             ))}
-          </datalist>
+            <option value={GUEST}>Someone else…</option>
+          </select>
         </label>
         <label className="grid gap-1">
           <span className="text-2xs text-muted">Date preached</span>
@@ -102,6 +140,40 @@ function NewSermon({
           />
         </label>
       </div>
+
+      {/* Only when it is needed. Two extra boxes on every sermon, greyed
+          out and unexplained, would be worse than the datalist this
+          replaced. */}
+      {isGuest && (
+        <div className="grid gap-2.5 sm:grid-cols-2">
+          <label className="grid gap-1">
+            <span className="text-2xs text-muted">Their name</span>
+            <input
+              autoFocus
+              value={guest}
+              onChange={(e) => setGuest(e.target.value)}
+              placeholder="Chris Tidwell"
+              className={field}
+            />
+          </label>
+          <label className="grid gap-1">
+            <span className="text-2xs text-muted">
+              What we call them, in the writing
+            </span>
+            <input
+              value={guestCalled}
+              onChange={(e) => setGuestCalled(e.target.value)}
+              placeholder="Pastor Chris"
+              className={field}
+            />
+          </label>
+          <p className="text-2xs text-faint sm:col-span-2">
+            They&rsquo;ll be added to the list, so next time they&rsquo;re one
+            tap away.
+          </p>
+        </div>
+      )}
+
       {error && <p className="text-sm text-danger">{error}</p>}
       <div className="flex items-center gap-2">
         <button
@@ -212,13 +284,17 @@ export function ProjectsPage({ churchId }: { churchId: string }) {
                       <span className="data">
                         {formatSermonDate(p.sermonDate)}
                       </span>
-                      {(p.speakerDisplayName ?? p.speaker) && (
+                      {/* The name on the record, not the familiar one. This
+                          is the filing cabinet; "Pastor Chris" belongs in
+                          the writing, and a list mixing both conventions
+                          sorts badly and reads worse. */}
+                      {p.speaker && (
                         <>
                           <span
                             className="h-2.5 w-px bg-border"
                             aria-hidden
                           />
-                          <span>{p.speakerDisplayName ?? p.speaker}</span>
+                          <span>{p.speaker}</span>
                         </>
                       )}
                     </p>

@@ -320,9 +320,16 @@ export function ProjectPage() {
         <p className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1">
           <span className="data">{longDate(project.sermonDate)}</span>
           <span className="h-3 w-px bg-border" aria-hidden />
-          <span className="text-sm text-muted">
-            {project.speakerDisplayName ?? project.speaker}
-          </span>
+          {/* Both, when they differ. This is the screen somebody is on when
+              they press Write, and the second name is what the writing will
+              actually call him — worth seeing before, not after. */}
+          <span className="text-sm text-muted">{project.speaker}</span>
+          {project.speakerDisplayName &&
+          project.speakerDisplayName !== project.speaker ? (
+            <span className="text-sm text-faint">
+              written as {project.speakerDisplayName}
+            </span>
+          ) : null}
         </p>
       </div>
 
