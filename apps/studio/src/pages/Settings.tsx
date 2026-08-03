@@ -70,7 +70,11 @@ function Voice({ churchId }: { churchId: string }) {
               setSaving(false);
             }
           }}
-          className="rounded-lg bg-ink px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-ink/85 disabled:opacity-40"
+          // Outlined when there is nothing to save, not a faded solid slab.
+          // A grey filled block is what a forbidden control looks like, and
+          // this one sits directly under a textarea showing placeholder
+          // grey — together they read as a form somebody has locked.
+          className="rounded-lg border border-transparent bg-ink px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-ink/85 disabled:border-border disabled:bg-surface disabled:text-faint"
         >
           {saving ? "Saving…" : "Save voice"}
         </button>
@@ -217,7 +221,7 @@ function Connections({ churchId }: { churchId: string }) {
                           setSaving(false);
                         }
                       }}
-                      className="rounded-lg bg-ink px-3 py-1.5 text-2xs font-medium text-white hover:bg-ink/85 disabled:opacity-40"
+                      className="rounded-lg border border-transparent bg-ink px-3 py-1.5 text-2xs font-medium text-white transition-colors hover:bg-ink/85 disabled:border-border disabled:bg-surface disabled:text-faint"
                     >
                       {saving ? "Saving…" : "Save connection"}
                     </button>
@@ -271,10 +275,14 @@ function PromptRow({
             yours
           </span>
         )}
-        {/* Said plainly rather than by a disabled control — "shared" is a
-            reason, and a greyed-out box is just a refusal. */}
+        {/* A chip, not a trailing sentence. On a phone the old grey words sat
+            below the title where nothing draws the eye, so the first sign
+            that a prompt could not be edited was tapping it and getting no
+            keyboard — which reads as the page being broken. */}
         {!prompt.tunable && (
-          <span className="text-2xs text-muted">shared with every church</span>
+          <span className="rounded-md bg-surface-strong px-2 py-0.5 text-2xs font-medium text-muted">
+            Read only
+          </span>
         )}
         <span className="ml-auto text-2xs text-muted">{prompt.category}</span>
       </button>
@@ -282,15 +290,35 @@ function PromptRow({
       {open && (
         <div className="grid gap-2 px-4 pb-4">
           <p className="text-2xs text-muted">{prompt.description}</p>
-          <textarea
-            rows={12}
-            readOnly={!prompt.tunable}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            className={`w-full resize-y rounded-xl border border-border px-3 py-2.5 font-mono text-2xs leading-relaxed text-ink focus:border-brand focus:outline-none ${
-              prompt.tunable ? "bg-surface" : "bg-surface-strong text-muted"
-            }`}
-          />
+
+          {/* Said before the box, not after it. The reason a prompt can't be
+              changed is no use underneath the thing somebody has already
+              tried to type into. */}
+          {!prompt.tunable && (
+            <p className="rounded-lg bg-surface-strong px-3 py-2 text-2xs leading-relaxed text-muted">
+              This one decides how the work is done rather than how it reads,
+              so every church shares it. Here to read, not to edit.
+            </p>
+          )}
+
+          {prompt.tunable ? (
+            <textarea
+              rows={12}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              className="w-full resize-y rounded-xl border border-border bg-surface px-3 py-2.5 font-mono text-2xs leading-relaxed text-ink focus:border-brand focus:outline-none"
+            />
+          ) : (
+            // Not a read-only textarea. On a phone that is a box you can tap
+            // that refuses to raise the keyboard, with no cursor and no
+            // explanation — indistinguishable from a broken page. A plain
+            // block never makes the offer, and can still be selected and
+            // copied.
+            <pre className="max-h-80 w-full overflow-auto whitespace-pre-wrap break-words rounded-xl border border-border bg-surface-strong px-3 py-2.5 font-mono text-2xs leading-relaxed text-muted">
+              {prompt.template}
+            </pre>
+          )}
+
           {prompt.tunable ? (
             <div className="flex flex-wrap items-center gap-3">
               <button
@@ -307,7 +335,7 @@ function PromptRow({
                     setSaving(false);
                   }
                 }}
-                className="rounded-lg bg-ink px-3 py-1.5 text-2xs font-medium text-white hover:bg-ink/85 disabled:opacity-40"
+                className="rounded-lg border border-transparent bg-ink px-3 py-1.5 text-2xs font-medium text-white transition-colors hover:bg-ink/85 disabled:border-border disabled:bg-surface disabled:text-faint"
               >
                 Save
               </button>
@@ -329,12 +357,7 @@ function PromptRow({
                 {"{{placeholders}}"} get filled in — keep the ones you need.
               </span>
             </div>
-          ) : (
-            <p className="text-2xs text-muted">
-              This one decides how the work is done rather than how it reads,
-              so every church shares it. It&rsquo;s here to read, not to edit.
-            </p>
-          )}
+          ) : null}
         </div>
       )}
     </li>
@@ -381,8 +404,13 @@ export function SettingsPage({ churchId }: { churchId: string }) {
         {showPrompts && (
           <div className="grid gap-2">
             <p className="text-2xs text-muted">
-              The instructions behind each piece of writing. You can change the
-              ones that decide how your church sounds; the rest are shared.
+              {/* Counted rather than described. "Some are shared" leaves you
+                  to find out which by tapping them, and the ones you can't
+                  change give no feedback at all on a phone. */}
+              The instructions behind each piece of writing.{" "}
+              {prompts
+                ? `${prompts.filter((p) => p.tunable).length} of ${prompts.length} decide how your church sounds and can be changed — the rest are shared machinery, marked read only.`
+                : "Some decide how your church sounds; the rest are shared."}
             </p>
             <ul className="card overflow-hidden">
               {(prompts ?? []).map((p) => (
