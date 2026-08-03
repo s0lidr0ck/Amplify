@@ -5,6 +5,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { HubGate } from "./auth/hubAuth";
 import { useChurch } from "./auth/useChurch";
 import { Mark } from "./brand/Mark";
+import { ProjectPage } from "./pages/Project";
 import { ProjectsPage } from "./pages/Projects";
 
 /**
@@ -84,6 +85,7 @@ function Inside() {
             />
           }
         />
+        <Route path="/projects/:id" element={<ProjectPage />} />
         <Route path="*" element={<Navigate to="/projects" replace />} />
       </Routes>
     </BrowserRouter>

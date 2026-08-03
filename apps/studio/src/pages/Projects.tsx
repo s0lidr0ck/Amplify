@@ -2,6 +2,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@convex/api";
 import type { Id } from "@convex/dataModel";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 
 import { Mark } from "../brand/Mark";
 
@@ -211,10 +212,11 @@ export function ProjectsPage({
       ) : (
         <ul className="card divide-y divide-border">
           {projects.map((p) => (
-            <li
-              key={p._id}
-              className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-4 py-3"
-            >
+            <li key={p._id}>
+              <Link
+                to={`/projects/${p._id}`}
+                className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-4 py-3 transition-colors hover:bg-surface-strong"
+              >
               <span className="font-medium text-ink">{p.title}</span>
               {/* Mono so the dates line up between rows when scanning. */}
               <span className="font-mono text-2xs text-muted">
@@ -226,6 +228,7 @@ export function ProjectsPage({
               <span className="ml-auto rounded-md bg-surface-strong px-2 py-0.5 text-2xs font-medium text-muted">
                 {p.status.replace(/_/g, " ")}
               </span>
+              </Link>
             </li>
           ))}
         </ul>
