@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { errorText } from "../lib/errorText";
 import { hhmmss } from "./TimeMark";
+import { Variants } from "./Variants";
 
 /**
  * Every reel this sermon has, not the one it used to be limited to.
@@ -44,6 +45,18 @@ function parse(json: string): ReelPayload {
   }
 }
 
+/** The three cover concepts, or none if the draft can't be read. */
+function coverVariants(json: string): Record<string, string>[] {
+  try {
+    const parsed = JSON.parse(json) as { variants?: unknown };
+    return Array.isArray(parsed.variants)
+      ? (parsed.variants as Record<string, string>[])
+      : [];
+  } catch {
+    return [];
+  }
+}
+
 function Reel({
   projectId,
   reel,
@@ -63,7 +76,9 @@ function Reel({
   const [downloading, setDownloading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [open, setOpen] = useState(false);
+  // One panel at a time. Two long briefs unrolled at once turns a list of
+  // four reels into a page nobody can scan.
+  const [open, setOpen] = useState<"captions" | "cover" | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
 
   const p = parse(reel.payloadJson);
@@ -103,11 +118,22 @@ function Reel({
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <button
-          onClick={() => setOpen(!open)}
+          onClick={() => setOpen(open === "captions" ? null : "captions")}
           className="text-2xs text-muted underline hover:text-ink"
         >
-          {open ? "Hide the captions" : "Read the captions"}
+          {open === "captions" ? "Hide the captions" : "Read the captions"}
         </button>
+        {/* "cover ready" with nothing to open is a status nobody can act on
+            — the covers were readable from the Writing list until reels
+            moved out of it, and this is where they belong now. */}
+        {cover?.status === "ready" && (
+          <button
+            onClick={() => setOpen(open === "cover" ? null : "cover")}
+            className="text-2xs text-muted underline hover:text-ink"
+          >
+            {open === "cover" ? "Hide the cover" : "Read the cover"}
+          </button>
+        )}
         {/* Present only once the clip has actually been cut. Before that
             there is no file, and a download button that explains it cannot
             download anything is worse than no button. */}
@@ -177,7 +203,13 @@ function Reel({
 
       {error && <p className="text-2xs text-danger">{error}</p>}
 
-      {open && (
+      {open === "cover" && cover && (
+        <div className="rounded-xl bg-surface-strong p-3">
+          <Variants variants={coverVariants(cover.payloadJson)} />
+        </div>
+      )}
+
+      {open === "captions" && (
         <div className="grid gap-2.5 rounded-xl bg-surface-strong p-3">
           {PLATFORMS.filter(([key]) => p.social?.[key]).map(([key, label]) => {
             const one = p.social![key];
