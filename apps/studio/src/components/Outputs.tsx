@@ -122,7 +122,7 @@ function PieceRow({
   return (
     <li className="grid gap-2 border-b border-border px-4 py-3 last:border-0">
       <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-        <span className="text-sm font-medium text-ink">{piece.label}</span>
+        <span className="text-[0.9375rem] font-semibold text-ink">{piece.label}</span>
         {draft?.editedByHuman && (
           <span className="text-2xs text-muted">edited</span>
         )}
@@ -158,7 +158,7 @@ function PieceRow({
         </div>
       </div>
 
-      <p className="text-2xs text-muted">
+      <p className="text-[0.8125rem] text-muted">
         {blocked
           ? "Write the blog post first — this one is written from it."
           : piece.blurb}
@@ -167,7 +167,7 @@ function PieceRow({
       {/* The reason, not just the fact. It is the only thing that tells
           anyone whether to retry or fix something. */}
       {draft?.error && (
-        <p className="text-2xs text-danger">{draft.error}</p>
+        <p className="text-[0.8125rem] text-danger">{draft.error}</p>
       )}
 
       {open && ready && draft && (
@@ -189,10 +189,10 @@ export function Outputs({ projectId }: { projectId: Id<"amplifyProjects"> }) {
   return (
     <div className="card grid gap-3 p-4">
       <div className="flex flex-wrap items-baseline gap-2">
-        <p className="section-label">Writing</p>
+        <p className="card-title">Writing</p>
         {transcript && (
-          <span className="text-2xs text-muted">
-            from {transcript.wordCount.toLocaleString()} words of transcript
+          <span className="data">
+            {transcript.wordCount.toLocaleString()} words of transcript
           </span>
         )}
       </div>

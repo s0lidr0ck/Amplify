@@ -60,14 +60,10 @@ export function Transcript({
   return (
     <div className="card grid gap-3 p-4">
       <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-        <p className="section-label">Transcript</p>
-        <span className="text-2xs text-muted">
-          {count.toLocaleString()} words
-        </span>
+        <p className="card-title">Transcript</p>
+        <span className="data">{count.toLocaleString()} words</span>
         {transcript.language && (
-          <span className="font-mono text-2xs text-muted">
-            {transcript.language}
-          </span>
+          <span className="data uppercase">{transcript.language}</span>
         )}
         {approved ? (
           <span className="rounded-md bg-ok-soft px-2 py-0.5 text-2xs font-medium text-ok">
@@ -76,7 +72,7 @@ export function Transcript({
         ) : (
           // Not styled as an error. An unapproved transcript is the normal
           // state of a transcript that was made ten seconds ago.
-          <span className="text-2xs text-muted">not approved yet</span>
+          <span className="text-[0.8125rem] text-muted">not approved yet</span>
         )}
 
         <div className="ml-auto flex items-center gap-2.5">
@@ -176,7 +172,7 @@ export function Transcript({
 
       {/* Said once, where the decision is, rather than as a banner. */}
       {!approved && (
-        <p className="text-2xs text-muted">
+        <p className="text-[0.8125rem] text-muted">
           Everything else is written from this. Worth a read before it goes
           out under the church&rsquo;s name.
         </p>

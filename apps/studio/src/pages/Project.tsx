@@ -116,7 +116,7 @@ function Jobs({ projectId }: { projectId: Id<"amplifyProjects"> }) {
 
   return (
     <div className="card grid gap-2 p-4">
-      <p className="section-label">Work</p>
+      <p className="card-title">Work</p>
       <ul className="grid gap-2">
         {jobs.map((job) => (
           <li key={job._id} className="grid gap-1">
@@ -197,11 +197,7 @@ function Progress({ projectId }: { projectId: Id<"amplifyProjects"> }) {
     published: false,
   };
 
-  return (
-    <div className="card p-4">
-      <SignalRail states={stageStates(progress, null)} />
-    </div>
-  );
+  return <SignalRail states={stageStates(progress, null)} />;
 }
 
 export function ProjectPage() {
@@ -241,35 +237,45 @@ export function ProjectPage() {
   const master = assets?.find((a) => a.kind === "sermon_master");
 
   return (
-    <div className="mx-auto grid max-w-3xl gap-5 px-5 py-8">
-      <header className="grid gap-3 border-b border-border pb-4">
-        <Link to="/projects" className="flex items-center gap-2 text-2xs text-muted hover:text-ink">
-          <Mark size={16} /> All sermons
+    <>
+      {/* Title block sits on the page ground, above the rail — the sermon is
+          the subject and the rail describes it, so the rail comes second. */}
+      <div className="mx-auto max-w-4xl px-5 pb-5 pt-8">
+        <Link
+          to="/projects"
+          className="text-xs text-muted transition-colors hover:text-ink"
+        >
+          ← All sermons
         </Link>
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h1 className="font-display text-[1.7rem] font-bold leading-tight tracking-tight text-ink">
-            {project.title}
-          </h1>
-          <span className="font-mono text-xs text-muted">{project.sermonDate}</span>
-          <span className="text-xs text-muted">
+        <h1 className="mt-3 font-display text-[2.125rem] font-bold leading-[1.15] tracking-[-0.02em] text-ink">
+          {project.title}
+        </h1>
+        <p className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1">
+          <span className="data">{longDate(project.sermonDate)}</span>
+          <span className="h-3 w-px bg-border" aria-hidden />
+          <span className="text-sm text-muted">
             {project.speakerDisplayName ?? project.speaker}
           </span>
+        </p>
+      </div>
+
+      {/* The channel strip: full-bleed, between hairlines, on the ground. */}
+      <div className="rail-band">
+        <div className="mx-auto max-w-4xl px-5 py-4">
+          <Progress projectId={projectId} />
         </div>
-      </header>
+      </div>
 
-      <Progress projectId={projectId} />
-
-      <div className="card grid gap-3 p-4">
-        <p className="section-label">Source</p>
+      <div className="mx-auto grid max-w-4xl gap-5 px-5 py-7">
+      <div className="card grid gap-3 p-5">
+        <p className="card-title">Source</p>
         {source ? (
           <div className="flex flex-wrap items-baseline gap-2">
             <span className="text-sm text-ink" title={source.filename}>
               {shortName(source.filename)}
             </span>
             {source.durationSeconds && (
-              <span className="font-mono text-2xs text-muted">
-                {Math.round(source.durationSeconds / 60)} min
-              </span>
+              <span className="data">{Math.round(source.durationSeconds / 60)} min</span>
             )}
             <button
               onClick={() =>
@@ -294,7 +300,7 @@ export function ProjectPage() {
                 Before this, a sermon that had been trimmed looked exactly
                 like one that had not. */}
             {master && (
-              <span className="w-full text-2xs text-muted">
+              <span className="w-full text-[0.8125rem] text-muted">
                 Sermon cut out
                 {master.durationSeconds
                   ? ` — ${Math.round(master.durationSeconds / 60)} min of ${
@@ -334,6 +340,19 @@ export function ProjectPage() {
       <Outputs projectId={projectId} />
 
       <Jobs projectId={projectId} />
-    </div>
+      </div>
+    </>
   );
+}
+
+/** "2 August 2026" reads; "2026-08-02" is a sort key wearing a date's
+ *  clothes. The mono face keeps it lining up between rows. */
+function longDate(iso: string): string {
+  const d = new Date(`${iso}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
 }

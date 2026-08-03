@@ -5,6 +5,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { HubGate } from "./auth/hubAuth";
 import { useChurch } from "./auth/useChurch";
 import { Mark } from "./brand/Mark";
+import { Shell } from "./components/Shell";
 import { ProjectPage } from "./pages/Project";
 import { ProjectsPage } from "./pages/Projects";
 import { SettingsPage } from "./pages/Settings";
@@ -73,26 +74,28 @@ function Inside() {
 
   if (!churchId) return null;
 
+  const current = churches.find((c) => c.churchId === churchId) ?? churches[0];
+
   return (
     <BrowserRouter>
-      <Routes>
-        <Route
-          path="/projects"
-          element={
-            <ProjectsPage
-              churchId={churchId}
-              churches={churches}
-              onChooseChurch={chooseChurch}
-            />
-          }
-        />
-        <Route path="/projects/:id" element={<ProjectPage />} />
-        <Route
-          path="/settings"
-          element={<SettingsPage churchId={churchId} />}
-        />
-        <Route path="*" element={<Navigate to="/projects" replace />} />
-      </Routes>
+      {/* One bar for every page. Each screen used to invent its own header,
+          so moving between them felt like leaving the product — and the
+          sermon page showed no church at all, which is the one thing here
+          that is expensive to get wrong. */}
+      <Shell church={current} churches={churches} onChooseChurch={chooseChurch}>
+        <Routes>
+          <Route
+            path="/projects"
+            element={<ProjectsPage churchId={churchId} />}
+          />
+          <Route path="/projects/:id" element={<ProjectPage />} />
+          <Route
+            path="/settings"
+            element={<SettingsPage churchId={churchId} />}
+          />
+          <Route path="*" element={<Navigate to="/projects" replace />} />
+        </Routes>
+      </Shell>
     </BrowserRouter>
   );
 }

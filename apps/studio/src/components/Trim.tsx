@@ -71,8 +71,8 @@ export function Trim({
   return (
     <div className="card grid gap-3 p-4">
       <div className="flex flex-wrap items-baseline gap-2">
-        <p className="section-label">Trim</p>
-        <span className="text-2xs text-muted">
+        <p className="card-title">Trim</p>
+        <span className="text-[0.8125rem] text-muted">
           Find where the sermon starts and ends
         </span>
       </div>
@@ -134,7 +134,7 @@ export function Trim({
         </div>
 
         {ready && (
-          <span className="text-2xs text-muted">
+          <span className="data">
             {hhmmss(end! - start!)} of sermon
             {duration > 0 && ` — cut from ${hhmmss(duration)}`}
           </span>

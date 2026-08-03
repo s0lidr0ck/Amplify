@@ -71,8 +71,13 @@
   --color-danger: hsl(350 70% 45%);
   --color-danger-soft: hsl(350 90% 97%);
 
-  --font-display: "Bricolage Grotesque", var(--font-body), sans-serif;
-  --font-body: "Inter Tight", system-ui, sans-serif;
+  /* The "Variable" suffix is the family name fontsource registers, and
+     getting it wrong is silent: the stack falls through to system-ui and the
+     product wears whatever face the machine has. Which is exactly what it
+     did until these were actually loaded in main.tsx. */
+  --font-display: "Bricolage Grotesque Variable", "Inter Tight Variable",
+    system-ui, sans-serif;
+  --font-body: "Inter Tight Variable", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
 
   /* Below Tailwind's xs. For chrome that must be present without competing:
@@ -122,5 +127,62 @@
     text-transform: uppercase;
     letter-spacing: 0.1em;
     color: var(--color-muted);
+  }
+
+  /* The name of a thing, at the top of the card that owns it. Distinct from
+     .section-label: a label names a category, this names the work. Every
+     card previously opened with the same small-caps whisper, so nothing on
+     the page was louder than anything else. */
+  .card-title {
+    font-family: var(--font-display);
+    font-size: 1.0625rem;
+    line-height: 1.4;
+    font-weight: 600;
+    letter-spacing: -0.011em;
+    color: var(--color-ink);
+  }
+
+  /* Anything a machine produced or that should line up between rows:
+     durations, word counts, dates, ids. Tabular figures so a column of
+     numbers is a column and not a ragged edge. */
+  .data {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 0.75rem;
+    letter-spacing: -0.01em;
+    color: var(--color-muted);
+  }
+
+  /* The desk's channel strip. Sits on the page ground between hairlines
+     rather than inside a card, because it is chrome and not content —
+     everything below it is work, and this says where the work has got to.
+     It is the one element that could only be this product. */
+  .rail-band {
+    border-top: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--color-border);
+    background: linear-gradient(
+      180deg,
+      var(--color-background-alt) 0%,
+      var(--color-background) 100%
+    );
+  }
+}
+
+/* Keyboard users get to see where they are. The ring is ink rather than the
+   signal colour, because focus is not "something is happening". */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }

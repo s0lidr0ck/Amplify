@@ -134,63 +134,31 @@ function NewSermon({
   );
 }
 
-export function ProjectsPage({
-  churchId,
-  churches,
-  onChooseChurch,
-}: {
-  churchId: string;
-  churches: { churchId: string; name: string }[];
-  onChooseChurch: (id: string) => void;
-}) {
+export function ProjectsPage({ churchId }: { churchId: string }) {
   const id = churchId as Id<"churches">;
   const projects = useQuery(api.amplify.listProjects, { churchId: id });
-  const here = churches.find((c) => c.churchId === churchId);
   const [adding, setAdding] = useState(false);
 
   return (
-    <div className="mx-auto grid max-w-4xl gap-5 px-5 py-8">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <span className="text-brand">
-            <Mark size={26} title="Amplify" />
-          </span>
-          <span className="font-display text-xl font-semibold tracking-tight text-ink">
-            Amplify
-          </span>
+    <div className="mx-auto grid max-w-4xl gap-6 px-5 py-9">
+      {/* The wordmark and the church picker moved to the shell, which every
+          page wears. This header now says what this page is for. */}
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="font-display text-[2.125rem] font-bold leading-[1.15] tracking-[-0.02em] text-ink">
+            Sermons
+          </h1>
+          <p className="mt-1 text-sm text-muted">
+            {projects === undefined
+              ? " "
+              : projects.length === 0
+                ? "Nothing here yet."
+                : `${projects.length} ${
+                    projects.length === 1 ? "sermon" : "sermons"
+                  }, newest first.`}
+          </p>
         </div>
         <div className="flex items-center gap-2.5">
-          <Link
-            to="/settings"
-            className="text-2xs text-muted underline hover:text-ink"
-          >
-            Settings
-          </Link>
-          {/* Only when there is a real choice. One church needs no chooser,
-              and offering one is a step that never had an answer — but with
-              two, silently taking the first files a sermon under the wrong
-              church and says nothing, which is how the first one added to
-              this rebuild ended up in the wrong place. */}
-          {churches.length > 1 ? (
-            <label className="flex items-center gap-1.5">
-              <span className="sr-only">Church</span>
-              <select
-                value={churchId}
-                onChange={(e) => onChooseChurch(e.target.value)}
-                className="rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand"
-              >
-                {churches.map((c) => (
-                  <option key={c.churchId} value={c.churchId}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : here ? (
-            // One church: state it rather than offering it, so what you are
-            // adding to is never a guess.
-            <span className="text-2xs text-muted">{here.name}</span>
-          ) : null}
           <button
             onClick={() => setAdding((v) => !v)}
             className="rounded-lg bg-ink px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-ink/85 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"

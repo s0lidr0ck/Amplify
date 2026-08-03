@@ -126,15 +126,15 @@ export function SignalRail({
         ))}
       </ol>
 
-      {/* The fan: siblings, drawn as a set rather than a sequence. The
-          bracket on the left says "all of these come from that". */}
-      <div className="flex gap-3 pl-1">
-        <span
-          className="mt-1 w-2 shrink-0 rounded-l border-b border-l border-t border-border"
-          style={{ height: "calc(100% - 0.5rem)" }}
-          aria-hidden
-        />
-        <ul className="flex flex-wrap gap-x-4 gap-y-2">
+      {/* The fan: siblings, drawn as a set rather than a sequence.
+          A vertical rule that stretches with the group says "all of these
+          come off that one thing" — the earlier version used a fixed-height
+          bracket, which rendered as a stray stub because a percentage
+          height has nothing to be a percentage of inside a flex row. */}
+      <div className="flex items-stretch gap-3 pl-1">
+        <span className="w-px shrink-0 bg-border-strong" aria-hidden />
+        <ul className="flex flex-wrap items-center gap-x-4 gap-y-2 py-0.5">
+
           {FAN.map((stage) => (
             <li key={stage.id}>
               <Stage
