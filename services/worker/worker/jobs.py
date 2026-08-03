@@ -198,10 +198,16 @@ def transcribe(hub: Hub, job: Job, scratch: Path) -> list[dict[str, object]]:
     return [
         {
             "kind": "transcript",
+            # Which audio this is a transcript OF. Convex links the two and
+            # refuses the write if the asset belongs to another project.
+            "assetId": str(asset_id),
+            "scope": "sermon",
             "language": info.language,
-            "durationSeconds": total,
             "text": " ".join(words).strip(),
-            "segments": collected,
+            # Serialised here rather than sent as a nested array: the segment
+            # list for a forty-minute sermon is thousands of objects, and it
+            # is only ever read back whole.
+            "segmentsJson": json.dumps(collected),
         }
     ]
 

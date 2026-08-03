@@ -26,6 +26,22 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
+# The source must not live inside the install directory. Step 4 syncs the
+# source INTO $APP_DIR with --delete, so a REPO_DIR underneath it deletes the
+# very files it is copying — quietly, half way through, leaving both broken.
+case "$(readlink -f "$REPO_DIR")/" in
+  "$(readlink -f "$APP_DIR")"/*)
+    echo "REPO_DIR ($REPO_DIR) is inside APP_DIR ($APP_DIR)." >&2
+    echo "Put the source somewhere else — /opt/amplify-src, say — and re-run." >&2
+    exit 1
+    ;;
+esac
+
+if [ ! -f "$REPO_DIR/services/worker/run.py" ]; then
+  echo "No worker source at $REPO_DIR/services/worker — wrong REPO_DIR?" >&2
+  exit 1
+fi
+
 say "1/6  Packages"
 # ffmpeg does the cutting, ffprobe reports real durations, yt-dlp pulls a
 # service down from YouTube. python3-venv is separate from python3 on Ubuntu
@@ -72,7 +88,7 @@ say "4/6  Worker code"
 # Copied rather than symlinked, so a half-finished git pull cannot swap the
 # code out from under a running transcription.
 rsync -a --delete \
-  --exclude '__pycache__' --exclude '*.pyc' \
+  --exclude '__pycache__' --exclude '*.pyc' --exclude 'venv' \
   "$REPO_DIR/services/worker/" "$APP_DIR/"
 chown -R amplify:amplify "$APP_DIR"
 
