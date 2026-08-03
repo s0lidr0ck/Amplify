@@ -62,7 +62,7 @@ export function Transcript({
   return (
     <div className="card grid gap-3 p-4">
       <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-        <p className="card-title">Transcript</p>
+        {/* The room heading already says Transcript. */}
         <span className="data">{count.toLocaleString()} words</span>
         {transcript.language && (
           <span className="data uppercase">{transcript.language}</span>

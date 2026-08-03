@@ -2,19 +2,22 @@ import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@convex/api";
 import type { Id } from "@convex/dataModel";
 import { useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import {
+  Link,
+  Navigate,
+  Outlet,
+  useLocation,
+  useParams,
+} from "react-router-dom";
 
 import { Mark } from "../brand/Mark";
-import { Clips } from "../components/Clips";
-import { Outputs } from "../components/Outputs";
-import { Publish } from "../components/Publish";
-import { Reels } from "../components/Reels";
-import { SignalRail } from "../components/SignalRail";
-import { Transcript } from "../components/Transcript";
+import { StageRail } from "../components/StageRail";
 import { Trim } from "../components/Trim";
 import { errorText } from "../lib/errorText";
 import { shortName } from "../lib/names";
-import { stageStates, type StageProgress } from "../lib/stageGating";
+import { firstStageNeeding, STAGES, type StageSlug } from "../lib/stages";
+import { useSermonFacts } from "../lib/useSermonFacts";
+import type { RoomContext } from "./project/rooms";
 import {
   formatBytes,
   uploadInParts,
@@ -155,13 +158,33 @@ function SourceUpload({ projectId }: { projectId: Id<"amplifyProjects"> }) {
 
 function Jobs({ projectId }: { projectId: Id<"amplifyProjects"> }) {
   const jobs = useQuery(api.amplifyWorker.listJobs, { projectId });
+  const [all, setAll] = useState(false);
   if (!jobs || jobs.length === 0) return null;
+
+  // Anything live or broken, and then a couple of finished ones for
+  // context. The full list is every clip ever cut — twenty rows of
+  // "completed" that nobody reads and that bury the one that failed.
+  const notable = jobs.filter(
+    (j) => j.status === "running" || j.status === "queued" || j.status === "failed",
+  );
+  const rest = jobs.filter((j) => !notable.includes(j));
+  const shown = all ? jobs : [...notable, ...rest.slice(0, 3)];
 
   return (
     <div className="card grid gap-2 p-4">
-      <p className="card-title">Work</p>
+      <div className="flex flex-wrap items-baseline gap-x-2.5">
+        <p className="card-title">Work</p>
+        {jobs.length > shown.length && (
+          <button
+            onClick={() => setAll(true)}
+            className="text-2xs text-muted underline hover:text-ink"
+          >
+            Show all {jobs.length}
+          </button>
+        )}
+      </div>
       <ul className="grid gap-2">
-        {jobs.map((job) => (
+        {shown.map((job) => (
           <li key={job._id} className="grid gap-1">
             <div className="flex flex-wrap items-baseline gap-2">
               <span className="text-sm text-ink">
@@ -205,49 +228,38 @@ function Jobs({ projectId }: { projectId: Id<"amplifyProjects"> }) {
   );
 }
 
-/** What has actually been produced, in the shape the gating expects. */
-function Progress({ projectId }: { projectId: Id<"amplifyProjects"> }) {
-  const assets = useQuery(api.amplifyMedia.listAssets, { projectId });
-  const transcript = useQuery(api.amplifyTranscripts.summary, { projectId });
-  const drafts = useQuery(api.amplifyDrafts.list, { projectId });
-  const publications = useQuery(api.amplifyPublish.list, { projectId });
+/** The room's wash, keyed to the pipeline ramp in tokens.css. */
+const TINT: Record<StageSlug, string> = {
+  source: "bg-stage-source",
+  transcript: "bg-stage-transcript",
+  writing: "bg-stage-writing",
+  clips: "bg-stage-clips",
+  publish: "bg-stage-publish",
+};
 
-  if (!assets || transcript === undefined || !drafts || !publications)
-    return null;
-
-  const has = (kind: string) => assets.some((a) => a.kind === kind);
-  const wrote = (kind: string) =>
-    drafts.some((d) => d.kind === kind && d.status === "ready");
-
-  const progress: StageProgress = {
-    source: has("source_video"),
-    trim: has("sermon_master"),
-    transcript: transcript !== null,
-    transcriptApproved: transcript?.approved ?? false,
-    metadata: wrote("metadata"),
-    titleDesc: wrote("youtube_packaging"),
-    blog: wrote("blog_post"),
-    textPost: wrote("facebook_post"),
-    published: publications.length > 0,
-  };
-
-  return <SignalRail states={stageStates(progress, null)} />;
-}
-
+/**
+ * One sermon, five rooms.
+ *
+ * This was a single scroll carrying eight jobs, which meant there was
+ * nowhere to be and nothing to come back to: you re-found your place by
+ * reading past everything already finished.
+ *
+ * The layout now owns three things and nothing else. Which sermon this is,
+ * where you are in it, and the wash that says so from the corner of your
+ * eye. The work itself lives in the rooms.
+ */
 export function ProjectPage() {
   const { id } = useParams();
   const projectId = id as Id<"amplifyProjects">;
   const project = useQuery(api.amplify.getProject, { projectId });
-  const assets = useQuery(api.amplifyMedia.listAssets, { projectId });
-  const transcriptSummary = useQuery(api.amplifyTranscripts.summary, {
-    projectId,
-  });
   const enqueue = useMutation(api.amplifyWorker.enqueue);
+  const location = useLocation();
 
-  // Every hook must run on every render. This one sat below the
-  // loading and not-found returns, so the first render called four
-  // hooks and the second called five — React error #310.
+  // Every hook runs on every render. This one sat below the loading and
+  // not-found returns once, so the first render called four hooks and the
+  // second called five — React error #310.
   const [retrim, setRetrim] = useState(false);
+  const sermon = useSermonFacts(projectId);
 
   if (project === undefined) {
     return (
@@ -258,8 +270,8 @@ export function ProjectPage() {
   }
 
   if (project === null) {
-    // Indistinguishable from a sermon that never existed — see the access
-    // rules; an id that errors differently is an id you can probe with.
+    // Indistinguishable from a sermon that never existed. An id that errors
+    // differently is an id you can probe with.
     return (
       <div className="mx-auto grid max-w-2xl gap-2 px-5 py-16 text-center">
         <p className="font-display text-lg font-semibold text-ink">Not found</p>
@@ -270,51 +282,39 @@ export function ProjectPage() {
     );
   }
 
-  const source = assets?.find((a) => a.kind === "source_video");
-  const master = assets?.find((a) => a.kind === "sermon_master");
-  const hasTranscript = transcriptSummary !== null && transcriptSummary !== undefined;
+  const slug = location.pathname.split("/").pop() as StageSlug;
+  const current = STAGES.find((s) => s.slug === slug);
 
-  return (
-    <>
-      {/* Title block sits on the page ground, above the rail — the sermon is
-          the subject and the rail describes it, so the rail comes second. */}
-      <div className="mx-auto max-w-4xl px-5 pb-5 pt-8">
-        <Link
-          to="/projects"
-          className="text-xs text-muted transition-colors hover:text-ink"
-        >
-          ← All sermons
-        </Link>
-        <h1 className="mt-3 font-display text-[2.125rem] font-bold leading-[1.15] tracking-[-0.02em] text-ink">
-          {project.title}
-        </h1>
-        <p className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1">
-          <span className="data">{longDate(project.sermonDate)}</span>
-          <span className="h-3 w-px bg-border" aria-hidden />
-          <span className="text-sm text-muted">
-            {project.speakerDisplayName ?? project.speaker}
-          </span>
-        </p>
-      </div>
-
-      {/* The channel strip: full-bleed, between hairlines, on the ground. */}
-      <div className="rail-band">
-        <div className="mx-auto max-w-4xl px-5 py-4">
-          <Progress projectId={projectId} />
+  // Opened without saying where: go to the room that actually wants them.
+  // Landing on Source every time means reading past finished work to reach
+  // the part that is not.
+  if (!current) {
+    if (sermon.loading) {
+      return (
+        <div className="grid min-h-screen place-items-center text-sm text-muted">
+          Loading…
         </div>
-      </div>
+      );
+    }
+    return <Navigate to={firstStageNeeding(sermon.readings)} replace />;
+  }
 
-      <div className="mx-auto grid max-w-4xl gap-5 px-5 py-7">
+  const { source, master } = sermon;
+
+  const sourceRoom = (
+    <>
       <div className="card grid gap-3 p-5">
-        <p className="card-title">Source</p>
+        <p className="card-title">The recording</p>
         {source ? (
           <div className="flex flex-wrap items-baseline gap-2">
             <span className="text-sm text-ink" title={source.filename}>
               {shortName(source.filename)}
             </span>
-            {source.durationSeconds && (
-              <span className="data">{Math.round(source.durationSeconds / 60)} min</span>
-            )}
+            {source.durationSeconds ? (
+              <span className="data">
+                {Math.round(source.durationSeconds / 60)} min
+              </span>
+            ) : null}
             <button
               onClick={() =>
                 void enqueue({
@@ -322,22 +322,19 @@ export function ProjectPage() {
                   jobType: "transcribe",
                   // The sermon if one has been cut, the whole service
                   // otherwise. Transcribing the source after a trim
-                  // describes the whole evening — worship, notices and
-                  // all — and every output written from it inherits it.
+                  // describes the whole evening — worship and notices
+                  // included — and every output written from it inherits it.
                   payloadJson: JSON.stringify({
                     assetId: (master ?? source)._id,
                   }),
                 })
               }
-              className="ml-auto rounded-lg bg-ink px-3 py-1.5 text-2xs font-medium text-white hover:bg-ink/85"
+              className="ml-auto rounded-lg bg-ink px-3 py-1.5 text-2xs font-medium text-white transition-colors hover:bg-ink/85"
             >
               {master ? "Transcribe the sermon" : "Transcribe"}
             </button>
 
-            {/* Which asset the writing will be built from, said plainly.
-                Before this, a sermon that had been trimmed looked exactly
-                like one that had not. */}
-            {master && (
+            {master ? (
               <span className="w-full text-[0.8125rem] text-muted">
                 Sermon cut out
                 {master.durationSeconds
@@ -355,43 +352,67 @@ export function ProjectPage() {
                   Trim it again
                 </button>
               </span>
-            )}
+            ) : null}
           </div>
         ) : (
           <SourceUpload projectId={projectId} />
         )}
       </div>
 
-      {/* Trim only appears once there is something to trim, and disappears
-          once the sermon has been cut — a step that is finished is clutter,
-          and the master is on the page above it. */}
-      {source && (!master || retrim) && (
+      {/* Trim appears once there is something to trim and goes once the
+          sermon has been cut. A finished step is clutter, and the master is
+          named in the card above it. */}
+      {source && (!master || retrim) ? (
         <Trim
           projectId={projectId}
           sourceAssetId={source._id}
           onQueued={() => setRetrim(false)}
         />
-      )}
+      ) : null}
 
-      <Transcript projectId={projectId} />
-
-      <Outputs projectId={projectId} />
-
-      <Clips
-        projectId={projectId}
-        masterAssetId={master?._id ?? null}
-        hasTranscript={hasTranscript}
-      />
-
-      {/* Below the clips, because that is where reels are made from — you
-          pick a moment, then come back up to read what was written for it. */}
-      <Reels projectId={projectId} />
-
-      <Publish projectId={projectId} />
-
+      {/* The job log lives here rather than on every room: it is about the
+          machine, and this is the room where the machine does the heavy
+          work. Anything urgent already shows on the rail, pulsing. */}
       <Jobs projectId={projectId} />
-      </div>
     </>
+  );
+
+  const context: RoomContext = {
+    projectId,
+    masterAssetId: master?._id ?? null,
+    hasTranscript: sermon.hasTranscript,
+    source: sourceRoom,
+  };
+
+  return (
+    // The wash covers the whole page below the header, so moving between
+    // rooms is a change of ground rather than a change of card.
+    <div className={`min-h-screen transition-colors ${TINT[slug]}`}>
+      <div className="mx-auto max-w-5xl px-5 pb-4 pt-7">
+        <Link
+          to="/projects"
+          className="text-xs text-muted transition-colors hover:text-ink"
+        >
+          ← All sermons
+        </Link>
+        <h1 className="mt-2.5 font-display text-[2rem] font-bold leading-[1.15] tracking-[-0.02em] text-ink">
+          {project.title}
+        </h1>
+        <p className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1">
+          <span className="data">{longDate(project.sermonDate)}</span>
+          <span className="h-3 w-px bg-border" aria-hidden />
+          <span className="text-sm text-muted">
+            {project.speakerDisplayName ?? project.speaker}
+          </span>
+        </p>
+      </div>
+
+      <StageRail readings={sermon.readings} />
+
+      <div className="mx-auto max-w-5xl px-5 py-7">
+        <Outlet context={context} />
+      </div>
+    </div>
   );
 }
 
@@ -406,3 +427,4 @@ function longDate(iso: string): string {
     year: "numeric",
   });
 }
+

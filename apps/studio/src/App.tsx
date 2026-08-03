@@ -8,6 +8,13 @@ import { Mark } from "./brand/Mark";
 import { Shell } from "./components/Shell";
 import { LibraryPage } from "./pages/Library";
 import { ProjectPage } from "./pages/Project";
+import {
+  ClipsRoom,
+  PublishRoom,
+  SourceRoom,
+  TranscriptRoom,
+  WritingRoom,
+} from "./pages/project/rooms";
 import { ProjectsPage } from "./pages/Projects";
 import { SettingsPage } from "./pages/Settings";
 import { SharedPage } from "./pages/Shared";
@@ -102,7 +109,17 @@ function Inside() {
           that is expensive to get wrong. */}
       <Routes>
         <Route path="/projects" element={<ProjectsPage churchId={churchId} />} />
-        <Route path="/projects/:id" element={<ProjectPage />} />
+        {/* Five rooms under one sermon. The layout carries the header, the
+            rail and the room's wash; each child is a screenful with one
+            job. Nesting rather than five sibling routes so the sermon is
+            fetched once and the rail never re-mounts as you move. */}
+        <Route path="/projects/:id" element={<ProjectPage />}>
+          <Route path="source" element={<SourceRoom />} />
+          <Route path="transcript" element={<TranscriptRoom />} />
+          <Route path="writing" element={<WritingRoom />} />
+          <Route path="clips" element={<ClipsRoom />} />
+          <Route path="publish" element={<PublishRoom />} />
+        </Route>
         <Route path="/library" element={<LibraryPage churchId={churchId} />} />
         <Route path="/settings" element={<SettingsPage churchId={churchId} />} />
         <Route path="*" element={<Navigate to="/projects" replace />} />

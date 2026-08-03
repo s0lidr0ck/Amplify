@@ -73,7 +73,7 @@ export function Publish({ projectId }: { projectId: Id<"amplifyProjects"> }) {
   return (
     <div className="card grid gap-3 p-5">
       <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-        <p className="card-title">Publishing</p>
+        {/* The room heading already says Publish. */}
         <span className="data">
           {out} of {rows.length} out
         </span>

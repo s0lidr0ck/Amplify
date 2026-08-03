@@ -57,6 +57,39 @@
   --color-muted: hsl(245 9% 45%);
   --color-faint: hsl(245 8% 62%);
 
+  /* THE PIPELINE RAMP
+     -------------------------------------------------------------------------
+     One hue arc, not five colours. A sermon travels from raw footage to the
+     moment it goes out, and the rooms warm up as it does: near-neutral slate
+     at the camera end, through violet, arriving at the rose that already
+     means "live" in this product. Publishing IS going live, so the ramp
+     terminating on the accent is the point rather than a coincidence.
+
+     Deliberately NOT a hue per room picked at random. Five unrelated colours
+     is a rainbow dashboard, and it would also collide with the state
+     colours: the whole arc stays clear of green, amber and red so a "done"
+     tick or a "failed" cross reads on any room's ground.
+
+     The washes sit at 98% lightness — enough to know which room you are in
+     from the corner of your eye, not enough to compete with anything on it.
+     The marks are the same hues at working strength, for the rail. */
+  /* 96%, not 98%. At 98 the wash was there in the hex and invisible on a
+     screen, which is the worst of both — the cost of a colour system with
+     none of the orientation. 96 reads as a room without competing with
+     anything in it, and the white cards separate from it properly, which
+     also answers the older complaint that nothing on the page had edges. */
+  --color-stage-source: hsl(240 44% 96%);
+  --color-stage-transcript: hsl(258 48% 96%);
+  --color-stage-writing: hsl(276 46% 96.5%);
+  --color-stage-clips: hsl(300 42% 96.5%);
+  --color-stage-publish: hsl(332 60% 96.5%);
+
+  --color-mark-source: hsl(240 52% 56%);
+  --color-mark-transcript: hsl(258 52% 58%);
+  --color-mark-writing: hsl(276 48% 56%);
+  --color-mark-clips: hsl(300 46% 55%);
+  --color-mark-publish: hsl(336 70% 55%);
+
   /* The signal. Live, active, happening now — nothing else. */
   --color-brand: hsl(350 89% 60%);
   --color-brand-strong: hsl(347 77% 50%);
@@ -151,6 +184,68 @@
     font-size: 0.75rem;
     letter-spacing: -0.01em;
     color: var(--color-muted);
+  }
+
+  /* THE STATE LEGEND
+     -------------------------------------------------------------------------
+     One vocabulary, learned once, used on every room. The page should be
+     readable by colour before a word of it is read:
+
+       done       green    behind you
+       running    rose     the worker is on it right now
+       attention  amber    it needs you before it can go
+       waiting    grey     nothing to do here yet
+       failed     red      it tried and could not
+
+     Rose is reserved for genuinely live work, which is why "ready to start"
+     is grey rather than a fifth colour — a page where four things are
+     shouting has no signal left. */
+  .state-done {
+    color: var(--color-ok);
+    background: var(--color-ok-soft);
+  }
+  .state-running {
+    color: var(--color-brand-strong);
+    background: var(--color-brand-soft);
+  }
+  .state-attention {
+    color: var(--color-warn);
+    background: var(--color-warn-soft);
+  }
+  .state-failed {
+    color: var(--color-danger);
+    background: var(--color-danger-soft);
+  }
+  .state-waiting {
+    color: var(--color-muted);
+    background: var(--color-surface-strong);
+  }
+
+  /* A dot carries the same legend where a word would not fit. */
+  .dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+    flex: none;
+  }
+
+  /* Only the live one moves. Motion is the strongest signal on a screen and
+     spending it anywhere else would waste it — and this is the one state
+     that changes on its own while somebody is looking at something else. */
+  .dot-running {
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%,
+    100% {
+      opacity: 1;
+      box-shadow: 0 0 0 0 hsl(350 89% 60% / 0.45);
+    }
+    50% {
+      opacity: 0.85;
+      box-shadow: 0 0 0 0.28rem hsl(350 89% 60% / 0);
+    }
   }
 
   /* The desk's channel strip. Sits on the page ground between hairlines

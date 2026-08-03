@@ -492,7 +492,8 @@ export function Outputs({ projectId }: { projectId: Id<"amplifyProjects"> }) {
   return (
     <div className="card grid gap-3 p-4">
       <div className="flex flex-wrap items-baseline gap-2">
-        <p className="card-title">Writing</p>
+        {/* No title. The room is called Writing; saying it twice in fourteen
+            vertical pixels of each other is the page talking to itself. */}
         {transcript && (
           <span className="data">
             {transcript.wordCount.toLocaleString()} words of transcript
