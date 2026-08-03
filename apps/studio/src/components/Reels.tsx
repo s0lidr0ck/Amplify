@@ -4,6 +4,7 @@ import type { Id } from "@convex/dataModel";
 import { useState } from "react";
 
 import { errorText } from "../lib/errorText";
+import { AttachImage } from "./AttachImage";
 import { hhmmss } from "./TimeMark";
 import { Variants } from "./Variants";
 
@@ -202,6 +203,15 @@ function Reel({
       </div>
 
       {error && <p className="text-2xs text-danger">{error}</p>}
+
+      {/* Where the picture comes back. The concepts above are a brief for an
+          image tool; this is the image that came out of it, kept beside the
+          reel it was made for instead of in a download folder. */}
+      <AttachImage
+        projectId={projectId}
+        kind="reel_cover"
+        subjectId={reel.subjectId ?? undefined}
+      />
 
       {open === "cover" && cover && (
         <div className="rounded-xl bg-surface-strong p-3">

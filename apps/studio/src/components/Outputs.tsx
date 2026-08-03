@@ -3,6 +3,7 @@ import { api } from "@convex/api";
 import type { Id } from "@convex/dataModel";
 import { useState } from "react";
 
+import { AttachImage } from "./AttachImage";
 import { Variants } from "./Variants";
 
 /**
@@ -404,6 +405,13 @@ function PieceRow({
           anyone whether to retry or fix something. */}
       {draft?.error && (
         <p className="text-[0.8125rem] text-danger">{draft.error}</p>
+      )}
+
+      {/* The concepts are a brief for an image tool; this is where the
+          finished picture comes back, beside the sermon it was made for
+          rather than in a download folder. */}
+      {piece.kind === "thumbnail_concepts" && ready && (
+        <AttachImage projectId={projectId} kind="sermon_thumbnail" />
       )}
 
       {open && ready && draft && (
