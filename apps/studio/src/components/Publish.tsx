@@ -47,7 +47,14 @@ export function Publish({ projectId }: { projectId: Id<"amplifyProjects"> }) {
 
   if (!rows || publications === undefined || !assets) return null;
 
-  const done = new Map(publications.map((p) => [p.target, p]));
+  // Keyed by destination AND reel: Instagram can hold several rows for one
+  // sermon now, and keying on destination alone made the last reel's status
+  // stand for all of them.
+  const key = (target: string, subjectId: string | null) =>
+    `${target}::${subjectId ?? ""}`;
+  const done = new Map(
+    publications.map((p) => [key(p.target, p.subjectId), p]),
+  );
   const out = publications.filter((p) => p.status === "posted").length;
   const approved = transcript?.approved ?? false;
 
@@ -127,7 +134,7 @@ export function Publish({ projectId }: { projectId: Id<"amplifyProjects"> }) {
 
       <ul className="-mx-5 -mb-5 border-t border-border">
         {rows.map((row) => {
-          const record = done.get(row.destination);
+          const record = done.get(key(row.destination, row.subjectId));
           const sending = record?.status === "sending";
           const posted = record?.status === "posted";
           const failed = record?.status === "failed";
@@ -140,12 +147,19 @@ export function Publish({ projectId }: { projectId: Id<"amplifyProjects"> }) {
 
           return (
             <li
-              key={row.destination}
+              key={key(row.destination, row.subjectId)}
               className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-border px-5 py-3.5 last:border-0"
             >
               <div className="min-w-0 flex-1">
                 <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.9375rem] font-semibold text-ink">
                   {row.label}
+                  {/* Which reel. Four Instagram rows that all say
+                      "Instagram" are four rows nobody can act on. */}
+                  {row.subjectLabel && (
+                    <span className="min-w-0 truncate text-[0.8125rem] font-normal text-muted">
+                      {row.subjectLabel}
+                    </span>
+                  )}
                   {posted && record.automatic && (
                     <span className="rounded-md bg-ok-soft px-2 py-0.5 text-2xs font-medium text-ok">
                       posted by Amplify
@@ -205,7 +219,11 @@ export function Publish({ projectId }: { projectId: Id<"amplifyProjects"> }) {
                       setBusy(row.destination);
                       setError(null);
                       try {
-                        await send({ projectId, destination: row.destination });
+                        await send({
+                          projectId,
+                          destination: row.destination,
+                          subjectId: row.subjectId ?? undefined,
+                        });
                       } catch (e) {
                         setError(errorText(e, "Couldn't send that"));
                       } finally {
@@ -229,6 +247,7 @@ export function Publish({ projectId }: { projectId: Id<"amplifyProjects"> }) {
                         projectId,
                         target: row.destination,
                         posted: !posted,
+                        subjectId: row.subjectId ?? undefined,
                       })
                     }
                     className={`rounded-lg px-3 py-1.5 text-2xs font-medium transition-colors ${

@@ -449,16 +449,21 @@ def publish(hub: Hub, job: Job, scratch: Path) -> list[dict[str, object]]:
     payload = json.loads(job.payload_json or "{}")
     destination = payload.get("destination") or job.subject_id or ""
     platform = payload.get("platform") or destination
+    # Which reel, when the sermon has several. Echoed back on every verdict
+    # so the result lands on the row that asked for it — a sermon with four
+    # reels would otherwise show one posted and three still waiting.
+    subject = payload.get("subjectId")
+
+    def verdict(**fields: object) -> list[dict[str, object]]:
+        row: dict[str, object] = {"kind": "publication", "destination": destination}
+        if subject:
+            row["subjectId"] = subject
+        row.update(fields)
+        return [row]
 
     publisher = PUBLISHERS.get(platform)
     if not publisher:
-        return [
-            {
-                "kind": "publication",
-                "destination": destination,
-                "error": f"Amplify doesn't know how to post to {platform}.",
-            }
-        ]
+        return verdict(error=f"Amplify doesn't know how to post to {platform}.")
 
     def on_progress(percent: float, message: str) -> None:
         hub.progress(job, percent, message)
@@ -471,28 +476,16 @@ def publish(hub: Hub, job: Job, scratch: Path) -> list[dict[str, object]]:
         # that is not verified. The church can act on all of these, so the
         # message goes through as written.
         hub.log(job, str(exc), level="error")
-        return [
-            {"kind": "publication", "destination": destination, "error": str(exc)}
-        ]
+        return verdict(error=str(exc))
     except Exception as exc:
         # Unexpected badness. The type and message only — a traceback here
         # can carry a signed URL, and these lines are shown in the app.
         logger.exception("publish to %s failed", platform)
         hub.log(job, f"{type(exc).__name__}: {exc}", level="error")
-        return [
-            {
-                "kind": "publication",
-                "destination": destination,
-                "error": f"{type(exc).__name__}: {exc}",
-            }
-        ]
+        return verdict(error=f"{type(exc).__name__}: {exc}")
 
     hub.progress(job, 100.0, f"Posted to {destination}")
-    return [
-        {
-            "kind": "publication",
-            "destination": destination,
-            "externalId": result.get("externalId", ""),
-            "externalUrl": result.get("externalUrl", ""),
-        }
-    ]
+    return verdict(
+        externalId=result.get("externalId", ""),
+        externalUrl=result.get("externalUrl", ""),
+    )

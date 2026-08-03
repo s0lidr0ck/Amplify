@@ -165,7 +165,9 @@ function ClipRow({
   const enqueue = useMutation(api.amplifyWorker.enqueue);
   const discard = useMutation(api.amplifyClips.discard);
   const packageReel = useAction(api.amplifyReel.packageReel);
+  const playbackUrl = useAction(api.amplifyMedia.playbackUrl);
   const [packaging, setPackaging] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -257,6 +259,29 @@ function ClipRow({
           >
             Discard
           </button>
+          {/* Once it has actually been cut there is a file, and the only way
+              to reach it was the library two screens away. A cut clip is
+              something somebody wants in their hands. */}
+          {clip.exportedAssetId && (
+            <button
+              disabled={downloading}
+              onClick={async () => {
+                setDownloading(true);
+                try {
+                  const url = await playbackUrl({
+                    assetId: clip.exportedAssetId!,
+                    download: true,
+                  });
+                  window.location.href = url;
+                } finally {
+                  setDownloading(false);
+                }
+              }}
+              className="text-2xs text-muted underline hover:text-ink disabled:opacity-40"
+            >
+              {downloading ? "Preparing…" : "Download"}
+            </button>
+          )}
           <button
             disabled={busy || !masterAssetId}
             onClick={async () => {

@@ -26,7 +26,7 @@ type Piece = {
     | "youtubePackaging"
     | "facebookPost"
     | "thumbnailConcepts"
-    | "reelThumbnail";
+;
   needs?: string;
 };
 
@@ -57,24 +57,11 @@ const PIECES: Piece[] = [
     needs: "blog_post",
   },
   {
-    kind: "reel",
-    label: "Reel",
-    blurb: "Pick a clip and press “Make it the reel”.",
-    run: null,
-  },
-  {
     kind: "thumbnail_concepts",
     label: "Thumbnail concepts",
     blurb: "Three directions to take to an image tool.",
     run: "thumbnailConcepts",
     needs: "youtube_packaging",
-  },
-  {
-    kind: "reel_thumbnail",
-    label: "Reel cover",
-    blurb: "Covers for the reel, framed vertical.",
-    run: "reelThumbnail",
-    needs: "reel",
   },
 ];
 
@@ -407,16 +394,7 @@ function PieceRow({
   // Two modules produce these, so the row resolves its own action. The
   // alternative — one module re-exporting everything — would make every
   // generation import every other one.
-  const generate = useAction(
-    api.amplifyGenerate[
-      (piece.run === "reelThumbnail" ? "metadata" : piece.run) ?? "metadata"
-    ],
-  );
-  const reelThumb = useAction(api.amplifyReel.reelThumbnail);
-  const run =
-    piece.run === "reelThumbnail"
-      ? (args: { projectId: Id<"amplifyProjects"> }) => reelThumb(args)
-      : generate;
+  const run = useAction(api.amplifyGenerate[piece.run ?? "metadata"]);
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);

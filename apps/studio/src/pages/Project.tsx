@@ -8,6 +8,7 @@ import { Mark } from "../brand/Mark";
 import { Clips } from "../components/Clips";
 import { Outputs } from "../components/Outputs";
 import { Publish } from "../components/Publish";
+import { Reels } from "../components/Reels";
 import { SignalRail } from "../components/SignalRail";
 import { Transcript } from "../components/Transcript";
 import { Trim } from "../components/Trim";
@@ -381,6 +382,10 @@ export function ProjectPage() {
         masterAssetId={master?._id ?? null}
         hasTranscript={hasTranscript}
       />
+
+      {/* Below the clips, because that is where reels are made from — you
+          pick a moment, then come back up to read what was written for it. */}
+      <Reels projectId={projectId} />
 
       <Publish projectId={projectId} />
 
