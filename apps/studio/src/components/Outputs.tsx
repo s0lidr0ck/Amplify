@@ -4,6 +4,7 @@ import type { Id } from "@convex/dataModel";
 import { useState } from "react";
 
 import { AttachImage } from "./AttachImage";
+import { SermonDetails } from "./SermonDetails";
 import { Variants } from "./Variants";
 
 /**
@@ -197,6 +198,13 @@ export function Preview({ payloadJson }: { payloadJson: string }) {
     return <Variants variants={obj.variants as Record<string, string>[]} />;
   }
 
+  // The sermon details carry nine fields of four different shapes. The
+  // fallback below renders all four the same way, which is why they ran
+  // together into one unreadable column.
+  if (Array.isArray(obj.mainPoints) || Array.isArray(obj.scriptures)) {
+    return <SermonDetails payload={obj} />;
+  }
+
   // The prose kinds carry a single string; show it as prose rather than as
   // a field called "markdown".
   const prose = obj.markdown ?? obj.text;
@@ -208,17 +216,29 @@ export function Preview({ payloadJson }: { payloadJson: string }) {
     );
   }
 
+  // The last resort, for a shape nothing above recognised. Ruled and spaced
+  // rather than run together, because "we don't know what this is" is not a
+  // reason to make it unreadable.
   return (
-    <dl className="grid gap-2">
+    <dl className="grid gap-4">
       {Object.entries(obj).map(([key, value]) => (
-        <div key={key} className="grid gap-0.5">
+        <div
+          key={key}
+          className="grid gap-1.5 border-t border-border pt-4 first:border-0 first:pt-0"
+        >
           <dt className="section-label">{key.replace(/([A-Z])/g, " $1")}</dt>
-          <dd className="text-sm leading-relaxed text-ink">
+          <dd className="max-w-prose text-[0.9375rem] leading-relaxed text-ink">
             {Array.isArray(value) ? (
-              <ul className="grid gap-0.5">
+              <ul className="grid gap-1.5">
                 {value.map((item, i) => (
-                  <li key={i}>
-                    {typeof item === "string" ? item : JSON.stringify(item)}
+                  <li key={i} className="flex gap-2.5">
+                    <span
+                      className="mt-2 h-1 w-1 shrink-0 rounded-full bg-border-strong"
+                      aria-hidden
+                    />
+                    <span>
+                      {typeof item === "string" ? item : JSON.stringify(item)}
+                    </span>
                   </li>
                 ))}
               </ul>

@@ -62,7 +62,10 @@ export function PiecePage({
 
   return (
     <div className="grid gap-4">
-      <div className="grid gap-1">
+      {/* The action belongs with the title, not in a card of its own below
+          it. A card containing two controls is a box drawn round nothing,
+          and it pushed the thing you came to read further down the page. */}
+      <div className="grid gap-3">
         <Link
           to=".."
           relative="path"
@@ -70,48 +73,71 @@ export function PiecePage({
         >
           ← All the writing
         </Link>
-        <h2 className="font-display text-[1.5rem] font-bold leading-tight tracking-[-0.02em] text-ink">
-          {piece.label}
-        </h2>
-        <p className="text-sm text-muted">{piece.blurb}</p>
-      </div>
 
-      <div className="card grid gap-3 p-5">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+          <div className="grid gap-1">
+            <h2 className="font-display text-[1.5rem] font-bold leading-tight tracking-[-0.02em] text-ink">
+              {piece.label}
+            </h2>
+            <p className="text-sm text-muted">{piece.blurb}</p>
+          </div>
+
           {piece.run === null ? (
             <p className="text-sm text-muted">
               Made from a clip, over in Clips &amp; reels.
             </p>
           ) : blocked ? (
-            // The reason, and a way to act on it. A disabled button with no
-            // explanation is the thing this whole redesign is against.
-            <p className="text-sm text-muted">
+            // The reason rather than a disabled button with no explanation.
+            <p className="max-w-xs text-sm text-muted">
               Write the {needsLabel} first — this one is built from it.
             </p>
           ) : (
-            <button
-              disabled={busy}
-              onClick={async () => {
-                setBusy(true);
-                setError(null);
-                try {
-                  await run({ projectId });
-                } catch (e) {
-                  setError(errorText(e, "Couldn't write that"));
-                } finally {
-                  setBusy(false);
-                }
-              }}
-              className={`rounded-lg border px-3.5 py-2 text-sm font-medium transition-colors disabled:opacity-40 ${
-                ready
-                  ? "border-border bg-surface text-muted hover:border-border-strong hover:text-ink"
-                  : "border-transparent bg-ink text-white hover:bg-ink/85"
-              }`}
-            >
-              {busy ? "Writing…" : ready ? "Write it again" : "Write it"}
-            </button>
+            <div className="grid justify-items-end gap-1">
+              <button
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  setError(null);
+                  try {
+                    await run({ projectId });
+                  } catch (e) {
+                    setError(errorText(e, "Couldn't write that"));
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+                className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-40 ${
+                  ready
+                    ? "border-border bg-surface text-ink hover:border-border-strong"
+                    : "border-transparent bg-ink text-white hover:bg-ink/85"
+                }`}
+              >
+                {busy
+                  ? "Claude is reading the sermon…"
+                  : ready
+                    ? "Write it again"
+                    : "Write it with Claude"}
+              </button>
+              {/* What it costs, said where the finger is. "Write it again"
+                  does not tell you it throws away what is on the screen —
+                  and it matters most in the one case the button looks
+                  identical in. */}
+              {!busy && ready && (
+                <span
+                  className={`text-2xs ${
+                    draft?.editedByHuman ? "text-warn" : "text-faint"
+                  }`}
+                >
+                  {draft?.editedByHuman
+                    ? "Replaces the edits you made"
+                    : "Replaces what's below"}
+                </span>
+              )}
+            </div>
           )}
+        </div>
 
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           {ready && isProse(draft.payloadJson) && !editing && (
             <button
               onClick={() => setEditing(true)}
@@ -126,41 +152,43 @@ export function PiecePage({
               edited by hand
             </span>
           )}
+
+          {/* Reading the assembled prompt is a tuning tool, so it sits with
+              the piece it assembles rather than in a settings screen. */}
+          {piece.kind === "thumbnail_concepts" && (
+            <>
+              <button
+                disabled={copying}
+                onClick={async () => {
+                  setCopying(true);
+                  setCopyNote(null);
+                  try {
+                    const built = await thumbnailPrompt({ projectId });
+                    await navigator.clipboard.writeText(built);
+                    setCopyNote(
+                      `Copied — ${built.length.toLocaleString()} characters`,
+                    );
+                  } catch (e) {
+                    setCopyNote(errorText(e, "Couldn't build the prompt"));
+                  } finally {
+                    setCopying(false);
+                    window.setTimeout(() => setCopyNote(null), 6000);
+                  }
+                }}
+                className="text-2xs text-muted underline hover:text-ink disabled:opacity-40"
+              >
+                {copying ? "Building…" : "Copy the prompt sent to Claude"}
+              </button>
+              {copyNote && (
+                <span className="text-2xs text-faint">{copyNote}</span>
+              )}
+            </>
+          )}
         </div>
 
         {error && <p className="text-[0.8125rem] text-danger">{error}</p>}
         {draft?.error && (
           <p className="text-[0.8125rem] text-danger">{draft.error}</p>
-        )}
-
-        {/* Reading the assembled prompt is a tuning tool, so it sits with
-            the piece it assembles rather than in a settings screen. */}
-        {piece.kind === "thumbnail_concepts" && (
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <button
-              disabled={copying}
-              onClick={async () => {
-                setCopying(true);
-                setCopyNote(null);
-                try {
-                  const built = await thumbnailPrompt({ projectId });
-                  await navigator.clipboard.writeText(built);
-                  setCopyNote(
-                    `Copied — ${built.length.toLocaleString()} characters`,
-                  );
-                } catch (e) {
-                  setCopyNote(errorText(e, "Couldn't build the prompt"));
-                } finally {
-                  setCopying(false);
-                  window.setTimeout(() => setCopyNote(null), 6000);
-                }
-              }}
-              className="text-2xs text-muted underline hover:text-ink disabled:opacity-40"
-            >
-              {copying ? "Building…" : "Copy the prompt sent to Claude"}
-            </button>
-            {copyNote && <span className="text-2xs text-faint">{copyNote}</span>}
-          </div>
         )}
       </div>
 
