@@ -331,9 +331,12 @@ function PieceRow({
   // alternative — one module re-exporting everything — would make every
   // generation import every other one.
   const run = useAction(api.amplifyGenerate[piece.run ?? "metadata"]);
+  const thumbnailPrompt = useAction(api.amplifyGenerate.thumbnailPrompt);
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [copying, setCopying] = useState(false);
+  const [copyNote, setCopyNote] = useState<string | null>(null);
 
   const blocked = piece.needs !== undefined && !have.has(piece.needs);
   const ready = draft?.status === "ready";
@@ -405,6 +408,42 @@ function PieceRow({
           anyone whether to retry or fix something. */}
       {draft?.error && (
         <p className="text-[0.8125rem] text-danger">{draft.error}</p>
+      )}
+
+      {piece.kind === "thumbnail_concepts" && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          {/* Tuning a prompt without seeing the filled-in version is
+              guesswork: the template is a third of it, and the rest is the
+              voice block, the church's wording, and six substitutions whose
+              sizes are capped in ways the template never mentions. */}
+          <button
+            disabled={copying}
+            onClick={async () => {
+              setCopying(true);
+              setCopyNote(null);
+              try {
+                const built = await thumbnailPrompt({ projectId });
+                await navigator.clipboard.writeText(built);
+                setCopyNote(
+                  `Copied — ${built.length.toLocaleString()} characters`,
+                );
+              } catch (e) {
+                setCopyNote(
+                  e instanceof Error
+                    ? e.message.slice(0, 140)
+                    : "Couldn't build the prompt",
+                );
+              } finally {
+                setCopying(false);
+                window.setTimeout(() => setCopyNote(null), 6000);
+              }
+            }}
+            className="text-2xs text-muted underline hover:text-ink disabled:opacity-40"
+          >
+            {copying ? "Building…" : "Copy the prompt sent to Claude"}
+          </button>
+          {copyNote && <span className="text-2xs text-faint">{copyNote}</span>}
+        </div>
       )}
 
       {/* The concepts are a brief for an image tool; this is where the
