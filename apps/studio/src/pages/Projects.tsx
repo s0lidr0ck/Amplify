@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 
 import { Mark } from "../brand/Mark";
 import { nextStep, ProgressRail, type Progress } from "../components/Progress";
+import { formatSermonDate, todayLocal } from "../lib/dates";
 import { errorText } from "../lib/errorText";
 
 /**
@@ -15,26 +16,6 @@ import { errorText } from "../lib/errorText";
  * the shape end to end — hub identity, church tenancy, app access, and live
  * data — and until it works there is no point building on top of it.
  */
-
-/** A plain date, formatted without a timezone changing the day. */
-function formatSermonDate(value: string): string {
-  // `new Date("2026-08-09")` is parsed as UTC midnight and renders as the 8th
-  // for anyone west of Greenwich, which is everyone using this.
-  const [y, m, d] = value.split("-").map(Number);
-  if (!y || !m || !d) return value;
-  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
-    weekday: "short",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
-}
-
-function todayLocal(): string {
-  const now = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}`;
-}
 
 function NewSermon({
   churchId,

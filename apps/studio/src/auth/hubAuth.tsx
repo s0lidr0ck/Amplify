@@ -87,13 +87,27 @@ export function HubGate({ children }: { children: React.ReactNode }) {
   return (
     <div className="grid min-h-screen place-items-center bg-background p-6">
       <div className="card grid w-full max-w-sm gap-4 p-7">
-        <div className="flex items-center gap-2.5">
-          <span className="text-brand">
-            <Mark size={26} title="Amplify" />
-          </span>
-          <span className="font-display text-xl font-semibold tracking-tight text-ink">
-            Amplify
-          </span>
+        <div className="grid gap-2.5">
+          <div className="flex items-center gap-2.5">
+            <span className="text-brand">
+              <Mark size={26} title="Amplify" />
+            </span>
+            <span className="font-display text-xl font-semibold tracking-tight text-ink">
+              Amplify
+            </span>
+          </div>
+          {/* What the product is, on the one screen everybody sees first.
+              A wordmark and a sign-in button says only "this is a thing
+              with a login" — which is what somebody sent a link by their
+              media director is trying to work out. */}
+          <p className="font-display text-[1.375rem] font-semibold leading-[1.25] tracking-[-0.015em] text-ink">
+            One sermon in.
+            <br />A week of content out.
+          </p>
+          <p className="text-[0.8125rem] leading-relaxed text-muted">
+            Amplify watches the whole service, finds the moments worth
+            clipping, and writes the posts in your church&rsquo;s own voice.
+          </p>
         </div>
         {exchange === "failed" && (
           <p className="text-sm text-danger">

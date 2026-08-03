@@ -3,6 +3,7 @@ import { api } from "@convex/api";
 import { useParams } from "react-router-dom";
 
 import { Mark } from "../brand/Mark";
+import { formatSermonDate } from "../lib/dates";
 
 /**
  * What a pastor sees when he opens the link.
@@ -137,7 +138,10 @@ export function SharedPage() {
             {view.sermonDate && (
               <>
                 <span className="h-3 w-px bg-border" aria-hidden />
-                <span className="data">{view.sermonDate}</span>
+                {/* Spelled out. This page is read by somebody who did not
+                    ask for it, on a phone, and 2026-08-02 is a database
+                    talking. */}
+                <span>{formatSermonDate(view.sermonDate)}</span>
               </>
             )}
           </p>

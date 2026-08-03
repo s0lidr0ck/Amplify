@@ -4,6 +4,7 @@ import type { Id } from "@convex/dataModel";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
+import { formatSermonDate } from "../lib/dates";
 import { shortName } from "../lib/names";
 
 /**
@@ -24,6 +25,14 @@ const KINDS: [string, string][] = [
   ["sermon_master", "Sermons"],
   ["source_video", "Service recordings"],
 ];
+
+/** Singular, for the chip on one row — the filter buttons read as plurals. */
+const KIND_LABELS: Record<string, string> = {
+  clip: "Clip",
+  sermon_master: "Sermon",
+  source_video: "Recording",
+  reel: "Reel",
+};
 
 const LABELS: Record<string, string> = {
   metadata: "details",
@@ -86,16 +95,28 @@ export function LibraryPage({ churchId }: { churchId: string }) {
               <li key={w.projectId} className="border-b border-border last:border-0">
                 <Link
                   to={`/projects/${w.projectId}`}
-                  className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-5 py-3.5 transition-colors hover:bg-surface-strong"
+                  className="flex items-center gap-4 px-5 py-3.5 transition-colors hover:bg-surface-strong focus-visible:outline focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-brand"
                 >
-                  <span className="text-[0.9375rem] font-semibold text-ink">
-                    {w.title}
-                  </span>
-                  <span className="data">{w.sermonDate}</span>
-                  <span className="text-[0.8125rem] text-muted">
-                    {w.ready.map((k) => LABELS[k] ?? k).join(", ")}
-                  </span>
-                  <span className="ml-auto">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-display text-[1.0625rem] font-semibold leading-snug tracking-[-0.01em] text-ink">
+                      {w.title}
+                    </p>
+                    <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-2xs text-muted">
+                      <span className="data">
+                        {formatSermonDate(w.sermonDate)}
+                      </span>
+                      <span className="h-2.5 w-px bg-border" aria-hidden />
+                      {/* A count, not the list. Six names of pieces of
+                          writing is a wall of grey the eye slides off; the
+                          number is read at a glance, and the names are one
+                          click away on the sermon itself. */}
+                      <span title={w.ready.map((k) => LABELS[k] ?? k).join(", ")}>
+                        {w.ready.length}{" "}
+                        {w.ready.length === 1 ? "piece" : "pieces"} written
+                      </span>
+                    </p>
+                  </div>
+                  <span className="shrink-0">
                     {w.published > 0 ? (
                       <span className="rounded-md bg-ok-soft px-2 py-0.5 text-2xs font-medium text-ok">
                         {w.published} out
@@ -139,18 +160,40 @@ export function LibraryPage({ churchId }: { churchId: string }) {
             {media.map((m) => (
               <li
                 key={m._id}
-                className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-border px-5 py-3 last:border-0"
+                className="flex items-center gap-4 border-b border-border px-5 py-3 last:border-0"
               >
-                <span className="text-sm text-ink" title={m.filename}>
-                  {shortName(m.filename)}
-                </span>
-                <span className="data">{mins(m.durationSeconds)}</span>
-                <Link
-                  to={`/projects/${m.projectId}`}
-                  className="text-[0.8125rem] text-muted underline hover:text-ink"
-                >
-                  {m.projectTitle}
-                </Link>
+                <div className="min-w-0 flex-1">
+                  <p className="flex items-center gap-2">
+                    {/* What kind of file it is, said rather than guessed at.
+                        A camera name like 1000132166.mp4 and an S3 key are
+                        equally meaningless, and without this the only way to
+                        tell a clip from a whole sermon was the duration —
+                        which the service recordings don't carry. */}
+                    <span className="shrink-0 rounded-md bg-surface-strong px-2 py-0.5 text-2xs font-medium text-muted">
+                      {KIND_LABELS[m.kind] ?? m.kind}
+                    </span>
+                    <span
+                      className="truncate text-sm text-ink"
+                      title={m.filename}
+                    >
+                      {shortName(m.filename)}
+                    </span>
+                  </p>
+                  <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-2xs text-muted">
+                    <Link
+                      to={`/projects/${m.projectId}`}
+                      className="underline hover:text-ink"
+                    >
+                      {m.projectTitle}
+                    </Link>
+                    {mins(m.durationSeconds) && (
+                      <>
+                        <span className="h-2.5 w-px bg-border" aria-hidden />
+                        <span className="data">{mins(m.durationSeconds)}</span>
+                      </>
+                    )}
+                  </p>
+                </div>
                 <button
                   disabled={opening === m._id}
                   onClick={async () => {
@@ -162,7 +205,7 @@ export function LibraryPage({ churchId }: { churchId: string }) {
                       setOpening(null);
                     }
                   }}
-                  className="ml-auto text-2xs text-muted underline hover:text-ink disabled:opacity-40"
+                  className="shrink-0 text-2xs text-muted underline hover:text-ink disabled:opacity-40"
                 >
                   {opening === m._id ? "Opening…" : "Open"}
                 </button>
