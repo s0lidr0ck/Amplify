@@ -1,0 +1,27 @@
+# What the polling worker actually needs.
+#
+# Shorter than pyproject.toml on purpose. The old arq worker pulled in Redis,
+# SQLAlchemy, asyncpg and boto3; the polling one needs none of them:
+#
+#   redis / arq   the queue is Convex now
+#   sqlalchemy    there is no database on this side
+#   asyncpg       likewise
+#   boto3         the worker holds no AWS credentials — it asks Convex for a
+#                 signed URL and PUTs to it, which is the whole point
+#
+# Leaving them in would put four unused dependencies and a set of AWS
+# credentials' worth of capability on a box that has no business with either.
+
+httpx>=0.26.0
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+python-dotenv>=1.0.0
+
+# The heavy one. On CPU, large-v3 wants roughly 10 GB of RAM; WHISPER_MODEL
+# in worker.env drops it to medium or small on a smaller box.
+faster-whisper>=1.0.0
+
+# Installed as a system package too, since the worker shells out to it
+# rather than importing it. Pinned here so a box without the apt package
+# still works.
+yt-dlp>=2025.1.15

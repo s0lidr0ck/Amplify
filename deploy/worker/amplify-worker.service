@@ -1,0 +1,60 @@
+# The Amplify worker: FFmpeg and Whisper, on a box of its own.
+#
+# It polls Convex outbound and is never called in, so this unit needs no
+# port, no reverse proxy and no certificate. Everything it needs is in the
+# environment file below.
+
+[Unit]
+Description=Amplify worker (transcribe, trim, import)
+Documentation=https://github.com/s0lidr0ck/amplify
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=amplify
+Group=amplify
+WorkingDirectory=/opt/amplify-worker
+EnvironmentFile=/etc/amplify-worker/worker.env
+ExecStart=/opt/amplify-worker/venv/bin/python run.py
+
+# Always, and without systemd's give-up rule.
+#
+# The default is five restarts in ten seconds and then the unit stays failed
+# — for something that polls a queue, that turns a transient network blip
+# into a worker that is quietly off until somebody notices the queue growing.
+# This is the same lesson the playout units learned the hard way, and
+# StartLimitIntervalSec belongs in [Unit], not here, where systemd ignores
+# it silently.
+Restart=always
+RestartSec=10
+
+# SIGTERM finishes the job in hand rather than dropping it. A transcription
+# killed halfway wastes the whole thing and leaves a claim to time out, so a
+# deploy waits for one job.
+KillSignal=SIGTERM
+TimeoutStopSec=1800
+
+# Weights, not quotas. A hard CPUQuota would throttle FFmpeg mid-encode; a
+# weight only matters when something else wants the CPU, which is the actual
+# goal — be a good neighbour, not a slow worker on an idle box.
+CPUWeight=50
+IOSchedulingClass=idle
+
+# It reads its own directory, writes to a scratch dir, and talks to the
+# network. Nothing else on the box is its business.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/amplify-worker
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=amplify-worker
+
+[Install]
+WantedBy=multi-user.target
