@@ -129,7 +129,7 @@ def main() -> None:
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
     # Import for side effects: each module registers its handlers.
-    from worker import jobs  # noqa: F401
+    from worker import clips, jobs  # noqa: F401
 
     runner = Runner()
     signal.signal(signal.SIGTERM, runner.request_stop)

@@ -108,6 +108,11 @@ def trim(hub: Hub, job: Job, scratch: Path) -> list[dict[str, object]]:
             # No re-encode. The sermon is a slice of an existing file, and
             # re-encoding would cost an hour and quality for nothing.
             "-c", "copy",
+            # Index at the front. Clips are cut by pointing ffmpeg at this
+            # file's URL and seeking, which only works if the index can be
+            # read without fetching the whole file — otherwise every clip
+            # quietly pulls 39 minutes down to take 35 seconds out.
+            "-movflags", "+faststart",
             str(output),
         ],
         job,

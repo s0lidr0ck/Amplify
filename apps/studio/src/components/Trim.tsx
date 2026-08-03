@@ -3,6 +3,8 @@ import { api } from "@convex/api";
 import type { Id } from "@convex/dataModel";
 import { useEffect, useRef, useState } from "react";
 
+import { hhmmss, TimeMark } from "./TimeMark";
+
 /**
  * Finding the sermon inside the service.
  *
@@ -17,15 +19,6 @@ import { useEffect, useRef, useState } from "react";
  * Bible, press "start here". Typing 00:14:32 requires already knowing the
  * answer.
  */
-
-function hhmmss(seconds: number): string {
-  const s = Math.max(0, Math.floor(seconds));
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const sec = s % 60;
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
-}
 
 export function Trim({
   projectId,
@@ -95,43 +88,34 @@ export function Trim({
         </div>
       )}
 
-      {/* Both marks on one line with the running time between them, because
-          the question being answered is "how long is the sermon" and that is
-          the difference, not either number on its own. */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setStart(position)}
-            className="rounded-lg bg-ink px-3 py-1.5 text-2xs font-medium text-white hover:bg-ink/85"
-          >
-            Sermon starts here
-          </button>
-          {start !== null && (
-            <button
-              onClick={() => seek(start)}
-              className="font-mono text-2xs text-muted underline hover:text-ink"
-            >
-              {hhmmss(start)}
-            </button>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setEnd(position)}
-            className="rounded-lg bg-ink px-3 py-1.5 text-2xs font-medium text-white hover:bg-ink/85"
-          >
-            Ends here
-          </button>
-          {end !== null && (
-            <button
-              onClick={() => seek(end)}
-              className="font-mono text-2xs text-muted underline hover:text-ink"
-            >
-              {hhmmss(end)}
-            </button>
-          )}
-        </div>
+      {/* Two marks, each with its own nudges. Setting a mark from the
+          playhead gets you within a second or two; the nudges are how you
+          close that gap without scrubbing back and forth, which is the part
+          that makes trimming tedious. Nudging seeks as well as moves, so you
+          hear the new edge rather than guessing at it. */}
+      <div className="grid gap-2.5">
+        <TimeMark
+          label="Sermon starts"
+          value={start}
+          onSet={() => setStart(position)}
+          onNudge={(by) => {
+            const next = Math.max(0, (start ?? position) + by);
+            setStart(next);
+            seek(next);
+          }}
+          onSeek={seek}
+        />
+        <TimeMark
+          label="Sermon ends"
+          value={end}
+          onSet={() => setEnd(position)}
+          onNudge={(by) => {
+            const next = Math.min(duration || Infinity, (end ?? position) + by);
+            setEnd(next);
+            seek(next);
+          }}
+          onSeek={seek}
+        />
 
         {ready && (
           <span className="data">

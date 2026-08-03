@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { Mark } from "../brand/Mark";
+import { Clips } from "../components/Clips";
 import { Outputs } from "../components/Outputs";
 import { SignalRail } from "../components/SignalRail";
 import { Transcript } from "../components/Transcript";
@@ -205,6 +206,9 @@ export function ProjectPage() {
   const projectId = id as Id<"amplifyProjects">;
   const project = useQuery(api.amplify.getProject, { projectId });
   const assets = useQuery(api.amplifyMedia.listAssets, { projectId });
+  const transcriptSummary = useQuery(api.amplifyTranscripts.summary, {
+    projectId,
+  });
   const enqueue = useMutation(api.amplifyWorker.enqueue);
 
   // Every hook must run on every render. This one sat below the
@@ -235,6 +239,7 @@ export function ProjectPage() {
 
   const source = assets?.find((a) => a.kind === "source_video");
   const master = assets?.find((a) => a.kind === "sermon_master");
+  const hasTranscript = transcriptSummary !== null && transcriptSummary !== undefined;
 
   return (
     <>
@@ -338,6 +343,12 @@ export function ProjectPage() {
       <Transcript projectId={projectId} />
 
       <Outputs projectId={projectId} />
+
+      <Clips
+        projectId={projectId}
+        masterAssetId={master?._id ?? null}
+        hasTranscript={hasTranscript}
+      />
 
       <Jobs projectId={projectId} />
       </div>
