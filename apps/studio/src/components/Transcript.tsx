@@ -34,6 +34,23 @@ export function Transcript({
   const transcript = useQuery(api.amplifyTranscripts.forProject, { projectId });
   const saveCleaned = useMutation(api.amplifyTranscripts.saveCleaned);
   const approve = useMutation(api.amplifyTranscripts.approve);
+  const enqueue = useMutation(api.amplifyWorker.enqueue);
+
+  // Which file to transcribe, and whether one is already being read. The
+  // sermon if it has been cut, the whole service otherwise — transcribing
+  // the source after a trim describes the whole evening, worship and
+  // notices included, and every output written from it inherits that.
+  const assets = useQuery(api.amplifyMedia.listAssets, { projectId });
+  const jobs = useQuery(api.amplifyWorker.listJobs, { projectId });
+  const master = (assets ?? []).find((a) => a.kind === "sermon_master");
+  const raw = (assets ?? []).find((a) => a.kind === "source_video");
+  const source = (master ?? raw)?._id ?? null;
+  const trimmed = Boolean(master);
+  const running = (jobs ?? []).some(
+    (j) =>
+      j.jobType === "transcribe" &&
+      (j.status === "running" || j.status === "queued"),
+  );
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
@@ -45,13 +62,49 @@ export function Transcript({
   if (transcript === undefined) return null;
 
   if (transcript === null) {
+    // An empty screen is an invitation, and this is where somebody lands
+    // when they are wondering where the transcript has got to — so the
+    // button lives here rather than on the Source page, which is about the
+    // file. Trimming queues one on its own; this is for the sermon that was
+    // never trimmed, or a re-run.
     return (
-      <div className="card grid gap-2 p-4">
-        <p className="section-label">Transcript</p>
-        <p className="text-sm text-muted">
-          Nothing yet. Transcribe the sermon and it will appear here to read
-          and approve.
+      <div className="card grid justify-items-start gap-2 p-5">
+        <p className="text-sm text-ink">
+          {running
+            ? "Claude is listening to the sermon now."
+            : "No transcript yet."}
         </p>
+        <p className="max-w-prose text-sm text-muted">
+          {running
+            ? "It takes a few minutes on the whole sermon. Everything else gets written from what comes back."
+            : source
+              ? "Everything else gets written from this, so it comes first."
+              : "Upload the recording first."}
+        </p>
+        {!running && source && (
+          <button
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                await enqueue({
+                  projectId,
+                  jobType: "transcribe",
+                  // The sermon if one has been cut, the whole service
+                  // otherwise. Transcribing the source after a trim
+                  // describes the whole evening — worship and notices
+                  // included — and every output written from it inherits it.
+                  payloadJson: JSON.stringify({ assetId: source }),
+                });
+              } finally {
+                setBusy(false);
+              }
+            }}
+            className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-ink/85 disabled:opacity-40"
+          >
+            {busy ? "Starting…" : trimmed ? "Transcribe the sermon" : "Transcribe the whole service"}
+          </button>
+        )}
       </div>
     );
   }

@@ -1,7 +1,7 @@
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@convex/api";
 import type { Id } from "@convex/dataModel";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { errorText } from "../lib/errorText";
 
@@ -41,8 +41,15 @@ const WANTED: Record<CoverKind, { one: string; many: string; wide: boolean; hint
   },
 };
 
-/** A, B, C… so two pictures can be talked about out loud. */
-const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+/**
+ * Numbered, not lettered.
+ *
+ * The concept cards below are already A, B and C — the model's own labels —
+ * and lettering the pictures too implies picture A came out of concept A.
+ * Nothing records that; somebody uploads three exports in whatever order
+ * their download folder had them. Numbers keep the pictures nameable
+ * without inventing a pairing.
+ */
 
 /** Read the picture's own dimensions before it goes anywhere. */
 function measure(file: File): Promise<{ width: number; height: number } | null> {
@@ -64,6 +71,14 @@ function measure(file: File): Promise<{ width: number; height: number } | null> 
   });
 }
 
+type Attached = {
+  assetId: Id<"amplifyAssets">;
+  url: string;
+  filename: string;
+  width: number | null;
+  height: number | null;
+};
+
 export function AttachImage({
   projectId,
   kind,
@@ -75,6 +90,7 @@ export function AttachImage({
   subjectId?: string;
 }) {
   const assets = useQuery(api.amplifyMedia.listAssets, { projectId });
+  const attachedImages = useAction(api.amplifyMedia.attachedImages);
   const requestUpload = useAction(api.amplifyMedia.requestUpload);
   const recordAsset = useMutation(api.amplifyMedia.recordAsset);
   const detach = useMutation(api.amplifyMedia.detachImage);
@@ -84,15 +100,32 @@ export function AttachImage({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
-  const [shown, setShown] = useState<Record<string, string>>({});
+  const [shown, setShown] = useState<Attached[]>([]);
+  const [full, setFull] = useState<Attached | null>(null);
 
   const spec = WANTED[kind];
-  // Oldest first, so A stays A when a third is added. Sorting newest-first
-  // would renumber every picture each time somebody uploads one, and "try
-  // B" would mean a different image by the afternoon.
-  const attached = (assets ?? [])
+
+  // Which pictures exist comes from the live query; the signed links to look
+  // at them come from an action. Keyed on the ids so a new upload or a
+  // removal refetches, and nothing else does.
+  const ids = (assets ?? [])
     .filter((a) => a.kind === kind && (a.subjectId ?? undefined) === subjectId)
-    .sort((a, b) => a.createdAt - b.createdAt);
+    .map((a) => a._id)
+    .join(",");
+
+  useEffect(() => {
+    let live = true;
+    if (!ids) {
+      setShown([]);
+      return;
+    }
+    void attachedImages({ projectId, kind, subjectId }).then((rows) => {
+      if (live) setShown(rows);
+    });
+    return () => {
+      live = false;
+    };
+  }, [ids, projectId, kind, subjectId, attachedImages]);
 
   const upload = async (files: File[]) => {
     setBusy(true);
@@ -107,8 +140,7 @@ export function AttachImage({
         }
         // A warning, not a refusal. Somebody attaching a landscape cover to
         // a reel usually knows something we don't — a different crop is
-        // coming, or the platform is not the one we assumed. Refusing would
-        // make the app an obstacle over a guess.
+        // coming, or the platform is not the one we assumed.
         if (size.width > size.height !== spec.wide) {
           setWarning(`${spec.hint} Attached anyway.`);
         }
@@ -145,21 +177,70 @@ export function AttachImage({
     }
   };
 
-  const look = async (assetId: string) => {
-    if (shown[assetId]) {
-      setShown((s) => {
-        const next = { ...s };
-        delete next[assetId];
-        return next;
-      });
-      return;
-    }
-    const url = await playbackUrl({ assetId: assetId as Id<"amplifyAssets"> });
-    setShown((s) => ({ ...s, [assetId]: url }));
-  };
-
   return (
-    <div className="grid gap-2">
+    <div className="grid gap-3">
+      {/* The pictures themselves, not buttons promising pictures. You are
+          choosing between three images; the only way to do that is to look
+          at all three at once, and a "See it" button per row made that
+          three clicks and a lot of scrolling. */}
+      {shown.length > 0 && (
+        <ul
+          className={`grid gap-3 ${
+            spec.wide
+              ? "sm:grid-cols-2 lg:grid-cols-3"
+              : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
+          }`}
+        >
+          {shown.map((img, i) => (
+            <li key={img.assetId} className="grid gap-1.5">
+              <button
+                onClick={() => setFull(img)}
+                title="See it full size"
+                className="group relative block overflow-hidden rounded-xl border border-border bg-surface-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+              >
+                <img
+                  src={img.url}
+                  alt={`${spec.one} ${i + 1}`}
+                  loading="lazy"
+                  className={`w-full object-cover transition-transform duration-200 group-hover:scale-[1.02] ${
+                    spec.wide ? "aspect-video" : "aspect-[9/16]"
+                  }`}
+                />
+                {/* The number sits on the picture, because the picture is
+                    what somebody points at when they say "go with two". */}
+                <span className="absolute left-2 top-2 rounded-md bg-ink/80 px-1.5 py-0.5 font-mono text-2xs font-medium text-white">
+                  {i + 1}
+                </span>
+              </button>
+
+              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
+                <span className="data">
+                  {img.width}×{img.height}
+                </span>
+                <button
+                  onClick={async () => {
+                    const url = await playbackUrl({
+                      assetId: img.assetId,
+                      download: true,
+                    });
+                    window.location.href = url;
+                  }}
+                  className="text-2xs text-muted underline hover:text-ink"
+                >
+                  Download
+                </button>
+                <button
+                  onClick={() => void detach({ assetId: img.assetId })}
+                  className="text-2xs text-muted underline hover:text-ink"
+                >
+                  Remove
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <input
           ref={input}
@@ -178,20 +259,20 @@ export function AttachImage({
           disabled={busy}
           onClick={() => input.current?.click()}
           className={`rounded-lg border px-3 py-1.5 text-2xs font-medium transition-colors disabled:opacity-40 ${
-            attached.length > 0
+            shown.length > 0
               ? "border-border bg-surface text-muted hover:border-border-strong hover:text-ink"
               : "border-transparent bg-ink text-white hover:bg-ink/85"
           }`}
         >
           {busy
             ? "Attaching…"
-            : attached.length > 0
-              ? `Attach another ${spec.one}`
+            : shown.length > 0
+              ? `Add another ${spec.one}`
               : `Attach the ${spec.one}`}
         </button>
-        {attached.length > 1 && (
+        {shown.length > 1 && (
           <span className="text-2xs text-muted">
-            {attached.length} {spec.many} to test against each other
+            {shown.length} {spec.many} to test against each other
           </span>
         )}
       </div>
@@ -199,58 +280,28 @@ export function AttachImage({
       {error && <p className="text-2xs text-danger">{error}</p>}
       {warning && <p className="text-2xs text-warn">{warning}</p>}
 
-      {attached.length > 0 && (
-        <ul className="grid gap-1.5">
-          {attached.map((a, i) => (
-            <li key={a._id} className="grid gap-1.5">
-              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-                <span className="rounded-md bg-surface-strong px-1.5 py-0.5 font-mono text-2xs font-medium text-ink">
-                  {LETTERS[i] ?? i + 1}
-                </span>
-                <span className="min-w-0 max-w-[16rem] truncate text-2xs text-muted">
-                  {a.filename}
-                </span>
-                <span className="data">
-                  {a.width}×{a.height}
-                </span>
-                <button
-                  onClick={() => void look(a._id)}
-                  className="text-2xs text-muted underline hover:text-ink"
-                >
-                  {shown[a._id] ? "Hide it" : "See it"}
-                </button>
-                <button
-                  onClick={async () => {
-                    const url = await playbackUrl({
-                      assetId: a._id,
-                      download: true,
-                    });
-                    window.location.href = url;
-                  }}
-                  className="text-2xs text-muted underline hover:text-ink"
-                >
-                  Download
-                </button>
-                <button
-                  onClick={() => void detach({ assetId: a._id })}
-                  className="text-2xs text-muted underline hover:text-ink"
-                >
-                  Remove
-                </button>
-              </div>
-              {shown[a._id] && (
-                <img
-                  src={shown[a._id]}
-                  alt={`${spec.one} ${LETTERS[i] ?? i + 1}`}
-                  // Bounded rather than full width: a 1080×1920 cover
-                  // unrolled at full size pushes everything else off screen.
-                  className="max-h-72 w-auto justify-self-start rounded-xl border border-border"
-                />
-              )}
-            </li>
-          ))}
-        </ul>
+      {/* Full size, for judging a thumbnail at the size it will not be seen
+          at. Escape and a click anywhere both close it — a lightbox you
+          cannot get out of is worse than no lightbox. */}
+      {full && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={full.filename}
+          onClick={() => setFull(null)}
+          onKeyDown={(e) => e.key === "Escape" && setFull(null)}
+          tabIndex={-1}
+          ref={(el) => el?.focus()}
+          className="fixed inset-0 z-50 grid place-items-center bg-ink/70 p-6"
+        >
+          <img
+            src={full.url}
+            alt={full.filename}
+            className="max-h-full max-w-full rounded-xl object-contain shadow-2xl"
+          />
+        </div>
       )}
     </div>
   );
 }
+

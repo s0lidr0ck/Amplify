@@ -11,6 +11,7 @@ import {
 } from "react-router-dom";
 
 import { Mark } from "../brand/Mark";
+import { Jobs } from "../components/Jobs";
 import { StageRail } from "../components/StageRail";
 import { Trim } from "../components/Trim";
 import { errorText } from "../lib/errorText";
@@ -156,78 +157,6 @@ function SourceUpload({ projectId }: { projectId: Id<"amplifyProjects"> }) {
   );
 }
 
-function Jobs({ projectId }: { projectId: Id<"amplifyProjects"> }) {
-  const jobs = useQuery(api.amplifyWorker.listJobs, { projectId });
-  const [all, setAll] = useState(false);
-  if (!jobs || jobs.length === 0) return null;
-
-  // Anything live or broken, and then a couple of finished ones for
-  // context. The full list is every clip ever cut — twenty rows of
-  // "completed" that nobody reads and that bury the one that failed.
-  const notable = jobs.filter(
-    (j) => j.status === "running" || j.status === "queued" || j.status === "failed",
-  );
-  const rest = jobs.filter((j) => !notable.includes(j));
-  const shown = all ? jobs : [...notable, ...rest.slice(0, 3)];
-
-  return (
-    <div className="card grid gap-2 p-4">
-      <div className="flex flex-wrap items-baseline gap-x-2.5">
-        <p className="card-title">Work</p>
-        {jobs.length > shown.length && (
-          <button
-            onClick={() => setAll(true)}
-            className="text-2xs text-muted underline hover:text-ink"
-          >
-            Show all {jobs.length}
-          </button>
-        )}
-      </div>
-      <ul className="grid gap-2">
-        {shown.map((job) => (
-          <li key={job._id} className="grid gap-1">
-            <div className="flex flex-wrap items-baseline gap-2">
-              <span className="text-sm text-ink">
-                {job.jobType.replace(/_/g, " ")}
-              </span>
-              <span
-                className={`rounded-md px-2 py-0.5 text-2xs font-medium ${
-                  job.status === "running"
-                    ? "bg-brand-soft text-brand-strong"
-                    : job.status === "failed"
-                      ? "bg-danger-soft text-danger"
-                      : job.status === "completed"
-                        ? "bg-ok-soft text-ok"
-                        : "bg-surface-strong text-muted"
-                }`}
-              >
-                {job.status}
-              </span>
-              {job.message && (
-                <span className="text-2xs text-muted">{job.message}</span>
-              )}
-              {job.attempt > 1 && (
-                <span className="text-2xs text-muted">attempt {job.attempt}</span>
-              )}
-            </div>
-            {job.status === "running" && (
-              <div className="h-1 overflow-hidden rounded-full bg-surface-strong">
-                <div
-                  className="h-full rounded-full bg-brand transition-[width] duration-500"
-                  style={{ width: `${job.progressPercent ?? 0}%` }}
-                />
-              </div>
-            )}
-            {/* The reason, not just the fact — it is the only thing that
-                tells anyone what to do next. */}
-            {job.error && <p className="text-2xs text-danger">{job.error}</p>}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
 /** The room's wash, keyed to the pipeline ramp in tokens.css. */
 const TINT: Record<StageSlug, string> = {
   source: "bg-stage-source",
@@ -320,25 +249,10 @@ export function ProjectPage() {
                 {Math.round(source.durationSeconds / 60)} min
               </span>
             ) : null}
-            <button
-              onClick={() =>
-                void enqueue({
-                  projectId,
-                  jobType: "transcribe",
-                  // The sermon if one has been cut, the whole service
-                  // otherwise. Transcribing the source after a trim
-                  // describes the whole evening — worship and notices
-                  // included — and every output written from it inherits it.
-                  payloadJson: JSON.stringify({
-                    assetId: (master ?? source)._id,
-                  }),
-                })
-              }
-              className="ml-auto rounded-lg bg-ink px-3 py-1.5 text-2xs font-medium text-white transition-colors hover:bg-ink/85"
-            >
-              {master ? "Transcribe the sermon" : "Transcribe"}
-            </button>
-
+            {/* No Transcribe button here any more. Trimming now queues one
+                by itself, and when it needs pressing by hand it belongs on
+                the Transcript page — which is where somebody goes when they
+                are wondering where the transcript is. */}
             {master ? (
               <span className="w-full text-[0.8125rem] text-muted">
                 Sermon cut out
@@ -375,10 +289,10 @@ export function ProjectPage() {
         />
       ) : null}
 
-      {/* The job log lives here rather than on every room: it is about the
-          machine, and this is the room where the machine does the heavy
-          work. Anything urgent already shows on the rail, pulsing. */}
-      <Jobs projectId={projectId} />
+      {/* Only this room's work. Transcribing reports on the Transcript
+          page and cutting reports on Clips, because that is where somebody
+          goes when they are wondering how it is getting on. */}
+      <Jobs projectId={projectId} types={["trim", "youtube_import"]} />
     </>
   );
 

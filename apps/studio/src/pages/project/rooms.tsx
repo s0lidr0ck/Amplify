@@ -2,6 +2,7 @@ import { useOutletContext } from "react-router-dom";
 import type { Id } from "@convex/dataModel";
 
 import { Clips } from "../../components/Clips";
+import { Jobs } from "../../components/Jobs";
 import { PiecePage } from "../../components/PiecePage";
 import { Publish } from "../../components/Publish";
 import { Reels } from "../../components/Reels";
@@ -63,6 +64,9 @@ export function TranscriptRoom() {
   return (
     <div className="grid gap-5">
       <RoomHeading slug="transcript" />
+      {/* Above the transcript: while it is being made, the progress IS the
+          page, and it used to report two rooms away on Source. */}
+      <Jobs projectId={projectId} types={["transcribe"]} />
       <Transcript projectId={projectId} />
     </div>
   );
@@ -92,6 +96,7 @@ export function ClipsRoom() {
       {/* Clips above reels because that is the order of the work: you find a
           moment, cut it, and only then is there something to write captions
           for. Reels first would be a list of things made from nothing. */}
+      <Jobs projectId={projectId} types={["clip_export"]} />
       <Clips
         projectId={projectId}
         masterAssetId={masterAssetId}
@@ -107,6 +112,7 @@ export function PublishRoom() {
   return (
     <div className="grid gap-5">
       <RoomHeading slug="publish" />
+      <Jobs projectId={projectId} types={["publish"]} />
       <Publish projectId={projectId} />
     </div>
   );
