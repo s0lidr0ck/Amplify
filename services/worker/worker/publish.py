@@ -78,11 +78,19 @@ def _explain(response: httpx.Response, what: str) -> PublishError:
     detail = ""
     try:
         body = response.json()
+        # `error` is an object on Meta and TikTok and a bare string on
+        # Google, so reaching straight for error.message throws on Google and
+        # the whole raw JSON body ends up on screen — which is what happened
+        # the first time this ran against a bad credential.
+        error = body.get("error")
+        nested = error if isinstance(error, dict) else {}
         detail = (
-            body.get("error", {}).get("message")
-            or body.get("error", {}).get("error_user_msg")
+            nested.get("message")
+            or nested.get("error_user_msg")
+            # Google's readable sentence lives here.
             or body.get("error_description")
             or body.get("message")
+            or (error if isinstance(error, str) else "")
             or ""
         )
     except Exception:

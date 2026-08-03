@@ -122,3 +122,30 @@ def test_explain_falls_back_to_the_status_code():
         503, text="", request=httpx.Request("POST", "https://example.invalid")
     )
     assert "503" in str(_explain(response, "YouTube refused"))
+
+
+def test_explain_handles_google_shape():
+    # Google returns `error` as a bare string with the readable sentence in
+    # error_description. Reaching for error.message throws, and the whole raw
+    # JSON body ends up on screen — which is what happened the first time
+    # this ran against a bad credential.
+    response = httpx.Response(
+        401,
+        json={
+            "error": "invalid_client",
+            "error_description": "The OAuth client was not found.",
+        },
+        request=httpx.Request("POST", "https://example.invalid"),
+    )
+    message = str(_explain(response, "YouTube would not accept the saved connection"))
+    assert message.endswith("The OAuth client was not found.")
+    assert "invalid_client" not in message
+
+
+def test_explain_handles_meta_shape():
+    response = httpx.Response(
+        400,
+        json={"error": {"message": "The video file is too long for a reel."}},
+        request=httpx.Request("POST", "https://example.invalid"),
+    )
+    assert "too long for a reel" in str(_explain(response, "Instagram refused"))
