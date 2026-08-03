@@ -18,7 +18,7 @@ import logging
 from pathlib import Path
 
 from worker.hub import Hub, Job
-from worker.jobs import _download, _payload, _probe_duration, _run
+from worker.jobs import _download, _payload, _probe_duration, _run, probe_frame
 from worker.loop import handles
 
 logger = logging.getLogger(__name__)
@@ -83,36 +83,78 @@ def clip_export(hub: Hub, job: Job, scratch: Path) -> list[dict[str, object]]:
     hub.progress(job, 5, "Reading the sermon")
     url, _ = hub.download_url(job, str(asset_id))
 
-    hub.progress(job, 25, "Cutting")
+    # What shape is it already?
+    #
+    # The old cutter cropped to 9:16 and re-encoded every clip, whatever came
+    # in. On a sermon filmed on a phone — which is most of them — the source
+    # is already vertical, so that crop is a no-op and the re-encode is pure
+    # loss: an h264 file decoded and re-compressed for nothing, slowly.
+    #
+    # You genuinely cannot make a vertical reel out of a 16:9 recording
+    # without re-encoding, so that path stays. It is just no longer the only
+    # one.
+    frame = probe_frame(url)
+    already_vertical = bool(frame and frame[1] >= frame[0])
+
     output = scratch / "clip.mp4"
-    _run(
-        [
-            "ffmpeg", "-y",
-            # Keep trying if the connection wobbles: a stream that dies
-            # halfway leaves a truncated clip rather than an error.
-            "-reconnect", "1", "-reconnect_streamed", "1",
-            "-reconnect_delay_max", "5",
-            # -ss before -i seeks by index; the extra -ss after would be
-            # frame-accurate but decodes from the last keyframe every time,
-            # and on a forty-minute file that is minutes per clip.
-            "-ss", str(start),
-            "-i", url,
-            "-t", str(end - start),
-            "-vf", _crop_filter(focus),
-            # Re-encoding is unavoidable here, so the settings are chosen
-            # rather than defaulted: veryfast keeps a batch of eight clips
-            # to minutes, and CRF 20 is visually clean at this size.
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
-            "-pix_fmt", "yuv420p",
-            # Faststart puts the index at the front so the file plays while
-            # it downloads. Without it a phone waits for the whole thing.
-            "-movflags", "+faststart",
-            "-c:a", "aac", "-b:a", "128k", "-ac", "2",
-            str(output),
-        ],
-        job,
-        hub,
-    )
+    if already_vertical:
+        hub.progress(job, 25, "Cutting (copying the stream)")
+        _run(
+            [
+                "ffmpeg", "-y",
+                "-reconnect", "1", "-reconnect_streamed", "1",
+                "-reconnect_delay_max", "5",
+                "-ss", str(start),
+                "-i", url,
+                "-t", str(end - start),
+                # No filter, no encoder. The bytes are copied across, so the
+                # clip is bit-for-bit the sermon and the cut costs seconds
+                # instead of minutes.
+                #
+                # The cost is that a copy can only cut on a keyframe, so the
+                # start lands on the nearest one before the mark — up to a
+                # couple of seconds early on a typical stream. Early is the
+                # right direction to be wrong in: it keeps the whole hook and
+                # adds a beat of run-up, where late would clip the first word.
+                "-c", "copy",
+                "-avoid_negative_ts", "make_zero",
+                "-movflags", "+faststart",
+                str(output),
+            ],
+            job,
+            hub,
+        )
+    else:
+        hub.progress(job, 25, "Cutting (reframing to vertical)")
+        _run(
+            [
+                "ffmpeg", "-y",
+                # Keep trying if the connection wobbles: a stream that dies
+                # halfway leaves a truncated clip rather than an error.
+                "-reconnect", "1", "-reconnect_streamed", "1",
+                "-reconnect_delay_max", "5",
+                # -ss before -i seeks by index; the extra -ss after would be
+                # frame-accurate but decodes from the last keyframe every
+                # time, and on a forty-minute file that is minutes per clip.
+                "-ss", str(start),
+                "-i", url,
+                "-t", str(end - start),
+                "-vf", _crop_filter(focus),
+                # Re-encoding is unavoidable on this path, so the settings
+                # are chosen rather than defaulted: veryfast keeps a batch of
+                # eight clips to minutes, and CRF 20 is visually clean here.
+                "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+                "-pix_fmt", "yuv420p",
+                # Faststart puts the index at the front so the file plays
+                # while it downloads. Without it a phone waits for the whole
+                # thing.
+                "-movflags", "+faststart",
+                "-c:a", "aac", "-b:a", "128k", "-ac", "2",
+                str(output),
+            ],
+            job,
+            hub,
+        )
 
     if not output.exists() or output.stat().st_size == 0:
         raise RuntimeError("ffmpeg finished but produced no clip")
@@ -127,9 +169,13 @@ def clip_export(hub: Hub, job: Job, scratch: Path) -> list[dict[str, object]]:
         "filename": name,
         "mimeType": "video/mp4",
         "durationSeconds": _probe_duration(scratch / name) or (end - start),
-        "width": WIDTH,
-        "height": HEIGHT,
     }
+    # Measured, not assumed. This used to record 1080x1920 on every clip
+    # whatever the file turned out to be, so a copied vertical clip claimed
+    # dimensions it did not have and nothing downstream could tell.
+    made = probe_frame(str(scratch / name))
+    if made:
+        asset["width"], asset["height"] = made[0], made[1]
     # Carried through so Convex can link the file back to the suggestion that
     # produced it. Without it the clip exists and nothing knows why.
     if clip_id:

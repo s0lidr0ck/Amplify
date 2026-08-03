@@ -253,3 +253,42 @@ def youtube_import(hub: Hub, job: Job, scratch: Path) -> list[dict[str, object]]
             "durationSeconds": _probe_duration(output),
         }
     ]
+
+
+def probe_frame(target: str) -> tuple[int, int] | None:
+    """The displayed size of a video, rotation already applied.
+
+    Works on a URL as well as a path, so the clip cutter can ask about the
+    master without downloading it.
+
+    Reads the *display* dimensions rather than the coded ones. A phone films
+    portrait and stores a landscape frame with a rotate tag, so trusting the
+    coded size means treating a vertical video as horizontal — and then
+    "cropping it to vertical" takes a narrow slice out of the middle of a
+    frame that was already the right shape.
+    """
+    try:
+        out = subprocess.run(
+            [
+                "ffprobe", "-v", "error",
+                "-select_streams", "v:0",
+                "-show_entries", "stream=width,height:stream_side_data=rotation",
+                "-of", "default=noprint_wrappers=1:nokey=1",
+                target,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        if out.returncode != 0:
+            return None
+        values = [v for v in out.stdout.split() if v]
+        if len(values) < 2:
+            return None
+        width, height = int(values[0]), int(values[1])
+        rotation = int(float(values[2])) if len(values) > 2 else 0
+        if abs(rotation) % 180 == 90:
+            width, height = height, width
+        return width, height
+    except (ValueError, OSError, subprocess.SubprocessError):
+        return None
