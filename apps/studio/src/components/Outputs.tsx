@@ -457,7 +457,17 @@ function PieceRow({
                 setBusy(false);
               }
             }}
-            className="rounded-lg bg-ink px-3 py-1.5 text-2xs font-medium text-white transition-colors hover:bg-ink/85 disabled:opacity-40"
+            // Weight follows what is left to do. Every row carried the same
+            // solid button, so seven pieces of writing meant seven identical
+            // black rectangles down the page — and the one thing that had
+            // not been written yet looked exactly like the six that had.
+            // Rewriting something finished is a second thought; it gets a
+            // second thought's weight.
+            className={`rounded-lg px-3 py-1.5 text-2xs font-medium transition-colors disabled:opacity-40 ${
+              ready
+                ? "border border-border bg-surface text-muted hover:border-border-strong hover:text-ink"
+                : "bg-ink text-white hover:bg-ink/85"
+            }`}
           >
             {busy ? "Writing…" : ready ? "Write again" : "Write"}
           </button>

@@ -277,7 +277,15 @@ function ClipRow({
                 setBusy(false);
               }
             }}
-            className="rounded-lg bg-ink px-3 py-1.5 text-2xs font-medium text-white transition-colors hover:bg-ink/85 disabled:opacity-40"
+            // Same rule as the writing list: a clip already cut gets a
+            // quieter button than one waiting to be. Eight suggestions with
+            // eight identical solid buttons is a wall, and the wall hides
+            // which ones are still outstanding.
+            className={`rounded-lg px-3 py-1.5 text-2xs font-medium transition-colors disabled:opacity-40 ${
+              exported
+                ? "border border-border bg-surface text-muted hover:border-border-strong hover:text-ink"
+                : "bg-ink text-white hover:bg-ink/85"
+            }`}
           >
             {busy ? "Cutting…" : exported ? "Cut again" : "Cut it"}
           </button>
@@ -339,7 +347,15 @@ export function Clips({
               setBusy(false);
             }
           }}
-          className="ml-auto rounded-lg bg-ink px-3 py-1.5 text-2xs font-medium text-white transition-colors hover:bg-ink/85 disabled:opacity-40"
+          // Solid while there is nothing to look at, quiet once there is.
+          // Reading forty minutes again is rarely what somebody came here
+          // for, and a solid button at the top of a full list draws the eye
+          // away from the eight suggestions underneath it.
+          className={`ml-auto rounded-lg px-3 py-1.5 text-2xs font-medium transition-colors disabled:opacity-40 ${
+            live.length > 0
+              ? "border border-border bg-surface text-muted hover:border-border-strong hover:text-ink"
+              : "bg-ink text-white hover:bg-ink/85"
+          }`}
         >
           {busy
             ? "Reading the sermon…"
