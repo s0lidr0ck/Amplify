@@ -39,6 +39,8 @@ export function Transcript({
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
 
   if (transcript === undefined) return null;
 
@@ -76,6 +78,34 @@ export function Transcript({
         )}
 
         <div className="ml-auto flex items-center gap-2.5">
+          {!editing && (
+            // Seven thousand words is not something anybody is going to
+            // select by dragging, least of all on a phone — and the panel is
+            // collapsed, so a drag cannot reach the end of it anyway.
+            <button
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(transcript.text);
+                  setCopied(true);
+                  window.setTimeout(() => setCopied(false), 2000);
+                } catch {
+                  // Clipboard access can be refused — an insecure origin, or
+                  // a browser that wants a fresher gesture. Say so rather
+                  // than leaving the button looking like it worked.
+                  setCopied(false);
+                  setCopyFailed(true);
+                  window.setTimeout(() => setCopyFailed(false), 4000);
+                }
+              }}
+              className="text-2xs text-muted underline hover:text-ink"
+            >
+              {copied
+                ? "Copied"
+                : copyFailed
+                  ? "Couldn't copy"
+                  : `Copy all ${count.toLocaleString()} words`}
+            </button>
+          )}
           {!editing && (
             <button
               onClick={() => {

@@ -253,6 +253,9 @@ function PromptRow({
     tunable: boolean;
     template: string;
     isOverridden: boolean;
+    editable: boolean;
+    scope: string;
+    sharedIsCustom: boolean;
   };
 }) {
   const setPrompt = useMutation(api.amplifySettings.setPrompt);
@@ -280,8 +283,22 @@ function PromptRow({
             that a prompt could not be edited was tapping it and getting no
             keyboard — which reads as the page being broken. */}
         {!prompt.tunable && (
-          <span className="rounded-md bg-surface-strong px-2 py-0.5 text-2xs font-medium text-muted">
-            Read only
+          <span
+            className={`rounded-md px-2 py-0.5 text-2xs font-medium ${
+              prompt.editable
+                ? // You can change it, and it lands on everybody. Said on the
+                  // row rather than only inside, because the consequence is
+                  // the thing worth knowing before opening it.
+                  "bg-warn-soft text-warn"
+                : "bg-surface-strong text-muted"
+            }`}
+          >
+            {prompt.editable ? "Every church" : "Read only"}
+          </span>
+        )}
+        {prompt.sharedIsCustom && (
+          <span className="rounded-md bg-brand-soft px-2 py-0.5 text-2xs font-medium text-brand-strong">
+            changed
           </span>
         )}
         <span className="ml-auto text-2xs text-muted">{prompt.category}</span>
@@ -294,14 +311,25 @@ function PromptRow({
           {/* Said before the box, not after it. The reason a prompt can't be
               changed is no use underneath the thing somebody has already
               tried to type into. */}
-          {!prompt.tunable && (
-            <p className="rounded-lg bg-surface-strong px-3 py-2 text-2xs leading-relaxed text-muted">
-              This one decides how the work is done rather than how it reads,
-              so every church shares it. Here to read, not to edit.
-            </p>
-          )}
+          {!prompt.tunable &&
+            (prompt.editable ? (
+              // The warning belongs before the box. Somebody who has already
+              // typed a paragraph has stopped reading.
+              <p className="rounded-lg bg-warn-soft px-3 py-2 text-2xs leading-relaxed text-warn">
+                This one decides how the work is done rather than how it
+                reads, so every church runs on it. Saving changes it for all
+                of them — and several of these have to keep producing the
+                exact shape the app reads back. Leave it blank to put the
+                standard wording back.
+              </p>
+            ) : (
+              <p className="rounded-lg bg-surface-strong px-3 py-2 text-2xs leading-relaxed text-muted">
+                This one decides how the work is done rather than how it
+                reads, so every church shares it. Here to read, not to edit.
+              </p>
+            ))}
 
-          {prompt.tunable ? (
+          {prompt.editable ? (
             <textarea
               rows={12}
               value={draft}
@@ -319,7 +347,7 @@ function PromptRow({
             </pre>
           )}
 
-          {prompt.tunable ? (
+          {prompt.editable ? (
             <div className="flex flex-wrap items-center gap-3">
               <button
                 disabled={saving || draft === prompt.template}
@@ -337,9 +365,17 @@ function PromptRow({
                 }}
                 className="rounded-lg border border-transparent bg-ink px-3 py-1.5 text-2xs font-medium text-white transition-colors hover:bg-ink/85 disabled:border-border disabled:bg-surface disabled:text-faint"
               >
-                Save
+                {saving
+                  ? "Saving…"
+                  : prompt.scope === "everyone"
+                    ? // The button says where it lands. "Save" on a control
+                      // that changes every church is the same word as "Save"
+                      // on one that changes yours, and they are not the same
+                      // act.
+                      "Save for every church"
+                    : "Save"}
               </button>
-              {prompt.isOverridden && (
+              {(prompt.isOverridden || prompt.sharedIsCustom) && (
                 <button
                   onClick={() =>
                     void setPrompt({
@@ -408,9 +444,13 @@ export function SettingsPage({ churchId }: { churchId: string }) {
                   to find out which by tapping them, and the ones you can't
                   change give no feedback at all on a phone. */}
               The instructions behind each piece of writing.{" "}
-              {prompts
-                ? `${prompts.filter((p) => p.tunable).length} of ${prompts.length} decide how your church sounds and can be changed — the rest are shared machinery, marked read only.`
-                : "Some decide how your church sounds; the rest are shared."}
+              {!prompts
+                ? "Some decide how your church sounds; the rest are shared."
+                : prompts.every((p) => p.editable)
+                  ? // Signed in as A1:8. Say so, because every save from here
+                    // reaches churches this person will never look at.
+                    `You can change all ${prompts.length} — the ${prompts.filter((p) => !p.tunable).length} marked "every church" are shared machinery, and edits to those land everywhere.`
+                  : `${prompts.filter((p) => p.editable).length} of ${prompts.length} decide how your church sounds and can be changed — the rest are shared machinery, marked read only.`}
             </p>
             <ul className="card overflow-hidden">
               {(prompts ?? []).map((p) => (
