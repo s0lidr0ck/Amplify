@@ -32,7 +32,7 @@ export function PiecePage({
 
   const drafts = useQuery(api.amplifyDrafts.list, { projectId });
   const run = useAction(api.amplifyGenerate[piece?.run ?? "metadata"]);
-  const thumbnailPrompt = useAction(api.amplifyGenerate.thumbnailPrompt);
+  const promptFor = useAction(api.amplifyGenerate.promptFor);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -154,8 +154,15 @@ export function PiecePage({
           )}
 
           {/* Reading the assembled prompt is a tuning tool, so it sits with
-              the piece it assembles rather than in a settings screen. */}
-          {piece.kind === "thumbnail_concepts" && (
+              the piece it assembles rather than in a settings screen. Every
+              piece that runs a prompt gets one — tuning the blog post is the
+              same job as tuning the thumbnails, and it was only on the
+              thumbnails because that is where the question first came up.
+
+              Hidden while blocked: the text post's prompt is built out of
+              the blog post, so before there is one there is no prompt to
+              read, only the same error the write button would give. */}
+          {piece.run !== null && !blocked && (
             <>
               <button
                 disabled={copying}
@@ -163,7 +170,10 @@ export function PiecePage({
                   setCopying(true);
                   setCopyNote(null);
                   try {
-                    const built = await thumbnailPrompt({ projectId });
+                    const built = await promptFor({
+                      projectId,
+                      kind: piece.kind,
+                    });
                     await navigator.clipboard.writeText(built);
                     setCopyNote(
                       `Copied — ${built.length.toLocaleString()} characters`,
