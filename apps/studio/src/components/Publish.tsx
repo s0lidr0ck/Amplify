@@ -28,6 +28,23 @@ const NOTES: Record<string, string> = {
   blog: "The long-form write-up, for your website.",
 };
 
+/**
+ * A sensible first offer for "go public at…".
+ *
+ * Tomorrow morning rather than now: a time already past makes YouTube
+ * publish immediately, which is the opposite of scheduling, and an empty
+ * box makes somebody do date arithmetic before they can press anything.
+ */
+function defaultPublishAt(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  d.setHours(9, 0, 0, 0);
+  // datetime-local wants local wall-clock with no zone, so the timezone
+  // offset has to come off before slicing.
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
 export function Publish({ projectId }: { projectId: Id<"amplifyProjects"> }) {
   const rows = useQuery(api.amplifyPublish.readiness, { projectId });
   const publications = useQuery(api.amplifyPublish.list, { projectId });
@@ -40,6 +57,11 @@ export function Publish({ projectId }: { projectId: Id<"amplifyProjects"> }) {
 
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Null means unlisted; a datetime-local string means schedule it. One
+  // piece of state rather than two, because the two are mutually exclusive
+  // and separate fields would let the screen ask for "unlisted at 9am",
+  // which YouTube refuses.
+  const [when, setWhen] = useState<string | null>(null);
   const shareToken = useQuery(api.amplifyShare.linkFor, { projectId });
   const createLink = useMutation(api.amplifyShare.createLink);
   const revokeLink = useMutation(api.amplifyShare.revoke);
@@ -186,6 +208,11 @@ export function Publish({ projectId }: { projectId: Id<"amplifyProjects"> }) {
                         ? "Amplify is uploading it now."
                         : (row.reason ?? NOTES[row.destination] ?? "")}
                 </p>
+                {/* Not a refusal — said before the press because fixing it
+                    afterwards means the same sermon on the channel twice. */}
+                {row.warning && !posted && !sending && (
+                  <p className="text-[0.8125rem] text-warn">{row.warning}</p>
+                )}
               </div>
 
               <div className="flex flex-wrap items-center gap-2.5">
@@ -212,6 +239,39 @@ export function Publish({ projectId }: { projectId: Id<"amplifyProjects"> }) {
                 {/* Posting for you is the better answer where it is
                     available, so it gets the solid button; the manual tick
                     stays beside it, quiet, for everywhere it isn't. */}
+                {/* Unlisted or scheduled, and never both — publishAt only
+                    works on a private video, so YouTube itself refuses the
+                    combination. Offering it as one choice keeps the browser
+                    from asking for something the API will reject. */}
+                {row.destination === "youtube" && row.canPost && !posted && !sending && (
+                  <>
+                    <select
+                      value={when === null ? "unlisted" : "scheduled"}
+                      onChange={(e) =>
+                        setWhen(
+                          e.target.value === "unlisted"
+                            ? null
+                            : // Next Sunday morning is a guess, but a guess
+                              // in the right shape beats an empty field.
+                              defaultPublishAt(),
+                        )
+                      }
+                      className="rounded-lg border border-border bg-surface px-2 py-1 text-2xs text-ink"
+                    >
+                      <option value="unlisted">Unlisted</option>
+                      <option value="scheduled">Go public at…</option>
+                    </select>
+                    {when !== null && (
+                      <input
+                        type="datetime-local"
+                        value={when}
+                        onChange={(e) => setWhen(e.target.value)}
+                        className="rounded-lg border border-border bg-surface px-2 py-1 text-2xs text-ink"
+                      />
+                    )}
+                  </>
+                )}
+
                 {row.canPost && !posted && !sending && (
                   <button
                     disabled={busy === row.destination}
@@ -223,6 +283,14 @@ export function Publish({ projectId }: { projectId: Id<"amplifyProjects"> }) {
                           projectId,
                           destination: row.destination,
                           subjectId: row.subjectId ?? undefined,
+                          ...(row.destination === "youtube" && when !== null
+                            ? {
+                                visibility: "scheduled",
+                                // Read as church-local, which is what
+                                // somebody typing into the box means.
+                                publishAt: new Date(when).getTime(),
+                              }
+                            : {}),
                         });
                       } catch (e) {
                         setError(errorText(e, "Couldn't send that"));
