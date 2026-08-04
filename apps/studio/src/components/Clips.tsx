@@ -7,6 +7,50 @@ import { errorText } from "../lib/errorText";
 import { hhmmss, TimeMark } from "./TimeMark";
 
 /**
+ * How long a video is and what shape it is, read in the browser.
+ *
+ * Recorded with the file because publishing needs the shape to refuse a
+ * widescreen clip — posting one to a reel letterboxes it into a strip down
+ * the middle of the phone screen, which is the sort of mistake you find out
+ * about from the feed rather than from the app.
+ *
+ * Nothing here is fatal. A container the browser will not decode still
+ * uploads; it simply arrives without dimensions, and the guard that needs
+ * them steps aside rather than blocking a file that may be perfectly good.
+ */
+async function measureVideo(
+  file: File,
+): Promise<{ durationSeconds?: number; width?: number; height?: number }> {
+  const url = URL.createObjectURL(file);
+  try {
+    return await new Promise((resolve) => {
+      const video = document.createElement("video");
+      video.preload = "metadata";
+      const done = (out: {
+        durationSeconds?: number;
+        width?: number;
+        height?: number;
+      }) => resolve(out);
+      video.onloadedmetadata = () =>
+        done({
+          durationSeconds: Number.isFinite(video.duration)
+            ? Math.round(video.duration)
+            : undefined,
+          width: video.videoWidth || undefined,
+          height: video.videoHeight || undefined,
+        });
+      video.onerror = () => done({});
+      // Belt and braces: a file that neither loads nor errors would leave
+      // the upload button spinning for ever.
+      setTimeout(() => done({}), 10_000);
+      video.src = url;
+    });
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+/**
  * The moments worth clipping.
  *
  * The model's job here is to read forty minutes so a person does not have to.
@@ -166,8 +210,13 @@ function ClipRow({
   const discard = useMutation(api.amplifyClips.discard);
   const packageReel = useAction(api.amplifyReel.packageReel);
   const playbackUrl = useAction(api.amplifyMedia.playbackUrl);
+  const requestUpload = useAction(api.amplifyMedia.requestUpload);
+  const recordAsset = useMutation(api.amplifyMedia.recordAsset);
+  const useEditedFile = useMutation(api.amplifyClips.useEditedFile);
   const [packaging, setPackaging] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -282,6 +331,72 @@ function ClipRow({
               {downloading ? "Preparing…" : "Download"}
             </button>
           )}
+          {/* The reframed cut, coming back from an editor.
+
+              Amplify cuts in the sermon's own frame, which off a real
+              camera is 16:9, while reels are 9:16. Publishing refuses a
+              widescreen clip and tells you to reframe it — this is where
+              the reframed one comes back, so the finished reel and the clip
+              it was written for are the same thing. */}
+          <label
+            className={`cursor-pointer rounded-lg border border-border bg-surface px-3 py-1.5 text-2xs font-medium transition-colors ${
+              uploading
+                ? "text-faint"
+                : "text-muted hover:border-border-strong hover:text-ink"
+            }`}
+          >
+            <input
+              type="file"
+              accept="video/*"
+              className="hidden"
+              disabled={uploading}
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (!file) return;
+                setUploading(true);
+                setUploadError(null);
+                try {
+                  // Measured before sending. Publishing checks the shape to
+                  // stop a widescreen clip being letterboxed into a strip
+                  // down the middle of a phone screen, and it can only do
+                  // that if the dimensions were recorded.
+                  const probe = await measureVideo(file);
+                  const { uploadUrl, storageKey } = await requestUpload({
+                    projectId,
+                    kind: "clip",
+                    filename: file.name,
+                    contentType: file.type || "video/mp4",
+                  });
+                  const put = await fetch(uploadUrl, {
+                    method: "PUT",
+                    body: file,
+                    headers: { "Content-Type": file.type || "video/mp4" },
+                  });
+                  if (!put.ok) throw new Error(`Upload failed (${put.status})`);
+
+                  const assetId = await recordAsset({
+                    projectId,
+                    kind: "clip",
+                    subjectId: clip._id,
+                    storageKey,
+                    filename: file.name,
+                    mimeType: file.type || "video/mp4",
+                    ...probe,
+                  });
+                  // Two steps, and the second is the one that matters:
+                  // without it the file is stored and the clip still points
+                  // at the machine's cut.
+                  await useEditedFile({ clipId: clip._id, assetId });
+                } catch (err) {
+                  setUploadError(errorText(err, "That upload didn't work"));
+                } finally {
+                  setUploading(false);
+                }
+              }}
+            />
+            {uploading ? "Uploading…" : "Use my edit"}
+          </label>
           <button
             disabled={busy || !masterAssetId}
             onClick={async () => {
@@ -316,6 +431,10 @@ function ClipRow({
           </button>
         </div>
       </div>
+
+      {uploadError && (
+        <p className="text-[0.8125rem] text-danger">{uploadError}</p>
+      )}
 
       {/* Why this one — the thing that lets somebody disagree on purpose
           rather than just scrolling past. */}
