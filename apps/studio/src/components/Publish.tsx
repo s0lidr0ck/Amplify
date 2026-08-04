@@ -56,7 +56,9 @@ export function Publish({ projectId }: { projectId: Id<"amplifyProjects"> }) {
   const send = useMutation(api.amplifyPublish.send);
   const playbackUrl = useAction(api.amplifyMedia.playbackUrl);
 
+  const retryFinish = useAction(api.amplifyYouTube.retryFinish);
   const [busy, setBusy] = useState<string | null>(null);
+  const [finishing, setFinishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Null means unlisted; a datetime-local string means schedule it. One
   // piece of state rather than two, because the two are mutually exclusive
@@ -219,7 +221,36 @@ export function Publish({ projectId }: { projectId: Id<"amplifyProjects"> }) {
                     alternative is a post missing something with nothing
                     anywhere to say what or why. */}
                 {posted && record.note && (
-                  <p className="text-[0.8125rem] text-warn">{record.note}</p>
+                  <p className="text-[0.8125rem] text-warn">
+                    {record.note}
+                    {/* The upload is the expensive, irreversible half. The
+                        thumbnail and the visibility are two small calls that
+                        can fail on their own, and without this the only way
+                        to act on the note would be to send the sermon again
+                        — putting a second copy on the channel. */}
+                    {row.destination === "youtube" && (
+                      <>
+                        {" "}
+                        <button
+                          disabled={finishing}
+                          onClick={async () => {
+                            setFinishing(true);
+                            setError(null);
+                            try {
+                              await retryFinish({ projectId });
+                            } catch (e) {
+                              setError(errorText(e, "Couldn't finish that"));
+                            } finally {
+                              setFinishing(false);
+                            }
+                          }}
+                          className="underline hover:text-ink disabled:opacity-40"
+                        >
+                          {finishing ? "Trying…" : "Try that part again"}
+                        </button>
+                      </>
+                    )}
+                  </p>
                 )}
               </div>
 
