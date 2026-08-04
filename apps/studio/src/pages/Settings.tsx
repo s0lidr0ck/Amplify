@@ -104,6 +104,13 @@ const PLATFORMS: Record<string, { label: string; hint: string }> = {
     label: "TikTok",
     hint: "The client key, client secret and refresh token from the TikTok developer portal.",
   },
+  wix: {
+    label: "Website (Wix)",
+    hint:
+      "bearerToken, siteId, collectionId, blogMemberId — and a fieldMap " +
+      "from Amplify's names (title, preachedOn, speaker, summary, " +
+      "scriptures, blogUrl, image) to your collection's own field keys.",
+  },
 };
 
 /**

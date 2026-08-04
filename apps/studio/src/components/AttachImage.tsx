@@ -77,6 +77,8 @@ type Attached = {
   filename: string;
   width: number | null;
   height: number | null;
+  /** The one that goes on the website. */
+  isCover: boolean;
 };
 
 export function AttachImage({
@@ -94,6 +96,7 @@ export function AttachImage({
   const requestUpload = useAction(api.amplifyMedia.requestUpload);
   const recordAsset = useMutation(api.amplifyMedia.recordAsset);
   const detach = useMutation(api.amplifyMedia.detachImage);
+  const setCover = useMutation(api.amplifyMedia.setCover);
   const playbackUrl = useAction(api.amplifyMedia.playbackUrl);
 
   const input = useRef<HTMLInputElement>(null);
@@ -108,10 +111,16 @@ export function AttachImage({
   // Which pictures exist comes from the live query; the signed links to look
   // at them come from an action. Keyed on the ids so a new upload or a
   // removal refetches, and nothing else does.
-  const ids = (assets ?? [])
-    .filter((a) => a.kind === kind && (a.subjectId ?? undefined) === subjectId)
-    .map((a) => a._id)
-    .join(",");
+  const mine = (assets ?? []).filter(
+    (a) => a.kind === kind && (a.subjectId ?? undefined) === subjectId,
+  );
+  const ids = mine.map((a) => a._id).join(",");
+
+  // Read off the live query rather than off `shown`, which is state filled
+  // by an action and only refetched when the set of images changes. Picking
+  // a cover changes no ids, so a badge driven by `shown` would not move
+  // until the next upload.
+  const coverId = mine.find((a) => a.isCover)?._id ?? null;
 
   useEffect(() => {
     let live = true;
@@ -211,6 +220,13 @@ export function AttachImage({
                 <span className="absolute left-2 top-2 rounded-md bg-ink/80 px-1.5 py-0.5 font-mono text-2xs font-medium text-white">
                   {i + 1}
                 </span>
+                {/* On the picture, because that is what you are looking at
+                    when you want to know which one the website will use. */}
+                {img.assetId === coverId && (
+                  <span className="absolute right-2 top-2 rounded-md bg-brand px-2 py-0.5 text-2xs font-medium text-white">
+                    cover
+                  </span>
+                )}
               </button>
 
               <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
@@ -229,6 +245,17 @@ export function AttachImage({
                 >
                   Download
                 </button>
+                {/* Only when there is a choice to make. With one image
+                    attached it is the cover already, and a control that can
+                    only ever confirm what is true is noise. */}
+                {kind === "sermon_thumbnail" && shown.length > 1 && img.assetId !== coverId && (
+                  <button
+                    onClick={() => void setCover({ assetId: img.assetId })}
+                    className="text-2xs text-muted underline hover:text-ink"
+                  >
+                    Use as cover
+                  </button>
+                )}
                 <button
                   onClick={() => void detach({ assetId: img.assetId })}
                   className="text-2xs text-muted underline hover:text-ink"
