@@ -195,11 +195,12 @@ const WIX_MAPPING: { key: string; label: string }[] = [
 /**
  * Platforms with a Connect button rather than boxes to paste a token into.
  *
- * The rest still take a pasted credential — Wix issues an API key that never
- * expires, and Meta and TikTok need their apps reviewed before this can be
- * offered. Grows as each one is registered.
+ * The rest still take a pasted credential. Wix issues an API key that never
+ * expires, so a Connect button would buy nothing; Facebook and Instagram
+ * need Meta's review of pages_manage_posts and instagram_content_publish
+ * before this can be offered. Grows as each one is registered.
  */
-const CONNECTABLE = new Set(["youtube"]);
+const CONNECTABLE = new Set(["youtube", "tiktok"]);
 
 const PLATFORMS: Record<string, { label: string; hint: string }> = {
   youtube: {
