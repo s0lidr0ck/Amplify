@@ -37,6 +37,11 @@ function NewSermon({
   const [guest, setGuest] = useState("");
   const [guestCalled, setGuestCalled] = useState("");
   const [sermonDate, setSermonDate] = useState(todayLocal());
+  // Optional, and worth having: three services on one Sunday are three
+  // sermons on one date, and the time is the only thing telling the morning
+  // one from the evening one at a glance. It is also what the website's
+  // Date-and-Time field wants, instead of Amplify assuming midday.
+  const [sermonTime, setSermonTime] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -64,6 +69,7 @@ function NewSermon({
           speaker,
           speakerDisplayName,
           sermonDate,
+          sermonTime: sermonTime || undefined,
         });
         // A guest who gets written up once usually gets written up again.
         // Adding them here means the roster grows from use rather than
@@ -83,6 +89,7 @@ function NewSermon({
         setGuest("");
         setGuestCalled("");
         setSermonDate(todayLocal());
+        setSermonTime("");
       } catch (e) {
         setError(errorText(e, "Couldn't add that"));
       } finally {
@@ -97,7 +104,9 @@ function NewSermon({
   return (
     <form onSubmit={submit} className="card grid gap-3 p-4">
       <p className="section-label">New sermon</p>
-      <div className="grid gap-2.5 sm:grid-cols-3">
+      {/* Four fields now, so two-up on a tablet rather than three squeezed
+          into a row with a fourth wrapping alone underneath. */}
+      <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
         <label className="grid gap-1">
           <span className="text-2xs text-muted">Title</span>
           <input
@@ -136,6 +145,17 @@ function NewSermon({
             type="date"
             value={sermonDate}
             onChange={(e) => setSermonDate(e.target.value)}
+            className={field}
+          />
+        </label>
+        <label className="grid gap-1">
+          <span className="text-2xs text-muted">
+            Service time <span className="text-faint">optional</span>
+          </span>
+          <input
+            type="time"
+            value={sermonTime}
+            onChange={(e) => setSermonTime(e.target.value)}
             className={field}
           />
         </label>

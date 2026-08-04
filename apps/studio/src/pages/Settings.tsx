@@ -108,8 +108,11 @@ const PLATFORMS: Record<string, { label: string; hint: string }> = {
     label: "Website (Wix)",
     hint:
       "bearerToken, siteId, collectionId, blogMemberId — and a fieldMap " +
-      "from Amplify's names (title, preachedOn, speaker, summary, " +
-      "scriptures, blogUrl, image) to your collection's own field keys.",
+      "from Amplify's names to your collection's field keys. Amplify can " +
+      "fill title, summary, topics, tags, mainPoints, teachingStatements, " +
+      "propheticStatements, keyMoments, scriptures, transcript, image, " +
+      "preachedOn, speaker and blogUrl. Leave out any your collection " +
+      "doesn't have — a key Wix doesn't know makes it reject the whole item.",
   },
 };
 
