@@ -332,9 +332,24 @@ def _publish_tiktok(
         headers={"Content-Type": "application/x-www-form-urlencoded"},
         timeout=API_TIMEOUT,
     )
-    if refreshed.status_code != 200:
+    # Status is not enough on its own here. TikTok answers 200 with an error
+    # body — {"error": "invalid_grant", ...} — so a status check alone falls
+    # through to a KeyError on access_token, and the job reports a Python
+    # traceback instead of the sentence TikTok wrote about what is wrong.
+    granted = refreshed.json() if refreshed.status_code == 200 else {}
+    token = granted.get("access_token")
+    if not token:
         raise _explain(refreshed, "TikTok would not accept the saved connection")
-    token = refreshed.json()["access_token"]
+
+    # TikTok retires the refresh token as it hands back a new one: "You must
+    # use the newly-returned token if the value is different than the
+    # previous one." Reading only the access token, which is what this did,
+    # left the saved credential stale from the first successful publish — so
+    # the second send failed with invalid_grant, and the connection appeared
+    # to break itself by working.
+    rotated = granted.get("refresh_token")
+    if rotated and rotated != refresh_token:
+        hub.rotate_credential(job, "tiktok", {"refresh_token": rotated})
 
     source_url, _ = hub.download_url(job, payload["assetId"])
     head = httpx.head(source_url, timeout=API_TIMEOUT, follow_redirects=True)

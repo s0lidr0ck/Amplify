@@ -213,6 +213,39 @@ class Hub:
                 "Reconnect it in Settings."
             ) from exc
 
+    def rotate_credential(
+        self, job: Job, platform: str, changes: dict[str, str]
+    ) -> None:
+        """Write a token the platform rotated back to Convex.
+
+        TikTok issues a new refresh token every time the old one is used and
+        retires the old one. A publish that reads the access token and throws
+        the rest away leaves the saved connection stale, so the next send
+        fails with `invalid_grant` — a connection broken by having worked.
+
+        Never fatal. The clip is already on TikTok by the time this matters,
+        and failing the job here would report a publish that plainly happened
+        as a failure, inviting somebody to send it a second time. A warning
+        in the log is the honest outcome: the post is up, the connection
+        needs reconnecting.
+
+        Convex accepts only token fields, so this cannot rewrite a client
+        secret even if this process is confused about what it is sending.
+        """
+        try:
+            self._post(
+                "credential-rotate",
+                {"jobId": job.job_id, "platform": platform, "changes": changes},
+            )
+        except Exception:
+            # Deliberately logs no values: this line reaches the job log,
+            # which people paste into chat.
+            logger.warning(
+                "could not save the rotated %s token — the connection may "
+                "need reconnecting before the next send",
+                platform,
+            )
+
     # ── files ───────────────────────────────────────────────────────────────
 
     def upload_file(self, job: Job, kind: str, path: str, content_type: str) -> str:
