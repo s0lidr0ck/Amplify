@@ -192,6 +192,15 @@ const WIX_MAPPING: { key: string; label: string }[] = [
   { key: "blogUrl", label: "Blog post link" },
 ];
 
+/**
+ * Platforms with a Connect button rather than boxes to paste a token into.
+ *
+ * The rest still take a pasted credential — Wix issues an API key that never
+ * expires, and Meta and TikTok need their apps reviewed before this can be
+ * offered. Grows as each one is registered.
+ */
+const CONNECTABLE = new Set(["youtube"]);
+
 const PLATFORMS: Record<string, { label: string; hint: string }> = {
   youtube: {
     label: "YouTube",
@@ -237,7 +246,9 @@ function Connections({ churchId }: { churchId: string }) {
     churchId: id as Id<"churches">,
   });
   const testConnection = useAction(api.amplifyConnections.test);
+  const startConnect = useAction(api.amplifyOAuth.start);
   const [testing, setTesting] = useState<string | null>(null);
+  const [connecting, setConnecting] = useState<string | null>(null);
   // Kept per platform rather than one at a time, so checking Instagram
   // does not wipe what you just learned about Facebook.
   const [checked, setChecked] = useState<
@@ -252,6 +263,31 @@ function Connections({ churchId }: { churchId: string }) {
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // Back from a platform's consent screen. The callback cannot render into
+  // the app, so it says what happened in the address bar and this picks it
+  // up — then clears it, so a refresh does not repeat a stale verdict.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const platform = params.get("connected");
+    if (!platform) return;
+    const problem = params.get("problem");
+    setChecked((c) => ({
+      ...c,
+      [platform]: {
+        ok: !problem,
+        detail: problem ?? "Connected. Press Check it to see which account.",
+      },
+    }));
+    params.delete("connected");
+    params.delete("problem");
+    const query = params.toString();
+    window.history.replaceState(
+      {},
+      "",
+      window.location.pathname + (query ? `?${query}` : ""),
+    );
+  }, []);
 
   const close = () => {
     setEditing(null);
@@ -346,6 +382,47 @@ function Connections({ churchId }: { churchId: string }) {
                   </span>
                 )}
                 <div className="ml-auto flex items-center gap-3">
+                  {/* The button that replaces going to find a token by hand.
+                      Solid when there is nothing connected yet, because that
+                      is the work; quiet once there is, because reconnecting
+                      is the exception. */}
+                  {CONNECTABLE.has(row.platform) && (
+                    <button
+                      disabled={connecting === row.platform}
+                      onClick={async () => {
+                        setConnecting(row.platform);
+                        try {
+                          const url = await startConnect({
+                            churchId: id as Id<"churches">,
+                            platform: row.platform,
+                            returnTo: window.location.href,
+                          });
+                          // Leaves the app. Nothing after this runs.
+                          window.location.href = url;
+                        } catch (e) {
+                          setChecked((c) => ({
+                            ...c,
+                            [row.platform]: {
+                              ok: false,
+                              detail: errorText(e, "Couldn't start that"),
+                            },
+                          }));
+                          setConnecting(null);
+                        }
+                      }}
+                      className={
+                        row.connected
+                          ? "text-2xs text-muted underline hover:text-ink disabled:opacity-40"
+                          : "rounded-lg bg-brand px-2.5 py-1 text-2xs font-medium text-white hover:bg-brand-strong disabled:opacity-40"
+                      }
+                    >
+                      {connecting === row.platform
+                        ? "Opening…"
+                        : row.connected
+                          ? "Reconnect"
+                          : `Connect ${meta?.label ?? row.platform}`}
+                    </button>
+                  )}
                   {row.connected && (
                     <button
                       disabled={testing === row.platform}
