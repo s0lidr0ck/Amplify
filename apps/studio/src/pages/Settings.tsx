@@ -158,7 +158,9 @@ const FIELDS: Record<string, Field[]> = {
     },
     {
       key: "createCategories",
-      label: "Make a category for the preacher when the blog has none",
+      label:
+        "Create blog categories as sermons need them — ten fixed topics, " +
+        "so your blog builds its own filing without you typing them in",
       optional: true,
       toggle: true,
     },
