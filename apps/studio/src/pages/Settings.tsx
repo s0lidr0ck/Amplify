@@ -107,13 +107,18 @@ type Field = {
   /** Skipped when blank rather than saved empty. */
   optional?: boolean;
   placeholder?: string;
+  /**
+   * Never comes back from the server, so an empty box on a connection that
+   * already exists means "keep what's there" rather than "clear it".
+   */
+  secret?: boolean;
 };
 
 const FIELDS: Record<string, Field[]> = {
   youtube: [
     { key: "client_id", label: "Client id", env: "YOUTUBE_CLIENT_ID" },
-    { key: "client_secret", label: "Client secret", env: "YOUTUBE_CLIENT_SECRET" },
-    { key: "refresh_token", label: "Refresh token", env: "YOUTUBE_REFRESH_TOKEN" },
+    { key: "client_secret", label: "Client secret", env: "YOUTUBE_CLIENT_SECRET", secret: true },
+    { key: "refresh_token", label: "Refresh token", env: "YOUTUBE_REFRESH_TOKEN", secret: true },
   ],
   facebook: [
     { key: "page_id", label: "Page id", env: "FACEBOOK_PAGE_ID" },
@@ -121,6 +126,7 @@ const FIELDS: Record<string, Field[]> = {
       key: "access_token",
       label: "Page access token",
       env: "FACEBOOK_PAGE_ACCESS_TOKEN",
+      secret: true,
     },
   ],
   instagram: [
@@ -129,15 +135,15 @@ const FIELDS: Record<string, Field[]> = {
       label: "Business account id",
       env: "INSTAGRAM_BUSINESS_ACCOUNT_ID",
     },
-    { key: "access_token", label: "Access token", env: "INSTAGRAM_ACCESS_TOKEN" },
+    { key: "access_token", label: "Access token", env: "INSTAGRAM_ACCESS_TOKEN", secret: true },
   ],
   tiktok: [
     { key: "client_key", label: "Client key", env: "TIKTOK_CLIENT_KEY" },
-    { key: "client_secret", label: "Client secret", env: "TIKTOK_CLIENT_SECRET" },
-    { key: "refresh_token", label: "Refresh token", env: "TIKTOK_REFRESH_TOKEN" },
+    { key: "client_secret", label: "Client secret", env: "TIKTOK_CLIENT_SECRET", secret: true },
+    { key: "refresh_token", label: "Refresh token", env: "TIKTOK_REFRESH_TOKEN", secret: true },
   ],
   wix: [
-    { key: "bearerToken", label: "API key", env: "WIX_BEARER_TOKEN" },
+    { key: "bearerToken", label: "API key", env: "WIX_BEARER_TOKEN", secret: true },
     { key: "siteId", label: "Site id", env: "WIX_SITE_ID" },
     { key: "collectionId", label: "Collection id", env: "WIX_COLLECTION_ID" },
     { key: "blogMemberId", label: "Blog author member id", env: "WIX_BLOG_MEMBER_ID" },
@@ -215,6 +221,11 @@ function Connections({ churchId }: { churchId: string }) {
   const rows = useQuery(api.amplifyCredentials.status, { churchId: id });
   const connect = useMutation(api.amplifyCredentials.connect);
   const disconnect = useMutation(api.amplifyCredentials.disconnect);
+  // Everything about a connection that is not a token. Tokens are never
+  // returned by anything, which is why the boxes for them stay blank.
+  const savedParts = useQuery(api.amplifyCredentials.editable, {
+    churchId: id as Id<"churches">,
+  });
   const testConnection = useAction(api.amplifyConnections.test);
   const [testing, setTesting] = useState<string | null>(null);
   // Kept per platform rather than one at a time, so checking Instagram
@@ -261,10 +272,19 @@ function Connections({ churchId }: { churchId: string }) {
     return out;
   };
 
-  /** Every non-optional box filled. */
-  const ready = (platform: string) =>
+  /**
+   * Enough filled in to save.
+   *
+   * On a connection that already exists, a blank secret means "keep the
+   * saved one", so demanding it would be demanding a token back that
+   * nothing can show you.
+   */
+  const ready = (platform: string, connected: boolean) =>
     (FIELDS[platform] ?? []).every(
-      (f) => f.optional || (parts[f.key] ?? "").trim() !== "",
+      (f) =>
+        f.optional ||
+        (f.secret && connected) ||
+        (parts[f.key] ?? "").trim() !== "",
     );
 
   return (
@@ -349,10 +369,29 @@ function Connections({ churchId }: { churchId: string }) {
                     </button>
                   )}
                   <button
-                    onClick={() => (open ? close() : setEditing(row.platform))}
+                    onClick={() => {
+                      if (open) return close();
+                      // Everything that is not a token comes back, so
+                      // correcting one field key does not mean retyping an
+                      // API key beside it.
+                      const saved = (savedParts ?? {})[row.platform] ?? {};
+                      const { fieldMap, ...rest } = saved as {
+                        fieldMap?: Record<string, string>;
+                      } & Record<string, unknown>;
+                      setParts(
+                        Object.fromEntries(
+                          Object.entries(rest).map(([k, v]) => [k, String(v ?? "")]),
+                        ),
+                      );
+                      setMapping(fieldMap ?? {});
+                      // Carried over too. Editing a field key should not
+                      // quietly rename the account it belongs to.
+                      setLabel(row.accountLabel ?? "");
+                      setEditing(row.platform);
+                    }}
                     className="text-2xs text-muted underline hover:text-ink"
                   >
-                    {open ? "Cancel" : row.connected ? "Replace" : "Connect"}
+                    {open ? "Cancel" : row.connected ? "Edit" : "Connect"}
                   </button>
                 </div>
               </div>
@@ -380,6 +419,12 @@ function Connections({ churchId }: { churchId: string }) {
                           )}
                           {f.optional && (
                             <span className="text-faint"> · optional</span>
+                          )}
+                          {f.secret && row.connected && (
+                            <span className="text-faint">
+                              {" "}
+                              · blank keeps the saved one
+                            </span>
                           )}
                         </span>
                         <input
@@ -432,7 +477,7 @@ function Connections({ churchId }: { churchId: string }) {
                   {error && <p className="text-2xs text-danger">{error}</p>}
                   <div className="flex flex-wrap items-center gap-3">
                     <button
-                      disabled={saving || !ready(row.platform)}
+                      disabled={saving || !ready(row.platform, row.connected)}
                       onClick={async () => {
                         setSaving(true);
                         setError(null);
