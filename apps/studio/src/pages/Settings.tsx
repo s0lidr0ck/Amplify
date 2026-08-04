@@ -87,41 +87,115 @@ function Voice({ churchId }: { churchId: string }) {
   );
 }
 
+/**
+ * What each platform actually needs, field by field.
+ *
+ * This used to be one textarea wanting hand-written JSON, which asked
+ * somebody holding five secrets to also get brace placement and comma
+ * placement right, and told them nothing about which keys mattered. A
+ * mistyped key does not fail here — it fails weeks later, on a publish,
+ * as "the saved connection has no siteId".
+ *
+ * `env` names the variable it comes from, because that is where these
+ * values already live and copying between two names is where they get
+ * crossed.
+ */
+type Field = {
+  key: string;
+  label: string;
+  env?: string;
+  /** Skipped when blank rather than saved empty. */
+  optional?: boolean;
+  placeholder?: string;
+};
+
+const FIELDS: Record<string, Field[]> = {
+  youtube: [
+    { key: "client_id", label: "Client id", env: "YOUTUBE_CLIENT_ID" },
+    { key: "client_secret", label: "Client secret", env: "YOUTUBE_CLIENT_SECRET" },
+    { key: "refresh_token", label: "Refresh token", env: "YOUTUBE_REFRESH_TOKEN" },
+  ],
+  facebook: [
+    { key: "page_id", label: "Page id", env: "FACEBOOK_PAGE_ID" },
+    {
+      key: "access_token",
+      label: "Page access token",
+      env: "FACEBOOK_PAGE_ACCESS_TOKEN",
+    },
+  ],
+  instagram: [
+    {
+      key: "ig_user_id",
+      label: "Business account id",
+      env: "INSTAGRAM_BUSINESS_ACCOUNT_ID",
+    },
+    { key: "access_token", label: "Access token", env: "INSTAGRAM_ACCESS_TOKEN" },
+  ],
+  tiktok: [
+    { key: "client_key", label: "Client key", env: "TIKTOK_CLIENT_KEY" },
+    { key: "client_secret", label: "Client secret", env: "TIKTOK_CLIENT_SECRET" },
+    { key: "refresh_token", label: "Refresh token", env: "TIKTOK_REFRESH_TOKEN" },
+  ],
+  wix: [
+    { key: "bearerToken", label: "API key", env: "WIX_BEARER_TOKEN" },
+    { key: "siteId", label: "Site id", env: "WIX_SITE_ID" },
+    { key: "collectionId", label: "Collection id", env: "WIX_COLLECTION_ID" },
+    { key: "blogMemberId", label: "Blog author member id", env: "WIX_BLOG_MEMBER_ID" },
+    {
+      key: "apiBase",
+      label: "API base",
+      env: "WIX_API_BASE",
+      optional: true,
+      placeholder: "https://www.wixapis.com",
+    },
+  ],
+};
+
+/**
+ * Wix only: which field in the church's collection holds each thing.
+ *
+ * A key the collection does not have makes Wix reject the whole item, so
+ * every one of these is optional — leave it blank and Amplify simply does
+ * not send that value. "Check it" prints the collection's real keys, which
+ * is the intended way to fill this in.
+ */
+const WIX_MAPPING: { key: string; label: string }[] = [
+  { key: "title", label: "Title" },
+  { key: "summary", label: "Summary" },
+  { key: "topics", label: "Topics" },
+  { key: "tags", label: "Tags" },
+  { key: "mainPoints", label: "Main points" },
+  { key: "teachingStatements", label: "Teaching statements" },
+  { key: "propheticStatements", label: "Prophetic statements" },
+  { key: "keyMoments", label: "Key moments" },
+  { key: "scriptures", label: "Scriptures" },
+  { key: "transcript", label: "Transcript" },
+  { key: "image", label: "Image" },
+  { key: "preachedOn", label: "Date preached" },
+  { key: "speaker", label: "Speaker" },
+  { key: "blogUrl", label: "Blog post link" },
+];
+
 const PLATFORMS: Record<string, { label: string; hint: string }> = {
   youtube: {
     label: "YouTube",
-    hint: "The OAuth client JSON from Google Cloud, plus the refresh token for the channel.",
+    hint: "From the OAuth client in Google Cloud, plus a refresh token for the channel.",
   },
   facebook: {
     label: "Facebook",
-    hint:
-      "page_id and access_token — your FACEBOOK_PAGE_ID and " +
-      "FACEBOOK_PAGE_ACCESS_TOKEN. The Page token, not the user one, from " +
-      "a Meta app with pages_manage_posts. Covers both the written post " +
-      "and Facebook reels.",
+    hint: "The Page token, not the user one, from a Meta app with pages_manage_posts. Covers the written post and reels.",
   },
   instagram: {
     label: "Instagram",
-    hint:
-      "ig_user_id and access_token — your INSTAGRAM_BUSINESS_ACCOUNT_ID " +
-      "and INSTAGRAM_ACCESS_TOKEN.",
+    hint: "The Business account, not a personal one.",
   },
   tiktok: {
     label: "TikTok",
-    hint:
-      "client_key, client_secret and refresh_token — your TIKTOK_CLIENT_KEY, " +
-      "TIKTOK_CLIENT_SECRET and TIKTOK_REFRESH_TOKEN. The access token is " +
-      "not needed; it's refreshed at every post.",
+    hint: "From the TikTok developer portal. The access token isn't needed — it's refreshed at every post.",
   },
   wix: {
     label: "Website (Wix)",
-    hint:
-      "bearerToken, siteId, collectionId, blogMemberId — and a fieldMap " +
-      "from Amplify's names to your collection's field keys. Amplify can " +
-      "fill title, summary, topics, tags, mainPoints, teachingStatements, " +
-      "propheticStatements, keyMoments, scriptures, transcript, image, " +
-      "preachedOn, speaker and blogUrl. Leave out any your collection " +
-      "doesn't have — a key Wix doesn't know makes it reject the whole item.",
+    hint: "Posts the blog post and files the sermon in your collection.",
   },
 };
 
@@ -150,16 +224,48 @@ function Connections({ churchId }: { churchId: string }) {
   >({});
   const [editing, setEditing] = useState<string | null>(null);
   const [label, setLabel] = useState("");
-  const [secret, setSecret] = useState("");
+  // One value per box, assembled into the credential on save. Never seeded
+  // from the server: nothing can read a saved token back, which is why
+  // "Replace" means typing all of them again rather than editing one.
+  const [parts, setParts] = useState<Record<string, string>>({});
+  const [mapping, setMapping] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const close = () => {
     setEditing(null);
-    setSecret("");
+    setParts({});
+    setMapping({});
     setLabel("");
     setError(null);
   };
+
+  /** The credential this platform's boxes add up to. */
+  const buildSecret = (platform: string): Record<string, unknown> => {
+    const out: Record<string, unknown> = {};
+    for (const f of FIELDS[platform] ?? []) {
+      const value = (parts[f.key] ?? "").trim();
+      // Blank means absent, not empty-string. An empty value saved under a
+      // required key passes the "is it there" check and then fails at the
+      // platform, which is the least useful place to find out.
+      if (value) out[f.key] = value;
+    }
+    if (platform === "wix") {
+      const fieldMap: Record<string, string> = {};
+      for (const m of WIX_MAPPING) {
+        const value = (mapping[m.key] ?? "").trim();
+        if (value) fieldMap[m.key] = value;
+      }
+      if (Object.keys(fieldMap).length > 0) out.fieldMap = fieldMap;
+    }
+    return out;
+  };
+
+  /** Every non-optional box filled. */
+  const ready = (platform: string) =>
+    (FIELDS[platform] ?? []).every(
+      (f) => f.optional || (parts[f.key] ?? "").trim() !== "",
+    );
 
   return (
     <div className="grid gap-3">
@@ -260,18 +366,73 @@ function Connections({ churchId }: { churchId: string }) {
                     placeholder="Which account is this? e.g. New Life Church"
                     className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink placeholder:text-faint focus:border-brand focus:outline-none"
                   />
-                  <textarea
-                    rows={5}
-                    value={secret}
-                    onChange={(e) => setSecret(e.target.value)}
-                    placeholder={'{ "refresh_token": "…", "client_id": "…" }'}
-                    spellCheck={false}
-                    className="w-full resize-y rounded-xl border border-border bg-surface px-3 py-2.5 font-mono text-2xs leading-relaxed text-ink placeholder:text-faint focus:border-brand focus:outline-none"
-                  />
+                  {/* One box per value, so nothing has to be assembled by
+                      hand. The variable name is on the label because these
+                      already exist under those names, and copying between
+                      two vocabularies is where they get crossed. */}
+                  <div className="grid gap-2.5 sm:grid-cols-2">
+                    {(FIELDS[row.platform] ?? []).map((f) => (
+                      <label key={f.key} className="grid gap-1">
+                        <span className="text-2xs text-muted">
+                          {f.label}{" "}
+                          {f.env && (
+                            <span className="font-mono text-faint">{f.env}</span>
+                          )}
+                          {f.optional && (
+                            <span className="text-faint"> · optional</span>
+                          )}
+                        </span>
+                        <input
+                          value={parts[f.key] ?? ""}
+                          onChange={(e) =>
+                            setParts((p) => ({ ...p, [f.key]: e.target.value }))
+                          }
+                          placeholder={f.placeholder}
+                          spellCheck={false}
+                          autoComplete="off"
+                          className="w-full rounded-lg border border-border bg-surface px-3 py-2 font-mono text-2xs text-ink placeholder:text-faint focus:border-brand focus:outline-none"
+                        />
+                      </label>
+                    ))}
+                  </div>
+
+                  {row.platform === "wix" && (
+                    <div className="grid gap-2">
+                      <p className="text-2xs text-muted">
+                        Which field in your Sermons collection holds each
+                        thing. Leave any blank that your collection
+                        doesn&rsquo;t have &mdash; a key Wix doesn&rsquo;t
+                        know makes it reject the whole item. Save this, then
+                        press &ldquo;Check it&rdquo; and it prints your
+                        collection&rsquo;s real keys.
+                      </p>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {WIX_MAPPING.map((m) => (
+                          <label key={m.key} className="grid gap-1">
+                            <span className="text-2xs text-muted">{m.label}</span>
+                            <input
+                              value={mapping[m.key] ?? ""}
+                              onChange={(e) =>
+                                setMapping((p) => ({
+                                  ...p,
+                                  [m.key]: e.target.value,
+                                }))
+                              }
+                              placeholder={m.key}
+                              spellCheck={false}
+                              autoComplete="off"
+                              className="w-full rounded-lg border border-border bg-surface px-3 py-2 font-mono text-2xs text-ink placeholder:text-faint focus:border-brand focus:outline-none"
+                            />
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {error && <p className="text-2xs text-danger">{error}</p>}
                   <div className="flex flex-wrap items-center gap-3">
                     <button
-                      disabled={saving || secret.trim() === ""}
+                      disabled={saving || !ready(row.platform)}
                       onClick={async () => {
                         setSaving(true);
                         setError(null);
@@ -280,7 +441,9 @@ function Connections({ churchId }: { churchId: string }) {
                             churchId: id,
                             platform: row.platform,
                             accountLabel: label.trim() || undefined,
-                            secretJson: secret,
+                            secretJson: JSON.stringify(
+                              buildSecret(row.platform),
+                            ),
                           });
                           close();
                         } catch (e) {
@@ -293,9 +456,13 @@ function Connections({ churchId }: { churchId: string }) {
                     >
                       {saving ? "Saving…" : "Save connection"}
                     </button>
-                    {/* Said once, here, where somebody is about to paste one. */}
+                    {/* Said once, here, where somebody is about to paste one.
+                        The second sentence matters on Replace: the boxes are
+                        blank because nothing can read a saved token back, not
+                        because the old one is gone. */}
                     <span className="text-2xs text-faint">
-                      Stored for this church only. It can&rsquo;t be read back.
+                      Stored for this church only, and never readable again
+                      &mdash; replacing means entering all of it afresh.
                     </span>
                   </div>
                 </div>
