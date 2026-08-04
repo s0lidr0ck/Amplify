@@ -149,3 +149,141 @@ def test_explain_handles_meta_shape():
         request=httpx.Request("POST", "https://example.invalid"),
     )
     assert "too long for a reel" in str(_explain(response, "Instagram refused"))
+
+
+# ── Wix ─────────────────────────────────────────────────────────────────────
+
+
+def wix_credential(**over):
+    base = {
+        "bearerToken": "t",
+        "siteId": "s",
+        "collectionId": "Sermons",
+        "blogMemberId": "m",
+        "apiBase": "https://www.wixapis.com",
+        "fieldMap": {"title": "title", "blogUrl": "link", "image": "image"},
+    }
+    base.update(over)
+    return base
+
+
+def wix_job():
+    return make_job(
+        {
+            "destination": "blog",
+            "platform": "wix",
+            "title": "Repairing the Altar",
+            "markdown": "## One\n\nText.",
+            "coverAssetId": "a1",
+            "metadata": {"description": "A summary."},
+            "sermonDate": "2026-08-02",
+            "speakerDisplayName": "Sis. Misti",
+        }
+    )
+
+
+def test_wix_names_the_missing_credential_field(tmp_path):
+    from worker.publish import _publish_wix
+
+    hub = FakeHub(credential={"bearerToken": "t"})
+    job = wix_job()
+    with pytest.raises(PublishError) as caught:
+        _publish_wix(hub, job, json.loads(job.payload_json), lambda p, m: None)
+    # Names the field. "Wix rejected this" sends somebody to the wrong place.
+    assert "siteId" in str(caught.value)
+
+
+def _wix_responses(collection_status: int = 200):
+    def fake_post(url, **kwargs):
+        if "files/import" in url:
+            return httpx.Response(200, json={"file": {"id": "media_1"}})
+        if "draft-posts" in url:
+            return httpx.Response(
+                200,
+                json={
+                    "draftPost": {
+                        "id": "post_1",
+                        "url": {"base": "https://nlc.org", "path": "/post/altar"},
+                    }
+                },
+            )
+        if "items" in url:
+            if collection_status >= 400:
+                return httpx.Response(
+                    collection_status, json={"message": "unknown field 'speaker'"}
+                )
+            return httpx.Response(200, json={"dataItem": {"id": "item_1"}})
+        return httpx.Response(404, json={"message": "no route"})
+
+    return fake_post
+
+
+def test_wix_publishes_the_post_and_files_the_item(monkeypatch, tmp_path):
+    from worker import publish as pub
+
+    monkeypatch.setattr(pub.httpx, "post", _wix_responses())
+    hub = FakeHub(credential=wix_credential())
+    job = wix_job()
+    out = pub._publish_wix(hub, job, json.loads(job.payload_json), lambda p, m: None)
+
+    assert out["externalId"] == "post_1"
+    assert out["externalUrl"] == "https://nlc.org/post/altar"
+
+
+def test_wix_reports_a_partial_when_the_collection_insert_fails(monkeypatch, tmp_path):
+    """The post is live and the collection item is not.
+
+    The only state where a retry must not repeat the whole thing, so the
+    post id has to travel out attached to the error.
+    """
+    from worker import publish as pub
+
+    monkeypatch.setattr(pub.httpx, "post", _wix_responses(collection_status=400))
+    hub = FakeHub(credential=wix_credential())
+    job = wix_job()
+
+    with pytest.raises(pub.PartialPublish) as caught:
+        pub._publish_wix(hub, job, json.loads(job.payload_json), lambda p, m: None)
+    assert caught.value.external_id == "post_1"
+    assert caught.value.external_url == "https://nlc.org/post/altar"
+    assert "unknown field" in str(caught.value)
+
+
+def test_wix_sends_only_the_fields_the_collection_has(monkeypatch, tmp_path):
+    """A collection without a speaker field is a different shape, not an error."""
+    from worker import publish as pub
+
+    sent: dict = {}
+
+    def capture(url, **kwargs):
+        if "items" in url:
+            sent.update(kwargs["json"]["dataItem"]["data"])
+        return _wix_responses()(url, **kwargs)
+
+    monkeypatch.setattr(pub.httpx, "post", capture)
+    hub = FakeHub(credential=wix_credential())
+    job = wix_job()
+    pub._publish_wix(hub, job, json.loads(job.payload_json), lambda p, m: None)
+
+    # fieldMap holds title, blogUrl and image only.
+    assert set(sent) == {"title", "link", "image"}
+    assert sent["link"] == "https://nlc.org/post/altar"
+
+
+def test_publish_verdict_carries_both_id_and_error_on_partial(monkeypatch, tmp_path):
+    """A partial must reach Convex as id AND error on one row."""
+    from worker import publish as pub
+
+    def boom(hub, job, payload, on_progress):
+        raise pub.PartialPublish(
+            "Collection insert rejected",
+            external_id="post_1",
+            external_url="https://nlc.org/post/altar",
+        )
+
+    monkeypatch.setitem(pub.PUBLISHERS, "wix", boom)
+    hub = FakeHub(credential={})
+    rows = pub.publish(hub, wix_job(), tmp_path)
+    assert rows[0]["externalId"] == "post_1"
+    assert rows[0]["externalUrl"] == "https://nlc.org/post/altar"
+    assert "Collection insert rejected" in rows[0]["error"]

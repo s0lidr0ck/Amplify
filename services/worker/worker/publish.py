@@ -40,6 +40,7 @@ import httpx
 
 from worker.hub import Hub, Job
 from worker.loop import handles
+from worker.ricos import markdown_to_ricos
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,21 @@ GRAPH = "https://graph.facebook.com/v21.0"
 
 class PublishError(RuntimeError):
     """Something the church can act on, safe to show and safe to log."""
+
+
+class PartialPublish(PublishError):
+    """Something irreversible succeeded and something after it did not.
+
+    Carries what already exists, so the verdict can report it. Without this
+    the id dies with the exception, Convex records a plain failure, and the
+    obvious next move — press it again — puts a second blog post on the
+    church's website.
+    """
+
+    def __init__(self, message: str, *, external_id: str, external_url: str = ""):
+        super().__init__(message)
+        self.external_id = external_id
+        self.external_url = external_url
 
 
 def _need(credential: dict[str, Any], *keys: str) -> list[str]:
@@ -430,11 +446,126 @@ def _publish_tiktok(
     return {"externalId": publish_id, "externalUrl": ""}
 
 
+# ── Wix ─────────────────────────────────────────────────────────────────────
+
+
+def _publish_wix(
+    hub: Hub,
+    job: Job,
+    payload: dict[str, Any],
+    on_progress: Callable[[float, str], None],
+) -> dict[str, str]:
+    """Publish the blog post, then file the sermon in the CMS collection.
+
+    The order is forced: the collection item carries the post's live URL, so
+    the post has to exist first. That also makes the third step the
+    irreversible one, which is why its id is carried out on the exception if
+    the fourth fails — a retry that republished would leave two blog posts on
+    the church's website.
+    """
+    credential = hub.credential(job, "wix")
+    bearer, site_id, collection_id, member_id = _need(
+        credential, "bearerToken", "siteId", "collectionId", "blogMemberId"
+    )
+
+    base = str(credential.get("apiBase") or "https://www.wixapis.com").rstrip("/")
+    headers = {
+        "Authorization": bearer,
+        "wix-site-id": site_id,
+        "Content-Type": "application/json",
+    }
+
+    # 1. The cover. Wix fetches it itself from a signed URL, so the image
+    # never travels through this container.
+    on_progress(15.0, "Sending the cover image")
+    cover_url, _filename = hub.download_url(job, payload["coverAssetId"])
+    response = httpx.post(
+        f"{base}/site-media/v1/files/import",
+        headers=headers,
+        json={
+            "url": cover_url,
+            "mediaType": "IMAGE",
+            "displayName": f"{payload.get('title') or 'Sermon'} cover",
+        },
+        timeout=API_TIMEOUT,
+    )
+    if response.status_code >= 400:
+        raise _explain(response, "Wix would not take the cover image")
+    media_id = str((response.json().get("file") or {}).get("id") or "")
+
+    # 2. The prose.
+    on_progress(40.0, "Writing the post")
+    rich_content = markdown_to_ricos(payload.get("markdown") or "")
+
+    # 3. The post. Irreversible from here.
+    on_progress(60.0, "Publishing the post")
+    draft_post: dict[str, Any] = {
+        "title": payload.get("title") or "Sermon",
+        "memberId": member_id,
+        "richContent": rich_content,
+    }
+    if media_id:
+        draft_post["media"] = {"wixMedia": {"image": {"id": media_id}}}
+    response = httpx.post(
+        f"{base}/blog/v3/draft-posts",
+        headers=headers,
+        json={"draftPost": draft_post, "publish": True},
+        timeout=API_TIMEOUT,
+    )
+    if response.status_code >= 400:
+        raise _explain(response, "Wix would not publish the blog post")
+    draft = response.json().get("draftPost") or {}
+    post_id = str(draft.get("id") or "")
+    url_parts = draft.get("url") or {}
+    post_url = f"{url_parts.get('base', '')}{url_parts.get('path', '')}"
+
+    # 4. The record in the collection.
+    on_progress(85.0, "Filing it in the Sermons collection")
+    field_map = credential.get("fieldMap") or {}
+    metadata = payload.get("metadata") or {}
+    values = {
+        "title": payload.get("title"),
+        "preachedOn": payload.get("sermonDate"),
+        "speaker": payload.get("speakerDisplayName") or payload.get("speaker"),
+        "summary": metadata.get("description"),
+        "scriptures": metadata.get("scriptures"),
+        "blogUrl": post_url,
+        "image": media_id,
+    }
+    # Only the fields this church's collection actually has. A collection
+    # without a speaker field is a different shape, not an error — and
+    # sending a key it does not know is what makes Wix reject the whole item.
+    item = {
+        field_map[name]: value
+        for name, value in values.items()
+        if name in field_map and value not in (None, "", [])
+    }
+    response = httpx.post(
+        f"{base}/wix-data/v2/items",
+        headers=headers,
+        json={
+            "dataCollectionId": collection_id,
+            "dataItem": {"data": item},
+        },
+        timeout=API_TIMEOUT,
+    )
+    if response.status_code >= 400:
+        raise PartialPublish(
+            "The blog post published, but filing it in the Sermons "
+            f"collection failed — {_explain(response, 'Wix said')}",
+            external_id=post_id,
+            external_url=post_url,
+        )
+
+    return {"externalId": post_id, "externalUrl": post_url}
+
+
 PUBLISHERS: dict[str, Callable[..., dict[str, str]]] = {
     "youtube": _publish_youtube,
     "facebook": _publish_facebook,
     "instagram": _publish_instagram,
     "tiktok": _publish_tiktok,
+    "wix": _publish_wix,
 }
 
 
@@ -471,6 +602,17 @@ def publish(hub: Hub, job: Job, scratch: Path) -> list[dict[str, object]]:
     hub.progress(job, 5.0, f"Sending to {destination}")
     try:
         result = publisher(hub, job, payload, on_progress)
+    except PartialPublish as exc:
+        # Both, on one row. Before PublishError because this is a subclass of
+        # it, and Python takes the first arm that matches — the other order
+        # loses the id silently, which is the whole thing this exists to
+        # prevent.
+        hub.log(job, str(exc), level="error")
+        return verdict(
+            externalId=exc.external_id,
+            externalUrl=exc.external_url,
+            error=str(exc),
+        )
     except PublishError as exc:
         # Expected badness — a wrong credential, a rejected video, a channel
         # that is not verified. The church can act on all of these, so the
