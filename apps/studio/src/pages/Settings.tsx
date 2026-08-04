@@ -112,6 +112,8 @@ type Field = {
    * already exists means "keep what's there" rather than "clear it".
    */
   secret?: boolean;
+  /** A switch rather than a box. Stored as a real boolean, not "true". */
+  toggle?: boolean;
 };
 
 const FIELDS: Record<string, Field[]> = {
@@ -153,6 +155,12 @@ const FIELDS: Record<string, Field[]> = {
       env: "WIX_API_BASE",
       optional: true,
       placeholder: "https://www.wixapis.com",
+    },
+    {
+      key: "createCategories",
+      label: "Make a category for the preacher when the blog has none",
+      optional: true,
+      toggle: true,
     },
   ],
 };
@@ -256,6 +264,12 @@ function Connections({ churchId }: { churchId: string }) {
     const out: Record<string, unknown> = {};
     for (const f of FIELDS[platform] ?? []) {
       const value = (parts[f.key] ?? "").trim();
+      if (f.toggle) {
+        // A real boolean, not the string "on". The server reads it as one,
+        // and "false" is truthy.
+        out[f.key] = value === "on";
+        continue;
+      }
       // Blank means absent, not empty-string. An empty value saved under a
       // required key passes the "is it there" check and then fails at the
       // platform, which is the least useful place to find out.
@@ -380,7 +394,17 @@ function Connections({ churchId }: { churchId: string }) {
                       } & Record<string, unknown>;
                       setParts(
                         Object.fromEntries(
-                          Object.entries(rest).map(([k, v]) => [k, String(v ?? "")]),
+                          Object.entries(rest).map(([k, v]) => [
+                            k,
+                            // Booleans come back as booleans; the boxes hold
+                            // strings. String(false) is "false", which is
+                            // not "on" but is very much not blank either.
+                            typeof v === "boolean"
+                              ? v
+                                ? "on"
+                                : ""
+                              : String(v ?? ""),
+                          ]),
                         ),
                       );
                       setMapping(fieldMap ?? {});
@@ -410,7 +434,26 @@ function Connections({ churchId }: { churchId: string }) {
                       already exist under those names, and copying between
                       two vocabularies is where they get crossed. */}
                   <div className="grid gap-2.5 sm:grid-cols-2">
-                    {(FIELDS[row.platform] ?? []).map((f) => (
+                    {(FIELDS[row.platform] ?? []).map((f) =>
+                      f.toggle ? (
+                        <label
+                          key={f.key}
+                          className="flex items-start gap-2 sm:col-span-2"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={parts[f.key] === "on"}
+                            onChange={(e) =>
+                              setParts((p) => ({
+                                ...p,
+                                [f.key]: e.target.checked ? "on" : "",
+                              }))
+                            }
+                            className="mt-0.5"
+                          />
+                          <span className="text-2xs text-muted">{f.label}</span>
+                        </label>
+                      ) : (
                       <label key={f.key} className="grid gap-1">
                         <span className="text-2xs text-muted">
                           {f.label}{" "}
@@ -438,7 +481,8 @@ function Connections({ churchId }: { churchId: string }) {
                           className="w-full rounded-lg border border-border bg-surface px-3 py-2 font-mono text-2xs text-ink placeholder:text-faint focus:border-brand focus:outline-none"
                         />
                       </label>
-                    ))}
+                      ),
+                    )}
                   </div>
 
                   {row.platform === "wix" && (
