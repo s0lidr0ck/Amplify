@@ -14,7 +14,14 @@ import httpx
 import pytest
 
 from worker.hub import Job
-from worker.publish import PublishError, _explain, _need, _publish_tiktok, publish
+from worker.publish import (
+    PublishError,
+    _explain,
+    _need,
+    _publish_tiktok,
+    _source_size,
+    publish,
+)
 
 
 def make_job(payload: dict) -> Job:
@@ -185,11 +192,13 @@ def tiktok_refresh(monkeypatch, body: dict, status: int = 200):
             )
         raise AssertionError(f"unexpected call to {url}")
 
-    def fake_head(url, **kwargs):
+    def stop(*_args, **_kwargs):
         raise PublishError("stop here")
 
     monkeypatch.setattr(httpx, "post", fake_post)
-    monkeypatch.setattr(httpx, "head", fake_head)
+    # Sizing the clip is the step after the refresh, and it is a streamed
+    # ranged GET rather than a HEAD — see _source_size.
+    monkeypatch.setattr(httpx, "stream", stop)
 
 
 def test_tiktok_saves_the_rotated_refresh_token(monkeypatch):
@@ -238,3 +247,66 @@ def test_tiktok_explains_an_error_sent_with_a_200(monkeypatch):
 
     assert "invalid or expired" in str(caught.value)
     assert hub.rotations == []
+
+
+# ── Sizing the source file ──────────────────────────────────────────────────
+#
+# The download URL is signed for GET, and SigV4 puts the HTTP method into the
+# signature. A HEAD against a GET-signed URL is a 403 every time, however
+# healthy the object and the credentials are — which is exactly how the first
+# real YouTube upload died: Google already authenticated, the file sitting in
+# the bucket, and a 403 that read like a permissions problem.
+
+
+class FakeStream:
+    """Enough of httpx.stream's context manager to size a file."""
+
+    def __init__(self, headers: dict, status: int = 206):
+        self.headers = headers
+        self.status_code = status
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        return False
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise httpx.HTTPStatusError(
+                "boom",
+                request=httpx.Request("GET", "https://example.invalid"),
+                response=httpx.Response(self.status_code),
+            )
+
+
+def test_size_comes_from_a_ranged_get_not_a_head(monkeypatch):
+    seen = {}
+
+    def fake_stream(method, url, **kwargs):
+        seen["method"] = method
+        seen["range"] = kwargs.get("headers", {}).get("Range")
+        return FakeStream({"content-range": "bytes 0-0/2147483648"})
+
+    monkeypatch.setattr(httpx, "stream", fake_stream)
+    monkeypatch.setattr(
+        httpx,
+        "head",
+        lambda *a, **k: pytest.fail("HEAD is signed differently and 403s"),
+    )
+
+    assert _source_size("https://s3.example/signed-for-get") == 2147483648
+    assert seen["method"] == "GET"
+    assert seen["range"] == "bytes=0-0"
+
+
+def test_size_says_so_when_the_range_is_ignored(monkeypatch):
+    # A server that answers 200 with the whole body tells us nothing about
+    # the total. Better to stop than to start an upload declaring a length
+    # that is wrong, which YouTube rejects only after every byte is sent.
+    monkeypatch.setattr(
+        httpx, "stream", lambda method, url, **k: FakeStream({}, status=200)
+    )
+    with pytest.raises(PublishError) as caught:
+        _source_size("https://s3.example/signed-for-get")
+    assert "how big" in str(caught.value)

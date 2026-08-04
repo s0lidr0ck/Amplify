@@ -73,6 +73,39 @@ def _need(credential: dict[str, Any], *keys: str) -> list[str]:
     return out
 
 
+def _source_size(url: str) -> int:
+    """How many bytes the signed URL points at.
+
+    Deliberately not a HEAD. The URL is signed for GET, and SigV4 puts the
+    HTTP method into the signature — so HEAD against a GET-signed URL is a
+    403 every time, however healthy the object and the credentials are. It
+    reads exactly like a permissions problem and is nothing of the kind: the
+    first real YouTube upload died here, with Google already authenticated
+    and the file sitting in the bucket.
+
+    A one-byte ranged GET asks the same question with the signature we have.
+    Streamed, so that a server which ignored the Range header would cost a
+    dropped connection rather than a two-gigabyte download.
+    """
+    with httpx.stream(
+        "GET",
+        url,
+        headers={"Range": "bytes=0-0"},
+        timeout=API_TIMEOUT,
+        follow_redirects=True,
+    ) as probe:
+        probe.raise_for_status()
+        # "bytes 0-0/1234567" — the total is what we came for.
+        total = probe.headers.get("content-range", "").rsplit("/", 1)[-1]
+
+    if not total.isdigit():
+        raise PublishError(
+            "Could not work out how big the video file is, so the upload "
+            "would have been rejected part way through. Try again."
+        )
+    return int(total)
+
+
 def _explain(response: httpx.Response, what: str) -> PublishError:
     """The platform's complaint, not ours."""
     detail = ""
@@ -131,9 +164,7 @@ def _publish_youtube(
     # Ask S3 how big it is before starting. YouTube's resumable endpoint
     # wants the length up front, and a chunked PUT without one is rejected
     # after the whole file has been sent.
-    head = httpx.head(source_url, timeout=API_TIMEOUT, follow_redirects=True)
-    head.raise_for_status()
-    size = int(head.headers["content-length"])
+    size = _source_size(source_url)
 
     body = {
         "snippet": {
@@ -352,9 +383,7 @@ def _publish_tiktok(
         hub.rotate_credential(job, "tiktok", {"refresh_token": rotated})
 
     source_url, _ = hub.download_url(job, payload["assetId"])
-    head = httpx.head(source_url, timeout=API_TIMEOUT, follow_redirects=True)
-    head.raise_for_status()
-    size = int(head.headers["content-length"])
+    size = _source_size(source_url)
 
     # FILE_UPLOAD rather than PULL_FROM_URL. Pulling requires the URL's
     # domain to be verified in the TikTok developer portal, which an S3
