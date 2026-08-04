@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@convex/api";
 import type { Id } from "@convex/dataModel";
 import { useEffect, useRef, useState } from "react";
@@ -141,6 +141,13 @@ function Connections({ churchId }: { churchId: string }) {
   const rows = useQuery(api.amplifyCredentials.status, { churchId: id });
   const connect = useMutation(api.amplifyCredentials.connect);
   const disconnect = useMutation(api.amplifyCredentials.disconnect);
+  const testConnection = useAction(api.amplifyConnections.test);
+  const [testing, setTesting] = useState<string | null>(null);
+  // Kept per platform rather than one at a time, so checking Instagram
+  // does not wipe what you just learned about Facebook.
+  const [checked, setChecked] = useState<
+    Record<string, { ok: boolean; detail: string }>
+  >({});
   const [editing, setEditing] = useState<string | null>(null);
   const [label, setLabel] = useState("");
   const [secret, setSecret] = useState("");
@@ -183,7 +190,48 @@ function Connections({ churchId }: { churchId: string }) {
                 ) : (
                   <span className="text-2xs text-muted">Not connected</span>
                 )}
+                {/* What the platform says this connection IS. A token that
+                    parses but points at the wrong page is the failure
+                    nobody catches until a sermon appears on somebody
+                    else's wall. */}
+                {checked[row.platform] && (
+                  <span
+                    className={`text-2xs ${
+                      checked[row.platform].ok ? "text-ok" : "text-danger"
+                    }`}
+                  >
+                    {checked[row.platform].detail}
+                  </span>
+                )}
                 <div className="ml-auto flex items-center gap-3">
+                  {row.connected && (
+                    <button
+                      disabled={testing === row.platform}
+                      onClick={async () => {
+                        setTesting(row.platform);
+                        try {
+                          const result = await testConnection({
+                            churchId: id as Id<"churches">,
+                            platform: row.platform,
+                          });
+                          setChecked((c) => ({ ...c, [row.platform]: result }));
+                        } catch (e) {
+                          setChecked((c) => ({
+                            ...c,
+                            [row.platform]: {
+                              ok: false,
+                              detail: errorText(e, "Couldn't check that"),
+                            },
+                          }));
+                        } finally {
+                          setTesting(null);
+                        }
+                      }}
+                      className="text-2xs text-muted underline hover:text-ink disabled:opacity-40"
+                    >
+                      {testing === row.platform ? "Checking…" : "Check it"}
+                    </button>
+                  )}
                   {row.connected && (
                     <button
                       onClick={() =>
