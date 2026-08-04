@@ -214,6 +214,13 @@ export function Publish({ projectId }: { projectId: Id<"amplifyProjects"> }) {
                 {row.warning && !posted && !sending && (
                   <p className="text-[0.8125rem] text-warn">{row.warning}</p>
                 )}
+                {/* Went out, but not whole — a tag that would not create, a
+                    thumbnail the platform refused. Said here because the
+                    alternative is a post missing something with nothing
+                    anywhere to say what or why. */}
+                {posted && record.note && (
+                  <p className="text-[0.8125rem] text-warn">{record.note}</p>
+                )}
               </div>
 
               <div className="flex flex-wrap items-center gap-2.5">
