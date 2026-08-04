@@ -201,10 +201,13 @@ function ClipRow({
   clip,
   projectId,
   masterAssetId,
+  hasReel,
 }: {
   clip: Clip;
   projectId: Id<"amplifyProjects">;
   masterAssetId: Id<"amplifyAssets"> | null;
+  /** An editor has already built a reel from this moment. */
+  hasReel: boolean;
 }) {
   const enqueue = useMutation(api.amplifyWorker.enqueue);
   const discard = useMutation(api.amplifyClips.discard);
@@ -212,7 +215,6 @@ function ClipRow({
   const playbackUrl = useAction(api.amplifyMedia.playbackUrl);
   const requestUpload = useAction(api.amplifyMedia.requestUpload);
   const recordAsset = useMutation(api.amplifyMedia.recordAsset);
-  const useEditedFile = useMutation(api.amplifyClips.useEditedFile);
   const [packaging, setPackaging] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -331,13 +333,13 @@ function ClipRow({
               {downloading ? "Preparing…" : "Download"}
             </button>
           )}
-          {/* The reframed cut, coming back from an editor.
+          {/* The finished reel, coming back from an editor.
 
-              Amplify cuts in the sermon's own frame, which off a real
-              camera is 16:9, while reels are 9:16. Publishing refuses a
-              widescreen clip and tells you to reframe it — this is where
-              the reframed one comes back, so the finished reel and the clip
-              it was written for are the same thing. */}
+              Stored against the clip rather than over it. A clip and a reel
+              are different things: the clip is the moment cut out of the
+              sermon and it stays that, which is what lets an editor work
+              from it and what stops two of them building a reel out of the
+              same moment. This is the reel — what actually gets posted. */}
           <label
             className={`cursor-pointer rounded-lg border border-border bg-surface px-3 py-1.5 text-2xs font-medium transition-colors ${
               uploading
@@ -364,7 +366,7 @@ function ClipRow({
                   const probe = await measureVideo(file);
                   const { uploadUrl, storageKey } = await requestUpload({
                     projectId,
-                    kind: "clip",
+                    kind: "reel_video",
                     filename: file.name,
                     contentType: file.type || "video/mp4",
                   });
@@ -375,19 +377,19 @@ function ClipRow({
                   });
                   if (!put.ok) throw new Error(`Upload failed (${put.status})`);
 
-                  const assetId = await recordAsset({
+                  // subjectId ties it to the clip it was built from, which
+                  // is how publishing finds it and how a second editor can
+                  // see the moment is already taken. No second step: the
+                  // clip's own cut is left exactly where it was.
+                  await recordAsset({
                     projectId,
-                    kind: "clip",
+                    kind: "reel_video",
                     subjectId: clip._id,
                     storageKey,
                     filename: file.name,
                     mimeType: file.type || "video/mp4",
                     ...probe,
                   });
-                  // Two steps, and the second is the one that matters:
-                  // without it the file is stored and the clip still points
-                  // at the machine's cut.
-                  await useEditedFile({ clipId: clip._id, assetId });
                 } catch (err) {
                   setUploadError(errorText(err, "That upload didn't work"));
                 } finally {
@@ -395,7 +397,11 @@ function ClipRow({
                 }
               }}
             />
-            {uploading ? "Uploading…" : "Use my edit"}
+            {uploading
+              ? "Uploading…"
+              : hasReel
+                ? "Replace the reel"
+                : "Upload the reel"}
           </label>
           <button
             disabled={busy || !masterAssetId}
@@ -465,7 +471,16 @@ export function Clips({
   hasTranscript: boolean;
 }) {
   const clips = useQuery(api.amplifyClips.list, { projectId });
+  const assets = useQuery(api.amplifyMedia.listAssets, { projectId });
   const findClips = useAction(api.amplifyClipFinder.findClips);
+  // Which clips already have a finished reel against them — so an editor
+  // can see at a glance that a moment is taken, which is the whole reason
+  // the two are tied together.
+  const reeled = new Set(
+    (assets ?? [])
+      .filter((a) => a.kind === "reel_video" && a.status === "ready")
+      .map((a) => a.subjectId),
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -537,6 +552,7 @@ export function Clips({
                 clip={clip}
                 projectId={projectId}
                 masterAssetId={masterAssetId}
+                hasReel={reeled.has(clip._id)}
               />
             ))}
           </ul>
