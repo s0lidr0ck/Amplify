@@ -185,6 +185,15 @@ export function Publish({ projectId }: { projectId: Id<"amplifyProjects"> }) {
                       {row.subjectLabel}
                     </span>
                   )}
+                  {/* Which video is going: the editor's finished reel, or
+                      Amplify's raw cut. Two different files under the same
+                      caption, and only one of them is the one anybody
+                      meant to post. */}
+                  {row.usingReel && !posted && (
+                    <span className="rounded-md bg-ok-soft px-2 py-0.5 text-2xs font-medium text-ok">
+                      your reel
+                    </span>
+                  )}
                   {posted && record.automatic && (
                     <span className="rounded-md bg-ok-soft px-2 py-0.5 text-2xs font-medium text-ok">
                       posted by Amplify
@@ -211,6 +220,23 @@ export function Publish({ projectId }: { projectId: Id<"amplifyProjects"> }) {
                         ? "Amplify is uploading it now."
                         : (row.reason ?? NOTES[row.destination] ?? "")}
                 </p>
+                {/* The words that will go out, in the platform's own
+                    wording — Amplify writes a different caption for each
+                    one, and the only honest way to show that is to show
+                    them. Read before pressing, not discovered in the feed. */}
+                {row.caption && !posted && !sending && (
+                  <details className="mt-1">
+                    {/* Folded away rather than absent. Six reel rows with
+                        six captions open is a wall nobody reads, and a
+                        caption nobody reads is the same as no caption. */}
+                    <summary className="cursor-pointer list-none text-2xs text-muted underline hover:text-ink">
+                      See the caption
+                    </summary>
+                    <p className="mt-1.5 whitespace-pre-wrap rounded-lg border border-border bg-surface px-3 py-2 text-[0.8125rem] leading-relaxed text-ink">
+                      {row.caption}
+                    </p>
+                  </details>
+                )}
                 {/* Not a refusal — said before the press because fixing it
                     afterwards means the same sermon on the channel twice. */}
                 {row.warning && !posted && !sending && (
