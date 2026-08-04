@@ -71,6 +71,24 @@ function measure(file: File): Promise<{ width: number; height: number } | null> 
   });
 }
 
+/** The mark on the chosen one. Outlined to offer, filled once taken. */
+function Star({ filled }: { filled?: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="11"
+      height="11"
+      aria-hidden
+      fill={filled ? "currentColor" : "none"}
+      stroke="currentColor"
+      strokeWidth={filled ? 0 : 2}
+      strokeLinejoin="round"
+    >
+      <path d="M12 2.5l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5-5.8-3-5.8 3 1.1-6.5L2.6 9.3l6.5-.9z" />
+    </svg>
+  );
+}
+
 type Attached = {
   assetId: Id<"amplifyAssets">;
   url: string;
@@ -220,14 +238,35 @@ export function AttachImage({
                 <span className="absolute left-2 top-2 rounded-md bg-ink/80 px-1.5 py-0.5 font-mono text-2xs font-medium text-white">
                   {i + 1}
                 </span>
-                {/* On the picture, because that is what you are looking at
-                    when you want to know which one the website will use. */}
-                {img.assetId === coverId && (
-                  <span className="absolute right-2 top-2 rounded-md bg-brand px-2 py-0.5 text-2xs font-medium text-white">
-                    cover
-                  </span>
-                )}
               </button>
+
+              {/* The pick, on the picture.
+                  It was a text link in a row with Download and Remove, all
+                  the same weight, and nothing showed which image was
+                  chosen — so the one decision on this card looked like a
+                  third housekeeping action. Same corner for both states, so
+                  two images side by side answer "which one is it" without
+                  reading anything.
+
+                  Outside the lightbox button rather than inside it: a
+                  button within a button is invalid, and the click would
+                  open the full-size view instead of choosing. */}
+              {kind === "sermon_thumbnail" && shown.length > 1 && (
+                <div className="relative">
+                  {img.assetId === coverId ? (
+                    <span className="absolute -top-11 right-2 flex items-center gap-1 rounded-md bg-brand px-2 py-1 text-2xs font-medium text-white shadow-sm">
+                      <Star filled /> Cover
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => void setCover({ assetId: img.assetId })}
+                      className="absolute -top-11 right-2 flex items-center gap-1 rounded-md bg-surface/95 px-2 py-1 text-2xs font-medium text-muted shadow-sm ring-1 ring-border transition-colors hover:text-ink"
+                    >
+                      <Star /> Make cover
+                    </button>
+                  )}
+                </div>
+              )}
 
               <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
                 <span className="data">
@@ -245,17 +284,6 @@ export function AttachImage({
                 >
                   Download
                 </button>
-                {/* Only when there is a choice to make. With one image
-                    attached it is the cover already, and a control that can
-                    only ever confirm what is true is noise. */}
-                {kind === "sermon_thumbnail" && shown.length > 1 && img.assetId !== coverId && (
-                  <button
-                    onClick={() => void setCover({ assetId: img.assetId })}
-                    className="text-2xs text-muted underline hover:text-ink"
-                  >
-                    Use as cover
-                  </button>
-                )}
                 <button
                   onClick={() => void detach({ assetId: img.assetId })}
                   className="text-2xs text-muted underline hover:text-ink"
