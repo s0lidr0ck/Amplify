@@ -114,13 +114,35 @@ type Field = {
   secret?: boolean;
   /** A switch rather than a box. Stored as a real boolean, not "true". */
   toggle?: boolean;
+  /**
+   * Supplied by the Connect button, so never asked for on a platform that
+   * has one.
+   *
+   * Asking anyway is worse than clutter: these were marked required, so the
+   * form refused to save without a refresh token — a value nobody can have
+   * before connecting, and which connecting then overwrites. The only way
+   * through was to invent one, which is exactly what happened.
+   */
+  viaConnect?: boolean;
 };
 
 const FIELDS: Record<string, Field[]> = {
   youtube: [
-    { key: "client_id", label: "Client id", env: "YOUTUBE_CLIENT_ID" },
-    { key: "client_secret", label: "Client secret", env: "YOUTUBE_CLIENT_SECRET", secret: true },
-    { key: "refresh_token", label: "Refresh token", env: "YOUTUBE_REFRESH_TOKEN", secret: true },
+    { key: "client_id", label: "Client id", env: "YOUTUBE_CLIENT_ID", viaConnect: true },
+    {
+      key: "client_secret",
+      label: "Client secret",
+      env: "YOUTUBE_CLIENT_SECRET",
+      secret: true,
+      viaConnect: true,
+    },
+    {
+      key: "refresh_token",
+      label: "Refresh token",
+      env: "YOUTUBE_REFRESH_TOKEN",
+      secret: true,
+      viaConnect: true,
+    },
   ],
   facebook: [
     { key: "page_id", label: "Page id", env: "FACEBOOK_PAGE_ID" },
@@ -140,9 +162,21 @@ const FIELDS: Record<string, Field[]> = {
     { key: "access_token", label: "Access token", env: "INSTAGRAM_ACCESS_TOKEN", secret: true },
   ],
   tiktok: [
-    { key: "client_key", label: "Client key", env: "TIKTOK_CLIENT_KEY" },
-    { key: "client_secret", label: "Client secret", env: "TIKTOK_CLIENT_SECRET", secret: true },
-    { key: "refresh_token", label: "Refresh token", env: "TIKTOK_REFRESH_TOKEN", secret: true },
+    { key: "client_key", label: "Client key", env: "TIKTOK_CLIENT_KEY", viaConnect: true },
+    {
+      key: "client_secret",
+      label: "Client secret",
+      env: "TIKTOK_CLIENT_SECRET",
+      secret: true,
+      viaConnect: true,
+    },
+    {
+      key: "refresh_token",
+      label: "Refresh token",
+      env: "TIKTOK_REFRESH_TOKEN",
+      secret: true,
+      viaConnect: true,
+    },
   ],
   wix: [
     { key: "bearerToken", label: "API key", env: "WIX_BEARER_TOKEN", secret: true },
@@ -298,6 +332,20 @@ function Connections({ churchId }: { churchId: string }) {
     setError(null);
   };
 
+  /**
+   * The boxes actually worth showing for a platform.
+   *
+   * What Connect supplies is not asked for. Note this filters the FORM, not
+   * what gets saved: buildSecret still reads those keys out of `parts`,
+   * where Edit prefilled them, because only secrets survive being left out
+   * of a save — dropping a non-secret client key would quietly break the
+   * connection it belongs to.
+   */
+  const asked = (platform: string) =>
+    (FIELDS[platform] ?? []).filter(
+      (f) => !(f.viaConnect && CONNECTABLE.has(platform)),
+    );
+
   /** The credential this platform's boxes add up to. */
   const buildSecret = (platform: string): Record<string, unknown> => {
     const out: Record<string, unknown> = {};
@@ -333,7 +381,7 @@ function Connections({ churchId }: { churchId: string }) {
    * nothing can show you.
    */
   const ready = (platform: string, connected: boolean) =>
-    (FIELDS[platform] ?? []).every(
+    asked(platform).every(
       (f) =>
         f.optional ||
         (f.secret && connected) ||
@@ -513,8 +561,15 @@ function Connections({ churchId }: { churchId: string }) {
                       hand. The variable name is on the label because these
                       already exist under those names, and copying between
                       two vocabularies is where they get crossed. */}
+                  {asked(row.platform).length === 0 && (
+                    <p className="text-2xs text-muted">
+                      Everything else comes from{" "}
+                      {row.connected ? "Reconnect" : "Connect"} — there is
+                      nothing here to fill in by hand.
+                    </p>
+                  )}
                   <div className="grid gap-2.5 sm:grid-cols-2">
-                    {(FIELDS[row.platform] ?? []).map((f) =>
+                    {asked(row.platform).map((f) =>
                       f.toggle ? (
                         <label
                           key={f.key}
