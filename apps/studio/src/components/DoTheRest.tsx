@@ -74,26 +74,49 @@ export function DoTheRest({
   );
   const byHand = written.filter((d) => d.editedByHuman).length;
 
+  // A run that stopped existing without saying so.
+  //
+  // The work happens server-side and survives the page being closed, which
+  // is the point — but it means nothing on the client notices if the run
+  // dies. Without this the row stays "running" for ever and the button is
+  // disabled permanently because of a job that is not there any more.
+  //
+  // Fifteen minutes: a whole six-step run takes four to six, and every step
+  // touches the row on the way past.
+  const STALE_MS = 15 * 60 * 1000;
+  const live =
+    run?.updatedAt === null || run?.updatedAt === undefined
+      ? true // Written before the heartbeat existed. Believe it.
+      : Date.now() - run.updatedAt < STALE_MS;
+
   // `pressed` covers the gap between the click and the first run row
   // arriving over the subscription. Without it the button springs back to
   // its resting state for a moment, which reads as a press that missed.
-  const busy =
-    pressed || run?.status === "running" || run?.status === "waiting";
+  const running = run?.status === "running" || run?.status === "waiting";
+  const stalled = running && !live;
+  const busy = pressed || (running && live);
   const finished = run?.status === "done";
 
   const line = () => {
+    if (stalled) {
+      return `This run stopped without finishing${
+        run.step ? ` on ${LABELS[run.step] ?? run.step}` : ""
+      }. Carrying on picks up whatever is missing.`;
+    }
     if (run?.status === "waiting") {
       return "Waiting for the transcript. It'll carry on by itself.";
     }
     if (run?.step) {
       const at = ORDER.indexOf(run.step);
       const where = at >= 0 ? ` (${at + 1} of ${ORDER.length})` : "";
-      return `Writing ${LABELS[run.step] ?? run.step}${where}…`;
+      // Said while it is working, because this is the moment somebody
+      // wonders whether they are allowed to go and do something else.
+      return `Writing ${LABELS[run.step] ?? run.step}${where}… you can close this page, it keeps going.`;
     }
     if (busy) return "Starting…";
     if (run?.status === "failed") return null;
     if (finished) return "All done.";
-    return "Transcribes it, then writes all six pieces in order. Anything already written is left alone.";
+    return "Transcribes it, then writes all six pieces in order. It keeps going if you close the page, and anything already written is left alone.";
   };
 
   return (
@@ -127,7 +150,7 @@ export function DoTheRest({
         >
           {busy
             ? "Working…"
-            : run?.status === "failed"
+            : stalled || run?.status === "failed"
               ? "Carry on"
               : finished
                 ? "Check for anything missing"
