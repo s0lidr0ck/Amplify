@@ -22,7 +22,8 @@ import { errorText } from "../lib/errorText";
 /** What each row is, in a sentence, when there is nothing more urgent to say. */
 const NOTES: Record<string, string> = {
   youtube: "The full sermon, with its title and description.",
-  facebook: "The short written version.",
+  facebook: "The short written version, with a link to the blog post.",
+  facebook_reel: "The clip, as a Facebook reel.",
   instagram: "The clip, as a reel.",
   tiktok: "The clip.",
   blog: "The long-form write-up, for your website.",

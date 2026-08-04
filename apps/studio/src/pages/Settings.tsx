@@ -94,15 +94,24 @@ const PLATFORMS: Record<string, { label: string; hint: string }> = {
   },
   facebook: {
     label: "Facebook",
-    hint: "The Page access token from a Meta app with pages_manage_posts.",
+    hint:
+      "page_id and access_token — your FACEBOOK_PAGE_ID and " +
+      "FACEBOOK_PAGE_ACCESS_TOKEN. The Page token, not the user one, from " +
+      "a Meta app with pages_manage_posts. Covers both the written post " +
+      "and Facebook reels.",
   },
   instagram: {
     label: "Instagram",
-    hint: "The Instagram Business account id and its long-lived token.",
+    hint:
+      "ig_user_id and access_token — your INSTAGRAM_BUSINESS_ACCOUNT_ID " +
+      "and INSTAGRAM_ACCESS_TOKEN.",
   },
   tiktok: {
     label: "TikTok",
-    hint: "The client key, client secret and refresh token from the TikTok developer portal.",
+    hint:
+      "client_key, client_secret and refresh_token — your TIKTOK_CLIENT_KEY, " +
+      "TIKTOK_CLIENT_SECRET and TIKTOK_REFRESH_TOKEN. The access token is " +
+      "not needed; it's refreshed at every post.",
   },
   wix: {
     label: "Website (Wix)",
