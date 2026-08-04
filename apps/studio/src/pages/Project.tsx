@@ -11,6 +11,7 @@ import {
 } from "react-router-dom";
 
 import { Mark } from "../brand/Mark";
+import { DoTheRest } from "../components/DoTheRest";
 import { Jobs } from "../components/Jobs";
 import { StageRail } from "../components/StageRail";
 import { Trim } from "../components/Trim";
@@ -288,6 +289,18 @@ export function ProjectPage() {
           onQueued={() => setRetrim(false)}
         />
       ) : null}
+
+      {/* Directly under the recording, because this is where somebody is
+          standing the moment they finish trimming, and "what now?" should
+          not need looking for. */}
+      {/* Or a transcript without one. A sermon can arrive already
+          transcribed — an import, a re-file, a trim that was undone — and
+          gating purely on the cut would hide the button on exactly the
+          sermon that has everything it needs and none of the writing. */}
+      <DoTheRest
+        projectId={projectId}
+        ready={!!master || sermon.hasTranscript}
+      />
 
       {/* Only this room's work. Transcribing reports on the Transcript
           page and cutting reports on Clips, because that is where somebody
