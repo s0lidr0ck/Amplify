@@ -77,6 +77,22 @@ export function Publish({ projectId }: { projectId: Id<"amplifyProjects"> }) {
   // stand for all of them.
   const key = (target: string, subjectId: string | null) =>
     `${target}::${subjectId ?? ""}`;
+
+  // One row per reel per platform comes back from the server. A person
+  // thinks in reels, so they are gathered back up here — the server stays
+  // the one place that decides what can go where, which is the rule that
+  // stops the button lying about what it will post.
+  const sermonRows = rows.filter((r) => r.subjectId === null);
+  const reelOrder: string[] = [];
+  const byReel = new Map<string, typeof rows>();
+  for (const row of rows) {
+    if (row.subjectId === null) continue;
+    if (!byReel.has(row.subjectId)) {
+      byReel.set(row.subjectId, []);
+      reelOrder.push(row.subjectId);
+    }
+    byReel.get(row.subjectId)!.push(row);
+  }
   const done = new Map(
     publications.map((p) => [key(p.target, p.subjectId), p]),
   );
@@ -97,12 +113,9 @@ export function Publish({ projectId }: { projectId: Id<"amplifyProjects"> }) {
 
   return (
     <div className="card grid gap-3 p-5">
-      <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-        {/* The room heading already says Publish. */}
-        <span className="data">
-          {out} of {rows.length} out
-        </span>
-      </div>
+      {/* The stage rail above already says "2 of 15 out", so repeating it
+          here was the same number twice on one screen with nothing between
+          them. The sermon and the reels each carry their own heading. */}
 
       {/* The one gate that is about the church's name rather than about
           convenience, so it is stated once at the top rather than repeated
@@ -157,8 +170,15 @@ export function Publish({ projectId }: { projectId: Id<"amplifyProjects"> }) {
 
       {error && <p className="text-[0.8125rem] text-danger">{error}</p>}
 
-      <ul className="-mx-5 -mb-5 border-t border-border">
-        {rows.map((row) => {
+      {/* The sermon itself, then the reels.
+
+          Grouped by reel rather than by platform, because a reel is the
+          unit somebody works in: one clip, edited once, posted to three
+          places. Listed by platform it became four reels × three platforms
+          = twelve rows, the same reel scattered across three sections and
+          the same blocking reason printed three times. */}
+      <ul className="-mx-5 border-t border-border">
+        {sermonRows.map((row) => {
           const record = done.get(key(row.destination, row.subjectId));
           const sending = record?.status === "sending";
           const posted = record?.status === "posted";
@@ -399,6 +419,156 @@ export function Publish({ projectId }: { projectId: Id<"amplifyProjects"> }) {
           );
         })}
       </ul>
+
+      {reelOrder.length > 0 && (
+        <div className="-mx-5 -mb-5 grid gap-0 border-t border-border">
+          <p className="section-label px-5 pb-1 pt-4">
+            Reels{" "}
+            <span className="font-normal text-faint">({reelOrder.length})</span>
+          </p>
+          {reelOrder.map((subjectId) => {
+            const group = byReel.get(subjectId)!;
+            const first = group[0];
+
+            // Said once. The reason a reel cannot go is almost always about
+            // its file, which is the same fact for all three platforms —
+            // printed per row it was the same sentence three times, and the
+            // repetition read as three separate problems.
+            const reasons = group
+              .filter((r) => !done.get(key(r.destination, subjectId)))
+              .map((r) => r.reason)
+              .filter(Boolean);
+            const shared =
+              reasons.length > 0 && reasons.every((r) => r === reasons[0])
+                ? reasons[0]
+                : null;
+
+            return (
+              <div
+                key={subjectId}
+                className="grid gap-2 border-b border-border px-5 py-3.5 last:border-0"
+              >
+                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                  {/* The hook is how you tell four reels apart. */}
+                  <p className="min-w-0 flex-1 text-[0.9375rem] font-semibold leading-snug text-ink">
+                    {first.subjectLabel || "Untitled reel"}
+                  </p>
+                  {first.usingReel && (
+                    <span className="rounded-md bg-ok-soft px-2 py-0.5 text-2xs font-medium text-ok">
+                      your reel
+                    </span>
+                  )}
+                </div>
+
+                {shared && <p className="text-[0.8125rem] text-warn">{shared}</p>}
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {group.map((row) => {
+                    const record = done.get(key(row.destination, subjectId));
+                    const posted = record?.status === "posted";
+                    const sending = record?.status === "sending";
+                    const failed = record?.status === "failed";
+                    const id = `${row.destination}::${subjectId}`;
+
+                    return (
+                      <button
+                        key={row.destination}
+                        disabled={
+                          busy === id || sending || (!row.canPost && !posted)
+                        }
+                        title={posted ? undefined : (row.reason ?? undefined)}
+                        onClick={async () => {
+                          // A posted reel toggles back to not-posted, which
+                          // is the only way to correct a mistaken tick.
+                          if (posted) {
+                            void mark({
+                              projectId,
+                              target: row.destination,
+                              posted: false,
+                              subjectId,
+                            });
+                            return;
+                          }
+                          setBusy(id);
+                          setError(null);
+                          try {
+                            await send({
+                              projectId,
+                              destination: row.destination,
+                              subjectId,
+                            });
+                          } catch (e) {
+                            setError(errorText(e, "Couldn't send that"));
+                          } finally {
+                            setBusy(null);
+                          }
+                        }}
+                        className={`rounded-lg px-3 py-1.5 text-2xs font-medium transition-colors disabled:opacity-40 ${
+                          posted
+                            ? "bg-ok-soft text-ok hover:bg-surface-strong"
+                            : row.canPost
+                              ? "bg-ink text-white hover:bg-ink/85"
+                              : "border border-border bg-surface text-faint"
+                        }`}
+                      >
+                        {busy === id || sending
+                          ? `${row.label}…`
+                          : posted
+                            ? `${row.label} ✓`
+                            : failed
+                              ? `${row.label} — try again`
+                              : row.label}
+                      </button>
+                    );
+                  })}
+
+                  {/* Posting by hand still has to be tickable, for a reel
+                      that went up from somebody's phone. */}
+                  <button
+                    onClick={() => {
+                      for (const row of group) {
+                        if (!done.get(key(row.destination, subjectId))) {
+                          void mark({
+                            projectId,
+                            target: row.destination,
+                            posted: true,
+                            subjectId,
+                          });
+                        }
+                      }
+                    }}
+                    className="text-2xs text-muted underline hover:text-ink"
+                  >
+                    Mark all posted
+                  </button>
+                </div>
+
+                {group.some((r) => r.caption) && (
+                  <details>
+                    <summary className="cursor-pointer list-none text-2xs text-muted underline hover:text-ink">
+                      See the captions
+                    </summary>
+                    <div className="mt-1.5 grid gap-2">
+                      {group
+                        .filter((r) => r.caption)
+                        .map((r) => (
+                          <div key={r.destination} className="grid gap-1">
+                            <p className="text-2xs font-medium text-muted">
+                              {r.label}
+                            </p>
+                            <p className="whitespace-pre-wrap rounded-lg border border-border bg-surface px-3 py-2 text-[0.8125rem] leading-relaxed text-ink">
+                              {r.caption}
+                            </p>
+                          </div>
+                        ))}
+                    </div>
+                  </details>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

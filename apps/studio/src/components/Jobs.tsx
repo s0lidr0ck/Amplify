@@ -31,6 +31,10 @@ export function Jobs({
   // looking for it.
   const jobs = (everything ?? []).filter((j) => types.includes(j.jobType));
   if (jobs.length === 0) return null;
+  // Nothing running and nothing broken means nothing to say. A card reading
+  // "publish completed Finished" twice was the first thing on the Publish
+  // page, above the rows that actually say what was published and where.
+  if (!jobs.some((j) => j.status !== "completed")) return null;
 
   // Anything live or broken, and then a couple of finished ones for
   // context. The full list is every clip ever cut — twenty rows of
