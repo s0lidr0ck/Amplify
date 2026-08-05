@@ -2,6 +2,7 @@ import { useOutletContext } from "react-router-dom";
 import type { Id } from "@convex/dataModel";
 
 import { Clips } from "../../components/Clips";
+import { DeleteSermon } from "../../components/DeleteSermon";
 import { Jobs } from "../../components/Jobs";
 import { PiecePage } from "../../components/PiecePage";
 import { Publish } from "../../components/Publish";
@@ -25,6 +26,8 @@ import { STAGES, type StageSlug } from "../../lib/stages";
 
 export type RoomContext = {
   projectId: Id<"amplifyProjects">;
+  /** For the one control that has to name what it is about to destroy. */
+  title: string;
   masterAssetId: Id<"amplifyAssets"> | null;
   hasTranscript: boolean;
   /** Rendered by the layout, because Source needs the upload and trim UI. */
@@ -49,11 +52,15 @@ export function RoomHeading({ slug }: { slug: StageSlug }) {
 }
 
 export function SourceRoom() {
-  const { source } = useRoom();
+  const { source, projectId, title } = useRoom();
   return (
     <div className="grid gap-5">
       <RoomHeading slug="source" />
       {source}
+      {/* Last, and quiet. Source is where a sermon begins and the room
+          nobody comes back to once it has gone out, which makes it the
+          right home for the one control that cannot be undone. */}
+      <DeleteSermon projectId={projectId} title={title} />
     </div>
   );
 }

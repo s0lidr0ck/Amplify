@@ -312,6 +312,7 @@ export function ProjectPage() {
 
   const context: RoomContext = {
     projectId,
+    title: project.title,
     masterAssetId: master?._id ?? null,
     hasTranscript: sermon.hasTranscript,
     source: sourceRoom,
