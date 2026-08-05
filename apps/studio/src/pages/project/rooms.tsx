@@ -5,7 +5,6 @@ import { Clips } from "../../components/Clips";
 import { Jobs } from "../../components/Jobs";
 import { PiecePage } from "../../components/PiecePage";
 import { Publish } from "../../components/Publish";
-import { Reels } from "../../components/Reels";
 import { Transcript } from "../../components/Transcript";
 import { WritingList } from "../../components/WritingList";
 import { STAGES, type StageSlug } from "../../lib/stages";
@@ -112,16 +111,16 @@ export function ClipsRoom() {
   return (
     <div className="grid gap-5">
       <RoomHeading slug="clips" />
-      {/* Clips above reels because that is the order of the work: you find a
-          moment, cut it, and only then is there something to write captions
-          for. Reels first would be a list of things made from nothing. */}
+      {/* One gallery, not a gallery and a list of the same moments under a
+          second heading. A reel is what a clip becomes — captions, a cover,
+          the edit an editor hands back — and all of it now lives on the
+          clip it belongs to, which is where it was already filed. */}
       <Jobs projectId={projectId} types={["clip_export"]} />
       <Clips
         projectId={projectId}
         masterAssetId={masterAssetId}
         hasTranscript={hasTranscript}
       />
-      <Reels projectId={projectId} />
     </div>
   );
 }

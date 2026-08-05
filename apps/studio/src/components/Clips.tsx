@@ -4,7 +4,9 @@ import type { Id } from "@convex/dataModel";
 import { useEffect, useRef, useState } from "react";
 
 import { errorText } from "../lib/errorText";
+import { AttachImage } from "./AttachImage";
 import { hhmmss, TimeMark } from "./TimeMark";
+import { Variants } from "./Variants";
 
 /**
  * How long a video is and what shape it is, read in the browser.
@@ -111,6 +113,63 @@ const scoreTone = (value: number) =>
   value >= 85 ? "ok" : value >= 70 ? "muted" : "faint";
 
 /**
+ * The written reel a moment became — captions per platform, and the brief
+ * for its cover.
+ *
+ * A reel has always belonged to exactly one clip: it is stored against the
+ * clip's id, and "Make it the reel" is the only way to get one. It was
+ * nevertheless listed in a second panel below the gallery, so the same ten
+ * moments appeared twice on one screen under two different names, and
+ * everything you needed to judge a reel — the moment it came from, its
+ * score, where its edges are — was in the panel it was not in.
+ */
+type Draft = { _id: string; subjectId: string | null; payloadJson: string };
+
+type ReelPayload = {
+  hook?: string;
+  startSeconds?: number;
+  endSeconds?: number;
+  social?: Record<string, { title?: string; description?: string }>;
+};
+
+const PLATFORMS: [string, string][] = [
+  ["instagram", "Instagram"],
+  ["tiktok", "TikTok"],
+  ["youtube", "Shorts"],
+  ["facebook", "Facebook"],
+];
+
+function reelPayload(json: string): ReelPayload {
+  try {
+    return JSON.parse(json) as ReelPayload;
+  } catch {
+    return {};
+  }
+}
+
+/** The cover concepts, or none if the draft can't be read. */
+function coverVariants(json: string): Record<string, string>[] {
+  try {
+    const parsed = JSON.parse(json) as { variants?: unknown };
+    return Array.isArray(parsed.variants)
+      ? (parsed.variants as Record<string, string>[])
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+/** A filename an editor can read. "clip-1237-1270.mp4" tells them nothing. */
+function reelFilename(hook: string): string {
+  return `${(hook || "reel")
+    .replace(/[^\w\s-]/g, "")
+    .trim()
+    .slice(0, 60)
+    .replace(/\s+/g, "-")
+    .toLowerCase()}.mp4`;
+}
+
+/**
  * One judgement, as a figure with a bar under it.
  *
  * The number is the score. The bar is only there to make the weak one
@@ -173,17 +232,37 @@ function ScoreBar({
 function ClipCard({
   clip,
   hasReel,
+  written,
+  coverReady,
   masterUrl,
   onOpen,
 }: {
   clip: Clip;
+  /** An editor has already built a reel from this moment. */
   hasReel: boolean;
+  /** Captions have been written for it. */
+  written: boolean;
+  coverReady: boolean;
   masterUrl: string | null;
   onOpen: () => void;
 }) {
   const analysis = parseAnalysis(clip.analysisJson);
   const exported = Boolean(clip.exportedAssetId);
   const length = clip.endSeconds - clip.startSeconds;
+
+  // How far this moment has got, as one badge rather than four. The order
+  // is the order of the work: cut it, write it, cover it, hand back the
+  // edit. Showing the furthest step reached answers "what's left here"
+  // without a row of chips on every tile.
+  const stage = hasReel
+    ? "reel ready"
+    : coverReady
+      ? "cover ready"
+      : written
+        ? "written"
+        : exported
+          ? "cut"
+          : null;
 
   return (
     <li>
@@ -226,9 +305,9 @@ function ClipCard({
 
           {/* What has already been done to this moment. Only shown when it
               is true, so an untouched grid carries no badges at all. */}
-          {(exported || hasReel) && (
+          {stage && (
             <span className="absolute bottom-1.5 right-1.5 rounded bg-ok/90 px-1.5 py-0.5 text-[0.625rem] font-medium text-white">
-              {hasReel ? "reel ready" : "cut"}
+              {stage}
             </span>
           )}
         </div>
@@ -277,12 +356,17 @@ function ClipDetail({
   projectId,
   masterAssetId,
   hasReel,
+  reel,
+  cover,
   onClose,
 }: {
   clip: Clip;
   projectId: Id<"amplifyProjects">;
   masterAssetId: Id<"amplifyAssets"> | null;
   hasReel: boolean;
+  /** The written reel this moment became, once "Make it the reel" has run. */
+  reel?: Draft;
+  cover?: Draft & { status: string };
   onClose: () => void;
 }) {
   const playbackUrl = useAction(api.amplifyMedia.playbackUrl);
@@ -290,6 +374,7 @@ function ClipDetail({
   const enqueue = useMutation(api.amplifyWorker.enqueue);
   const discard = useMutation(api.amplifyClips.discard);
   const packageReel = useAction(api.amplifyReel.packageReel);
+  const reelThumbnail = useAction(api.amplifyReel.reelThumbnail);
   const requestUpload = useAction(api.amplifyMedia.requestUpload);
   const recordAsset = useMutation(api.amplifyMedia.recordAsset);
 
@@ -304,6 +389,8 @@ function ClipDetail({
   const [packaging, setPackaging] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [writingCover, setWritingCover] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const analysis = parseAnalysis(clip.analysisJson);
@@ -311,6 +398,23 @@ function ClipDetail({
   const exported = Boolean(clip.exportedAssetId);
   const edited = start !== clip.startSeconds || end !== clip.endSeconds;
   const valid = end > start;
+
+  const written = reel ? reelPayload(reel.payloadJson) : null;
+  const coverIsReady = cover?.status === "ready";
+  // The brief is reference material for whoever makes the picture, so it
+  // opens by itself exactly when that work is outstanding and stays shut
+  // once a cover has been attached.
+  const [briefOpen, setBriefOpen] = useState(!coverIsReady);
+
+  const copy = async (key: string, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(key);
+      window.setTimeout(() => setCopied(null), 2000);
+    } catch {
+      setCopied(null);
+    }
+  };
 
   useEffect(() => {
     if (!masterAssetId) return;
@@ -532,6 +636,126 @@ function ClipDetail({
           </div>
         </div>
 
+        {/* The reel this moment became.
+
+            Here rather than in a second panel further down the page. A reel
+            has only ever belonged to one clip — it is stored against the
+            clip's id — so listing them separately printed the same moments
+            twice and split the judgement from the thing being judged. */}
+        {reel && (
+          <div className="grid gap-4 border-t border-border pt-4">
+            <p className="section-label">The reel</p>
+
+            <div className="grid gap-4 lg:grid-cols-[1fr_1.35fr]">
+              <div className="grid content-start gap-2.5">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <span className="text-2xs font-medium text-muted">Cover</span>
+                  {coverIsReady ? (
+                    <span className="rounded-md bg-ok-soft px-2 py-0.5 text-2xs font-medium text-ok">
+                      written
+                    </span>
+                  ) : (
+                    <span className="text-2xs text-faint">not written yet</span>
+                  )}
+                  <button
+                    disabled={writingCover}
+                    onClick={async () => {
+                      setWritingCover(true);
+                      setError(null);
+                      try {
+                        await reelThumbnail({
+                          projectId,
+                          clipId: clip._id,
+                        });
+                      } catch (e) {
+                        setError(errorText(e, "Couldn't write the cover"));
+                      } finally {
+                        setWritingCover(false);
+                      }
+                    }}
+                    // Solid only while the cover is missing — the weight
+                    // goes to what is left to do.
+                    className={`ml-auto rounded-lg border px-3 py-1.5 text-2xs font-medium transition-colors disabled:opacity-40 ${
+                      coverIsReady
+                        ? "border-border bg-surface text-muted hover:border-border-strong hover:text-ink"
+                        : "border-transparent bg-ink text-white hover:bg-ink/85"
+                    }`}
+                  >
+                    {writingCover
+                      ? "Writing…"
+                      : coverIsReady
+                        ? "Write it again"
+                        : "Write the cover"}
+                  </button>
+                </div>
+
+                {/* Where the picture comes back. The concepts are a brief
+                    for an image tool; this is the image that came out of
+                    it, kept beside the reel it was made for instead of in
+                    a download folder. */}
+                <AttachImage
+                  projectId={projectId}
+                  kind="reel_cover"
+                  subjectId={clip._id}
+                />
+
+                {coverIsReady && cover && (
+                  <>
+                    <button
+                      onClick={() => setBriefOpen(!briefOpen)}
+                      className="justify-self-start text-2xs text-muted underline hover:text-ink"
+                    >
+                      {briefOpen ? "Hide the brief" : "Read the brief"}
+                    </button>
+                    {briefOpen && (
+                      <div className="rounded-xl bg-surface-strong p-3">
+                        <Variants
+                          variants={coverVariants(cover.payloadJson)}
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* The captions, per platform, ready to be copied out. */}
+              <div className="grid content-start gap-3">
+                {written?.social ? (
+                  PLATFORMS.filter(([key]) => written.social?.[key]).map(
+                    ([key, label]) => {
+                      const one = written.social![key];
+                      const text = [one.title, one.description]
+                        .filter(Boolean)
+                        .join("\n\n");
+                      return (
+                        <div key={key} className="grid gap-1">
+                          <div className="flex items-baseline gap-2">
+                            <span className="section-label">{label}</span>
+                            <button
+                              onClick={() => void copy(key, text)}
+                              className="text-2xs text-muted underline hover:text-ink"
+                            >
+                              {copied === key ? "Copied" : "Copy"}
+                            </button>
+                          </div>
+                          <p className="whitespace-pre-wrap text-[0.8125rem] leading-relaxed text-ink">
+                            {text}
+                          </p>
+                        </div>
+                      );
+                    },
+                  )
+                ) : (
+                  <p className="text-2xs text-muted">
+                    This reel has no captions yet. Make it again from the
+                    button below.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {error && <p className="text-[0.8125rem] text-danger">{error}</p>}
 
         {/* What you can do about it, all in one row at the bottom rather
@@ -575,6 +799,10 @@ function ClipDetail({
                   const link = await playbackUrl({
                     assetId: clip.exportedAssetId!,
                     download: true,
+                    // Named for the moment, not the timecodes it was cut
+                    // at, because the file lands in somebody's downloads
+                    // folder with nothing else to identify it.
+                    filename: reelFilename(written?.hook || clip.title || ""),
                   });
                   window.location.href = link;
                 } finally {
@@ -710,6 +938,7 @@ export function Clips({
 }) {
   const clips = useQuery(api.amplifyClips.list, { projectId });
   const assets = useQuery(api.amplifyMedia.listAssets, { projectId });
+  const drafts = useQuery(api.amplifyDrafts.list, { projectId });
   const findClips = useAction(api.amplifyClipFinder.findClips);
   const signMaster = useAction(api.amplifyMedia.playbackUrl);
 
@@ -735,6 +964,20 @@ export function Clips({
     (assets ?? [])
       .filter((a) => a.kind === "reel_video" && a.status === "ready")
       .map((a) => a.subjectId),
+  );
+
+  // The written reel and its cover, both filed under the clip they belong
+  // to. This is the join the second panel was doing; doing it here puts
+  // them on the moment instead of beside it.
+  const reelFor = new Map(
+    (drafts ?? [])
+      .filter((d) => d.kind === "reel" && d.status === "ready")
+      .map((d) => [d.subjectId ?? "", d]),
+  );
+  const coverFor = new Map(
+    (drafts ?? [])
+      .filter((d) => d.kind === "reel_thumbnail")
+      .map((d) => [d.subjectId ?? "", d]),
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -813,6 +1056,8 @@ export function Clips({
                 key={clip._id}
                 clip={clip}
                 hasReel={reeled.has(clip._id)}
+                written={reelFor.has(clip._id)}
+                coverReady={coverFor.get(clip._id)?.status === "ready"}
                 masterUrl={masterUrl}
                 onOpen={() => setOpenId(clip._id)}
               />
@@ -830,6 +1075,8 @@ export function Clips({
           projectId={projectId}
           masterAssetId={masterAssetId}
           hasReel={reeled.has(open._id)}
+          reel={reelFor.get(open._id)}
+          cover={coverFor.get(open._id)}
           onClose={() => setOpenId(null)}
         />
       )}
