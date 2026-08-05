@@ -202,12 +202,15 @@ function ClipRow({
   projectId,
   masterAssetId,
   hasReel,
+  masterUrl,
 }: {
   clip: Clip;
   projectId: Id<"amplifyProjects">;
   masterAssetId: Id<"amplifyAssets"> | null;
   /** An editor has already built a reel from this moment. */
   hasReel: boolean;
+  /** The whole sermon, signed once, seeked per clip. */
+  masterUrl: string | null;
 }) {
   const enqueue = useMutation(api.amplifyWorker.enqueue);
   const discard = useMutation(api.amplifyClips.discard);
@@ -226,47 +229,152 @@ function ClipRow({
   const analysis = (() => {
     if (!clip.analysisJson) return null;
     try {
-      return JSON.parse(clip.analysisJson) as Record<string, string>;
+      return JSON.parse(clip.analysisJson) as Record<string, string> & {
+        editorial_scores?: Record<string, number>;
+      };
     } catch {
       return null;
     }
   })();
+
+  // The five sub-scores, in the order the ranker reasons in rather than
+  // whatever order JSON.parse happened to produce. `editor` is left out: it
+  // is the same judgement as the big number beside the hook.
+  const ORDER = ["hook", "cadence", "standalone", "emotion"];
+  const scores: [string, number][] = Object.entries(
+    analysis?.editorial_scores ?? {},
+  )
+    .filter(
+      (entry): entry is [string, number] =>
+        typeof entry[1] === "number" && entry[0] !== "editor",
+    )
+    .sort((a, b) => ORDER.indexOf(a[0]) - ORDER.indexOf(b[0]));
 
   const exported = Boolean(clip.exportedAssetId);
   const length = clip.endSeconds - clip.startSeconds;
 
   return (
     <li className="grid gap-2 border-b border-border px-5 py-3.5 last:border-0">
-      <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-        {/* The hook is the clip. It is the first thing anyone hears and the
-            only thing that decides whether they keep watching. */}
-        <p className="flex-1 text-[0.9375rem] font-semibold leading-snug text-ink">
-          {clip.title || "Untitled moment"}
-        </p>
-        {clip.score !== null && (
-          <span className="data" title="The model's editorial score">
-            {Math.round(clip.score)}
+      <div className="flex gap-3.5">
+        {/* The moment itself, not a description of it.
+
+            A clip is video, and a list that showed only a quote and a
+            timecode made a media tool read like a spreadsheet. The frame is
+            seeked out of the sermon everybody already has — no render, no
+            second file, no worker. */}
+        <div className="relative shrink-0 overflow-hidden rounded-lg bg-black">
+          {masterUrl ? (
+            <video
+              // The fragment never reaches S3; the browser range-requests
+              // around that timestamp and paints the frame.
+              src={`${masterUrl}#t=${Math.max(0, Math.floor(clip.startSeconds))}`}
+              preload="metadata"
+              muted
+              playsInline
+              className="h-[4.5rem] w-28 object-cover"
+            />
+          ) : (
+            <div className="h-[4.5rem] w-28 animate-pulse bg-surface-strong" />
+          )}
+          <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 text-[0.625rem] font-medium text-white">
+            {Math.round(length)}s
           </span>
-        )}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline gap-x-2.5">
+            {/* The hook is the clip. It is the first thing anyone hears and
+                the only thing that decides whether they keep watching. */}
+            <p className="min-w-0 flex-1 text-[0.9375rem] font-semibold leading-snug text-ink">
+              {clip.title || "Untitled moment"}
+            </p>
+            {clip.score !== null && (
+              <span
+                title="The model's editorial score"
+                className={`shrink-0 text-lg font-semibold tabular-nums ${
+                  clip.score >= 85
+                    ? "text-ok"
+                    : clip.score >= 70
+                      ? "text-ink"
+                      : "text-faint"
+                }`}
+              >
+                {Math.round(clip.score)}
+              </span>
+            )}
+          </div>
+
+          <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1">
+            <span className="data">
+              {hhmmss(clip.startSeconds)}–{hhmmss(clip.endSeconds)}
+            </span>
+            {analysis?.clip_type && (
+              <span className="rounded-md bg-surface-strong px-2 py-0.5 text-2xs font-medium text-muted">
+                {analysis.clip_type}
+              </span>
+            )}
+            {analysis?.cadence_marker && (
+              <span className="text-2xs text-faint">
+                {analysis.cadence_marker}
+              </span>
+            )}
+            {/* Which feed this one belongs in, and whether it stops a
+                thumb. The ranker has judged both on every clip since the
+                day it was written; the schema dropped them on the way out
+                and nobody ever saw them. */}
+            {analysis?.best_platform_fit && (
+              <span className="rounded-md bg-brand-soft px-2 py-0.5 text-2xs font-medium text-brand-strong">
+                {analysis.best_platform_fit}
+              </span>
+            )}
+            {analysis?.scroll_stopping_strength && (
+              <span
+                title="How well the first seconds stop a scroll"
+                className={`text-2xs font-medium ${
+                  analysis.scroll_stopping_strength === "High"
+                    ? "text-ok"
+                    : analysis.scroll_stopping_strength === "Medium"
+                      ? "text-muted"
+                      : "text-faint"
+                }`}
+              >
+                {analysis.scroll_stopping_strength} stop
+              </span>
+            )}
+            {exported && (
+              <span className="rounded-md bg-ok-soft px-2 py-0.5 text-2xs font-medium text-ok">
+                cut
+              </span>
+            )}
+            {hasReel && (
+              <span className="rounded-md bg-ok-soft px-2 py-0.5 text-2xs font-medium text-ok">
+                reel ready
+              </span>
+            )}
+          </div>
+
+          {/* Five judgements behind one number. Shown as bars because the
+              useful question is "what is this clip weak at", and five
+              numbers in a row does not answer it at a glance. */}
+          {scores.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+              {scores.map(([name, value]) => (
+                <span key={name} className="flex items-center gap-1.5">
+                  <span className="text-2xs capitalize text-faint">{name}</span>
+                  <span className="h-1 w-10 overflow-hidden rounded-full bg-surface-strong">
+                    <span
+                      className="block h-full rounded-full bg-ink/50"
+                      style={{ width: `${Math.min(100, Math.max(0, value))}%` }}
+                    />
+                  </span>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        <span className="data">
-          {hhmmss(clip.startSeconds)}–{hhmmss(clip.endSeconds)} · {Math.round(length)}s
-        </span>
-        {analysis?.clip_type && (
-          <span className="rounded-md bg-surface-strong px-2 py-0.5 text-2xs font-medium text-muted">
-            {analysis.clip_type}
-          </span>
-        )}
-        {analysis?.cadence_marker && (
-          <span className="text-2xs text-faint">{analysis.cadence_marker}</span>
-        )}
-        {exported && (
-          <span className="rounded-md bg-ok-soft px-2 py-0.5 text-2xs font-medium text-ok">
-            cut
-          </span>
-        )}
 
         <div className="ml-auto flex items-center gap-2.5">
           {analysis?.editor_reason && (
@@ -473,6 +581,22 @@ export function Clips({
   const clips = useQuery(api.amplifyClips.list, { projectId });
   const assets = useQuery(api.amplifyMedia.listAssets, { projectId });
   const findClips = useAction(api.amplifyClipFinder.findClips);
+  const signMaster = useAction(api.amplifyMedia.playbackUrl);
+
+  // One signed URL for the whole list. Every row shows the frame at its own
+  // start time by seeking into the same file, so eight clips cost one
+  // signature and one file rather than eight of each.
+  const [masterUrl, setMasterUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!masterAssetId) return;
+    let alive = true;
+    void signMaster({ assetId: masterAssetId }).then((u) => {
+      if (alive) setMasterUrl(u);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [signMaster, masterAssetId]);
   // Which clips already have a finished reel against them — so an editor
   // can see at a glance that a moment is taken, which is the whole reason
   // the two are tied together.
@@ -553,6 +677,7 @@ export function Clips({
                 projectId={projectId}
                 masterAssetId={masterAssetId}
                 hasReel={reeled.has(clip._id)}
+                masterUrl={masterUrl}
               />
             ))}
           </ul>
