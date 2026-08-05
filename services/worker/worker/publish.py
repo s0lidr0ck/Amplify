@@ -445,10 +445,15 @@ def _publish_tiktok(
         # No post_info means no caption went with it. Saying so matters:
         # the words Amplify wrote are not on the clip, and somebody has to
         # paste them in before posting.
+        # Where it lands is worth being exact about. It is NOT in Drafts,
+        # which is where "we uploaded it for you" makes everybody look
+        # first. TikTok raises a notification in the Inbox tab and the
+        # editing flow opens from there.
         note = (
-            "TikTok hasn't audited this app yet, so the clip went to your "
-            "TikTok drafts instead of straight to the profile. Open TikTok, "
-            "finish it from the inbox, and paste the caption in."
+            "TikTok hasn't audited this app yet, so the clip couldn't go "
+            "straight to the profile. It's waiting in the TikTok app: open "
+            "the Inbox tab (not Drafts) and tap the notification to finish "
+            "and post it. The caption isn't attached — copy it from here."
         )
 
     if init.status_code != 200:
