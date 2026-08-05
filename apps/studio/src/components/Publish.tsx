@@ -66,6 +66,18 @@ export function Publish({ projectId }: { projectId: Id<"amplifyProjects"> }) {
   // and separate fields would let the screen ask for "unlisted at 9am",
   // which YouTube refuses.
   const [when, setWhen] = useState<string | null>(null);
+  // Which caption was last copied, so the button can say so. Keyed rather
+  // than a boolean: a sermon has a dozen captions and "Copied" appearing on
+  // all of them at once says nothing about which one is on the clipboard.
+  const [copiedCaption, setCopiedCaption] = useState<string | null>(null);
+  const copyCaption = (id: string, text: string) => {
+    void navigator.clipboard.writeText(text);
+    setCopiedCaption(id);
+    window.setTimeout(
+      () => setCopiedCaption((c) => (c === id ? null : c)),
+      2000,
+    );
+  };
   const shareToken = useQuery(api.amplifyShare.linkFor, { projectId });
   const createLink = useMutation(api.amplifyShare.createLink);
   const revokeLink = useMutation(api.amplifyShare.revoke);
@@ -253,9 +265,39 @@ export function Publish({ projectId }: { projectId: Id<"amplifyProjects"> }) {
                     <summary className="cursor-pointer list-none text-2xs text-muted underline hover:text-ink">
                       See the caption
                     </summary>
-                    <p className="mt-1.5 whitespace-pre-wrap rounded-lg border border-border bg-surface px-3 py-2 text-[0.8125rem] leading-relaxed text-ink">
-                      {row.caption}
-                    </p>
+                    <div className="mt-1.5 grid gap-1">
+                      <button
+                        onClick={() =>
+                          copyCaption(row.destination, row.caption!)
+                        }
+                        className="justify-self-start text-2xs text-muted underline hover:text-ink"
+                      >
+                        {copiedCaption === row.destination ? "Copied" : "Copy"}
+                      </button>
+                      <p className="whitespace-pre-wrap rounded-lg border border-border bg-surface px-3 py-2 text-[0.8125rem] leading-relaxed text-ink">
+                        {row.caption}
+                      </p>
+                      {row.tags.length > 0 && (
+                        <div className="flex items-baseline gap-2">
+                          <p className="min-w-0 flex-1 truncate text-2xs text-muted">
+                            {row.tags.join(", ")}
+                          </p>
+                          <button
+                            onClick={() =>
+                              copyCaption(
+                                `${row.destination}-tags`,
+                                row.tags.join(", "),
+                              )
+                            }
+                            className="text-2xs text-muted underline hover:text-ink"
+                          >
+                            {copiedCaption === `${row.destination}-tags`
+                              ? "Copied"
+                              : "Copy tags"}
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </details>
                 )}
                 {/* Not a refusal — said before the press because fixing it
@@ -570,16 +612,54 @@ export function Publish({ projectId }: { projectId: Id<"amplifyProjects"> }) {
                     <div className="mt-1.5 grid gap-2">
                       {group
                         .filter((r) => r.caption)
-                        .map((r) => (
-                          <div key={r.destination} className="grid gap-1">
-                            <p className="text-2xs font-medium text-muted">
-                              {r.label}
-                            </p>
-                            <p className="whitespace-pre-wrap rounded-lg border border-border bg-surface px-3 py-2 text-[0.8125rem] leading-relaxed text-ink">
-                              {r.caption}
-                            </p>
-                          </div>
-                        ))}
+                        .map((r) => {
+                          const id = `${r.destination}::${subjectId}`;
+                          return (
+                            <div key={r.destination} className="grid gap-1">
+                              <div className="flex items-baseline gap-2">
+                                <p className="text-2xs font-medium text-muted">
+                                  {r.label}
+                                </p>
+                                {/* TikTok's own editor cannot be handed a
+                                    caption — an inbox upload carries no
+                                    post_info — so the words have to travel
+                                    by clipboard. One tap, not a select-all
+                                    across a wrapped paragraph. */}
+                                <button
+                                  onClick={() => copyCaption(id, r.caption!)}
+                                  className="text-2xs text-muted underline hover:text-ink"
+                                >
+                                  {copiedCaption === id ? "Copied" : "Copy"}
+                                </button>
+                              </div>
+                              <p className="whitespace-pre-wrap rounded-lg border border-border bg-surface px-3 py-2 text-[0.8125rem] leading-relaxed text-ink">
+                                {r.caption}
+                              </p>
+                              {r.tags.length > 0 && (
+                                <div className="flex items-baseline gap-2">
+                                  <p className="min-w-0 flex-1 truncate text-2xs text-muted">
+                                    {r.tags.join(", ")}
+                                  </p>
+                                  {/* Comma-separated, which is the shape
+                                      YouTube's own tag box takes. */}
+                                  <button
+                                    onClick={() =>
+                                      copyCaption(
+                                        `${id}-tags`,
+                                        r.tags.join(", "),
+                                      )
+                                    }
+                                    className="text-2xs text-muted underline hover:text-ink"
+                                  >
+                                    {copiedCaption === `${id}-tags`
+                                      ? "Copied"
+                                      : "Copy tags"}
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                     </div>
                   </details>
                 )}
