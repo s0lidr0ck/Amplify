@@ -163,6 +163,7 @@ const TINT: Record<StageSlug, string> = {
   source: "bg-stage-source",
   transcript: "bg-stage-transcript",
   writing: "bg-stage-writing",
+  visuals: "bg-stage-visuals",
   clips: "bg-stage-clips",
   publish: "bg-stage-publish",
 };

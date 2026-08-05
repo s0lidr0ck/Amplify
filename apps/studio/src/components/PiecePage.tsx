@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { AttachImage } from "./AttachImage";
-import { DraftEditor, isProse, PIECES, Preview } from "./Outputs";
+import { DraftEditor, isProse, PIECES, Preview, VISUAL_PIECE } from "./Outputs";
 import { errorText } from "../lib/errorText";
 
 /**
@@ -24,11 +24,20 @@ import { errorText } from "../lib/errorText";
  */
 export function PiecePage({
   projectId,
+  /**
+   * Fixed instead of read from the URL, for a room that is about one piece.
+   * Visuals is the thumbnail concepts and nothing else, so making somebody
+   * click a list of one to reach them would be a step that exists only
+   * because the component used to live behind a route.
+   */
+  kind: fixedKind,
 }: {
   projectId: Id<"amplifyProjects">;
+  kind?: string;
 }) {
-  const { kind } = useParams();
-  const piece = PIECES.find((p) => p.kind === kind);
+  const params = useParams();
+  const kind = fixedKind ?? params.kind;
+  const piece = [...PIECES, VISUAL_PIECE].find((p) => p.kind === kind);
 
   const drafts = useQuery(api.amplifyDrafts.list, { projectId });
   const run = useAction(api.amplifyGenerate[piece?.run ?? "metadata"]);

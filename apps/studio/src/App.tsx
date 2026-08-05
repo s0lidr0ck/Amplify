@@ -10,6 +10,7 @@ import { LibraryPage } from "./pages/Library";
 import { ProjectPage } from "./pages/Project";
 import {
   ClipsRoom,
+  VisualsRoom,
   PublishRoom,
   SourceRoom,
   TranscriptRoom,
@@ -122,6 +123,7 @@ function Inside() {
               — and so its actions have somewhere to live other than beside
               four pieces they have nothing to do with. */}
           <Route path="writing/:kind" element={<WritingPieceRoom />} />
+          <Route path="visuals" element={<VisualsRoom />} />
           <Route path="clips" element={<ClipsRoom />} />
           <Route path="publish" element={<PublishRoom />} />
         </Route>

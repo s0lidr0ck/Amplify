@@ -88,6 +88,25 @@ export function WritingPieceRoom() {
   return <PiecePage projectId={projectId} />;
 }
 
+/**
+ * The pictures a sermon goes out under.
+ *
+ * Its own room rather than the fifth item in a list called Writing, which
+ * it never was. The thumbnail is the highest-leverage image in the whole
+ * pipeline — it decides whether the sermon gets watched at all — and the
+ * website refuses to publish without a cover picked, so burying it under
+ * prose hid both the work and the thing blocking a publish.
+ */
+export function VisualsRoom() {
+  const { projectId } = useRoom();
+  return (
+    <div className="grid gap-5">
+      <RoomHeading slug="visuals" />
+      <PiecePage projectId={projectId} kind="thumbnail_concepts" />
+    </div>
+  );
+}
+
 export function ClipsRoom() {
   const { projectId, masterAssetId, hasTranscript } = useRoom();
   return (

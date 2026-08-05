@@ -60,14 +60,23 @@ export const PIECES: Piece[] = [
     run: "facebookPost",
     needs: "blog_post",
   },
-  {
-    kind: "thumbnail_concepts",
-    label: "Thumbnail concepts",
-    blurb: "Three directions to take to an image tool.",
-    run: "thumbnailConcepts",
-    needs: "youtube_packaging",
-  },
 ];
+
+/**
+ * The thumbnail concepts, which are pictures rather than prose.
+ *
+ * Kept out of PIECES so the Writing room lists writing. They have their own
+ * room now — the thumbnail decides whether a sermon gets watched at all,
+ * and the website refuses to publish without a cover picked, so filing it
+ * fifth in a list called Writing hid both the work and a publish blocker.
+ */
+export const VISUAL_PIECE: Piece = {
+  kind: "thumbnail_concepts",
+  label: "Thumbnail concepts",
+  blurb: "Five directions to take to an image tool.",
+  run: "thumbnailConcepts",
+  needs: "youtube_packaging",
+};
 
 
 /**

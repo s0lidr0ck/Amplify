@@ -1,5 +1,5 @@
 /**
- * The five rooms of a sermon, and how to tell what state each one is in.
+ * The six rooms of a sermon, and how to tell what state each one is in.
  *
  * This is the sermon page's whole information architecture in one file.
  * Before it, the page was a single scroll carrying eight jobs — you could
@@ -18,6 +18,7 @@ export type StageSlug =
   | "source"
   | "transcript"
   | "writing"
+  | "visuals"
   | "clips"
   | "publish";
 
@@ -60,7 +61,17 @@ export const STAGES: Stage[] = [
   {
     slug: "writing",
     label: "Writing",
-    blurb: "The blog post, the packaging, the posts, the thumbnails.",
+    blurb: "The blog post, the packaging, the short written version.",
+    group: "fan",
+  },
+  {
+    // Its own room rather than the fifth item in a list called Writing,
+    // which it never was. The thumbnail is the single highest-leverage
+    // image in the whole pipeline — it decides whether the sermon gets
+    // watched at all — and it was filed under prose.
+    slug: "visuals",
+    label: "Visuals",
+    blurb: "Thumbnail concepts, and the picture each sermon goes out under.",
     group: "fan",
   },
   {
@@ -87,6 +98,9 @@ export type StageReading = {
 };
 
 export type SermonFacts = {
+  /** Thumbnail concepts written, and whether a cover has been picked. */
+  visualsReady: boolean;
+  hasCover: boolean;
   hasSource: boolean;
   hasMaster: boolean;
   transcriptWords: number | null;
@@ -177,6 +191,24 @@ export function readStages(f: SermonFacts): Record<StageSlug, StageReading> {
             caption: `${f.clipsCut} cut${f.reels ? `, ${f.reels} reel${f.reels === 1 ? "" : "s"}` : ""}`,
           };
 
+  const visuals: StageReading = writingBlocked
+    ? {
+        state: "waiting",
+        caption: "nothing yet",
+        reason: "Transcribe the sermon first.",
+      }
+    : !f.visualsReady
+      ? { state: "attention", caption: "no concepts yet" }
+      : f.hasCover
+        ? { state: "done", caption: "cover picked" }
+        : {
+            // Concepts are not a cover. The website refuses to publish
+            // without one, so stopping at "written" would call a room
+            // finished that still blocks the blog post.
+            state: "attention",
+            caption: "concepts ready, no cover",
+          };
+
   const publish: StageReading = f.running.has("publish")
     ? { state: "running", caption: "sending it out" }
     : f.publishFailed
@@ -191,7 +223,7 @@ export function readStages(f: SermonFacts): Record<StageSlug, StageReading> {
           ? { state: "done", caption: "all out" }
           : { state: "attention", caption: `${f.publishedCount} of ${f.publishTotal} out` };
 
-  return { source, transcript, writing, clips, publish };
+  return { source, transcript, writing, visuals, clips, publish };
 }
 
 /**

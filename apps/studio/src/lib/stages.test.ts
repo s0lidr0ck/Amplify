@@ -14,8 +14,10 @@ const EMPTY: SermonFacts = {
   transcriptWords: null,
   transcriptApproved: false,
   writingReady: 0,
-  writingTotal: 5,
+  writingTotal: 4,
   writingFailed: false,
+  visualsReady: false,
+  hasCover: false,
   clipsFound: 0,
   clipsCut: 0,
   reels: 0,
@@ -82,7 +84,7 @@ describe("reading the rooms", () => {
         writingReady: 3,
       }),
     );
-    expect(r.writing.caption).toBe("3 of 5");
+    expect(r.writing.caption).toBe("3 of 4");
     expect(r.writing.state).toBe("attention");
   });
 
@@ -134,13 +136,34 @@ describe("where to land", () => {
     expect(where).toBe("transcript");
   });
 
+  it("sends somebody to Visuals when no cover has been picked", () => {
+    // Concepts written is not a cover chosen, and the website refuses to
+    // publish without one. A room that called itself done here would hide
+    // the thing actually blocking the blog post.
+    const r = readStages(
+      facts({
+        hasSource: true,
+        hasMaster: true,
+        transcriptWords: 7068,
+        transcriptApproved: true,
+        writingReady: 4,
+        visualsReady: true,
+        hasCover: false,
+      }),
+    );
+    expect(r.visuals.state).toBe("attention");
+    expect(r.visuals.caption).toBe("concepts ready, no cover");
+  });
+
   it("lands on publish when there is nothing left to chase", () => {
     const done = facts({
       hasSource: true,
       hasMaster: true,
       transcriptWords: 7068,
       transcriptApproved: true,
-      writingReady: 5,
+      writingReady: 4,
+      visualsReady: true,
+      hasCover: true,
       clipsFound: 9,
       clipsCut: 9,
       publishedCount: 5,

@@ -16,13 +16,18 @@ import { readStages, type SermonFacts, type StageReading, type StageSlug } from 
  * dedupes identical queries, so asking here costs nothing extra.
  */
 
-/** The five written pieces, which is what "3 of 5" counts. */
+/** The four written pieces, which is what "3 of 4" counts.
+ *
+ * Thumbnail concepts left, deliberately. They are pictures, not prose, and
+ * counting them here made "all 5 written" true of a sermon with no cover —
+ * the one thing the website refuses to publish without. They live in
+ * Visuals now and are counted there.
+ */
 const WRITING_KINDS = [
   "metadata",
   "blog_post",
   "youtube_packaging",
   "facebook_post",
-  "thumbnail_concepts",
 ];
 
 export function useSermonFacts(projectId: Id<"amplifyProjects">) {
@@ -50,6 +55,10 @@ export function useSermonFacts(projectId: Id<"amplifyProjects">) {
     (drafts ?? []).some((d) => d.kind === kind && d.status === "ready");
 
   const facts: SermonFacts = {
+    visualsReady: ready("thumbnail_concepts"),
+    hasCover: (assets ?? []).some(
+      (a) => a.kind === "sermon_thumbnail" && a.isCover && a.status === "ready",
+    ),
     hasSource: Boolean(source),
     hasMaster: Boolean(master),
     transcriptWords: transcript ? transcript.wordCount : null,

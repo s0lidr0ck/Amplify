@@ -81,12 +81,14 @@
   --color-stage-source: hsl(240 44% 96%);
   --color-stage-transcript: hsl(258 48% 96%);
   --color-stage-writing: hsl(276 46% 96.5%);
+  --color-stage-visuals: hsl(288 44% 96.5%);
   --color-stage-clips: hsl(300 42% 96.5%);
   --color-stage-publish: hsl(332 60% 96.5%);
 
   --color-mark-source: hsl(240 52% 56%);
   --color-mark-transcript: hsl(258 52% 58%);
   --color-mark-writing: hsl(276 48% 56%);
+  --color-mark-visuals: hsl(288 47% 55%);
   --color-mark-clips: hsl(300 46% 55%);
   --color-mark-publish: hsl(336 70% 55%);
 

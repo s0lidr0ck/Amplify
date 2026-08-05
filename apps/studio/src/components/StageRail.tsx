@@ -39,6 +39,7 @@ const MARK: Record<StageSlug, string> = {
   source: "text-mark-source",
   transcript: "text-mark-transcript",
   writing: "text-mark-writing",
+  visuals: "text-mark-visuals",
   clips: "text-mark-clips",
   publish: "text-mark-publish",
 };
