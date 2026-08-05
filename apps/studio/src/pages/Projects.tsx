@@ -1,7 +1,7 @@
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@convex/api";
 import type { Id } from "@convex/dataModel";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { Mark } from "../brand/Mark";
@@ -231,10 +231,30 @@ export function ProjectsPage({ churchId }: { churchId: string }) {
   );
   const [adding, setAdding] = useState(false);
 
+  // A picture for every sermon: the cover somebody picked, or a frame out
+  // of the sermon itself. One signing round trip for the library rather
+  // than one per card, so the grid does not appear a card at a time.
+  const signArtwork = useAction(api.amplifyMedia.libraryImages);
+  const [artwork, setArtwork] = useState<
+    Map<string, { url: string; kind: "image" | "video" }>
+  >(new Map());
+  useEffect(() => {
+    let alive = true;
+    void signArtwork({ churchId: id }).then((rows) => {
+      if (!alive) return;
+      setArtwork(
+        new Map(rows.map((r) => [r.projectId, { url: r.url, kind: r.kind }])),
+      );
+    });
+    return () => {
+      alive = false;
+    };
+  }, [signArtwork, id, projects?.length]);
+
   const unfinished = (progress ?? []).filter((p) => !p.out).length;
 
   return (
-    <div className="mx-auto grid max-w-4xl gap-6 px-5 py-9">
+    <div className="mx-auto grid max-w-5xl gap-6 px-5 py-9">
       {/* The wordmark and the church picker moved to the shell, which every
           page wears. This header now says what this page is for. */}
       <header className="flex flex-wrap items-end justify-between gap-4">
@@ -281,55 +301,80 @@ export function ProjectsPage({ churchId }: { churchId: string }) {
           </p>
         </div>
       ) : (
-        <ul className="card divide-y divide-border">
+        /* Covers, not filenames.
+
+           A list of sermons with no pictures in it is a list of filenames,
+           and this is an app about video. Every card carries the sermon's
+           own cover — or, where nobody picked one, a frame seeked out of
+           the sermon itself, so none of them is a grey rectangle. */
+        <ul className="grid gap-x-4 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
           {projects.map((p) => {
             const prog = byProject.get(p._id);
             const next = nextStep(prog);
+            const art = artwork.get(p._id);
 
             return (
               <li key={p._id}>
                 <Link
                   to={`/projects/${p._id}`}
-                  className="group flex items-center gap-4 px-4 py-3.5 transition-colors hover:bg-surface-strong focus-visible:outline focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-brand"
+                  className="group block rounded-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
                 >
-                  <div className="min-w-0 flex-1">
-                    {/* The title carries the row. It was the same size and
-                        weight as the date and the speaker, so nothing in the
-                        list was easier to find than anything else. */}
-                    <p className="truncate font-display text-[1.0625rem] font-semibold leading-snug tracking-[-0.01em] text-ink">
-                      {p.title}
-                    </p>
-                    <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-2xs text-muted">
-                      {/* Mono so the dates line up down the column. */}
-                      <span className="data">
-                        {formatSermonDate(p.sermonDate)}
-                      </span>
-                      {/* The name on the record, not the familiar one. This
-                          is the filing cabinet; "Pastor Chris" belongs in
-                          the writing, and a list mixing both conventions
-                          sorts badly and reads worse. */}
-                      {p.speaker && (
-                        <>
-                          <span
-                            className="h-2.5 w-px bg-border"
-                            aria-hidden
-                          />
-                          <span>{p.speaker}</span>
-                        </>
-                      )}
-                    </p>
+                  <div className="relative aspect-video overflow-hidden rounded-xl bg-surface-strong">
+                    {art?.kind === "image" ? (
+                      <img
+                        src={art.url}
+                        alt=""
+                        loading="lazy"
+                        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                      />
+                    ) : art?.kind === "video" ? (
+                      <video
+                        // A minute in. The opening frame of a service is
+                        // usually a dark stage or a title card, which says
+                        // nothing about which sermon this is.
+                        src={`${art.url}#t=60`}
+                        preload="metadata"
+                        muted
+                        playsInline
+                        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                      />
+                    ) : (
+                      <div className="grid h-full place-items-center opacity-20">
+                        <Mark size={28} />
+                      </div>
+                    )}
+
+                    {/* How far it has got, on the picture rather than in a
+                        column beside it. */}
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/65 to-transparent px-2.5 pb-2.5 pt-6">
+                      <ProgressRail progress={prog} />
+                    </div>
                   </div>
 
-                  {/* On a phone the rail is the whole answer; the sentence
-                      needs room the row does not have. */}
-                  <div className="hidden shrink-0 sm:block sm:w-40 sm:text-right">
-                    <p
-                      className={`text-2xs ${next ? "text-muted" : "font-medium text-ok"}`}
-                    >
-                      {prog === undefined ? "" : (next ?? "Out the door")}
-                    </p>
-                  </div>
-                  <ProgressRail progress={prog} className="shrink-0" />
+                  <p className="mt-2.5 truncate font-display text-[1.0625rem] font-semibold leading-snug tracking-[-0.01em] text-ink">
+                    {p.title}
+                  </p>
+                  <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-2xs text-muted">
+                    {/* Mono so the dates line up down the column. */}
+                    <span className="data">
+                      {formatSermonDate(p.sermonDate)}
+                    </span>
+                    {/* The name on the record, not the familiar one. This is
+                        the filing cabinet; "Pastor Chris" belongs in the
+                        writing, and a list mixing both conventions sorts
+                        badly and reads worse. */}
+                    {p.speaker && (
+                      <>
+                        <span className="h-2.5 w-px bg-border" aria-hidden />
+                        <span>{p.speaker}</span>
+                      </>
+                    )}
+                  </p>
+                  <p
+                    className={`mt-0.5 text-2xs ${next ? "text-muted" : "font-medium text-ok"}`}
+                  >
+                    {prog === undefined ? "" : (next ?? "Out the door")}
+                  </p>
                 </Link>
               </li>
             );
