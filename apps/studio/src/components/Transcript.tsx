@@ -171,6 +171,36 @@ export function Transcript({
               Fix something
             </button>
           )}
+          {/* Transcribing again, which there was no way to ask for once a
+              transcript existed — the button only ever appeared on a sermon
+              that had none. That was fine until the transcript started
+              carrying more than words: the delivery measurements the Clip
+              Lab ranks on are produced during transcription, so a sermon
+              read before that existed had no way to get them.
+
+              Quiet and last, because it supersedes what is there and the
+              new one arrives unapproved. */}
+          {!editing && source && !running && (
+            <button
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  await enqueue({
+                    projectId,
+                    jobType: "transcribe",
+                    payloadJson: JSON.stringify({ assetId: source }),
+                  });
+                } finally {
+                  setBusy(false);
+                }
+              }}
+              title="Replaces this transcript. You'll need to approve the new one."
+              className="text-2xs text-muted underline hover:text-ink disabled:opacity-40"
+            >
+              {busy ? "Starting…" : "Transcribe it again"}
+            </button>
+          )}
           {!approved && !editing && (
             <button
               disabled={busy}
