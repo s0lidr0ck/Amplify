@@ -415,10 +415,6 @@ function ClipDetail({
 
   const written = reel ? reelPayload(reel.payloadJson) : null;
   const coverIsReady = cover?.status === "ready";
-  // The brief is reference material for whoever makes the picture, so it
-  // opens by itself exactly when that work is outstanding and stays shut
-  // once a cover has been attached.
-  const [briefOpen, setBriefOpen] = useState(!coverIsReady);
 
   const copy = async (key: string, text: string) => {
     try {
@@ -713,22 +709,15 @@ function ClipDetail({
                   subjectId={clip._id}
                 />
 
+                {/* The brief, in the open. It was behind a toggle because
+                    it is long, but a brief nobody can see is a brief
+                    nobody uses — and the whole point of this panel is that
+                    the moment and everything written about it are on one
+                    screen at once. */}
                 {coverIsReady && cover && (
-                  <>
-                    <button
-                      onClick={() => setBriefOpen(!briefOpen)}
-                      className="justify-self-start text-2xs text-muted underline hover:text-ink"
-                    >
-                      {briefOpen ? "Hide the brief" : "Read the brief"}
-                    </button>
-                    {briefOpen && (
-                      <div className="rounded-xl bg-surface-strong p-3">
-                        <Variants
-                          variants={coverVariants(cover.payloadJson)}
-                        />
-                      </div>
-                    )}
-                  </>
+                  <div className="rounded-xl bg-surface-strong p-3">
+                    <Variants variants={coverVariants(cover.payloadJson)} />
+                  </div>
                 )}
               </div>
 
