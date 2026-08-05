@@ -247,6 +247,7 @@ function ClipCard({
   onOpen: () => void;
 }) {
   const analysis = parseAnalysis(clip.analysisJson);
+  const scores = subScores(analysis);
   const exported = Boolean(clip.exportedAssetId);
   const length = clip.endSeconds - clip.startSeconds;
 
@@ -336,6 +337,19 @@ function ClipCard({
             </>
           )}
         </p>
+
+        {/* The four judgements on the tile, not only inside the moment.
+            The headline score says which clip is best; these say what each
+            one is good at, which is what decides between two clips a point
+            apart. Two by two rather than four across: "standalone" does not
+            fit in a quarter of a card. */}
+        {scores.length > 0 && (
+          <span className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+            {scores.map(([name, value]) => (
+              <ScoreBar key={name} name={name} value={value} wide />
+            ))}
+          </span>
+        )}
       </button>
     </li>
   );
