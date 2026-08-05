@@ -190,7 +190,20 @@ export function Publish({ projectId }: { projectId: Id<"amplifyProjects"> }) {
           places. Listed by platform it became four reels × three platforms
           = twelve rows, the same reel scattered across three sections and
           the same blocking reason printed three times. */}
-      <ul className="-mx-5 border-t border-border">
+      {/* The sermon's own heading. The comment above has claimed since the
+          day it was written that both halves carry one, and only the reels
+          ever did — so the first three rows sat under nothing and read as
+          loose platforms belonging to no particular thing. They are the
+          sermon: the full video, the written post, the blog. */}
+      <div className="-mx-5 border-t border-border">
+        <p className="section-label px-5 pb-1 pt-4">
+          The sermon{" "}
+          <span className="font-normal text-faint">
+            ({sermonRows.length})
+          </span>
+        </p>
+      </div>
+      <ul className="-mx-5 -mt-3">
         {sermonRows.map((row) => {
           const record = done.get(key(row.destination, row.subjectId));
           const sending = record?.status === "sending";
