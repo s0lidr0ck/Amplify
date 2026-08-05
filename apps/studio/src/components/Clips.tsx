@@ -656,7 +656,7 @@ function ClipDetail({
             has only ever belonged to one clip — it is stored against the
             clip's id — so listing them separately printed the same moments
             twice and split the judgement from the thing being judged. */}
-        {reel && (
+        {(reel || hasReel || exported) && (
           <div className="grid gap-4 border-t border-border pt-4">
             <p className="section-label">The reel</p>
 
@@ -760,10 +760,33 @@ function ClipDetail({
                     },
                   )
                 ) : (
-                  <p className="text-2xs text-muted">
-                    This reel has no captions yet. Make it again from the
-                    button below.
-                  </p>
+                  <div className="grid justify-items-start gap-2">
+                    <p className="text-2xs text-muted">
+                      {hasReel
+                        ? "The captions are being written — they arrive a few seconds after the upload."
+                        : "No captions yet. They're written by themselves when you upload the reel."}
+                    </p>
+                    {/* A retry, not a gate. Nothing is hidden behind this:
+                        uploading a reel writes its captions, and this is
+                        here for the time that call fails. */}
+                    <button
+                      disabled={packaging}
+                      onClick={async () => {
+                        setPackaging(true);
+                        setError(null);
+                        try {
+                          await packageReel({ clipId: clip._id });
+                        } catch (e) {
+                          setError(errorText(e, "Couldn't write the captions"));
+                        } finally {
+                          setPackaging(false);
+                        }
+                      }}
+                      className="rounded-lg border border-border bg-surface px-3 py-1.5 text-2xs font-medium text-muted transition-colors hover:border-border-strong hover:text-ink disabled:opacity-40"
+                    >
+                      {packaging ? "Writing…" : "Write them now"}
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -784,24 +807,6 @@ function ClipDetail({
           >
             Discard
           </button>
-          {exported && (
-            <button
-              disabled={packaging}
-              onClick={async () => {
-                setPackaging(true);
-                try {
-                  await packageReel({ clipId: clip._id });
-                } catch (e) {
-                  setError(errorText(e, "Couldn't write the captions"));
-                } finally {
-                  setPackaging(false);
-                }
-              }}
-              className="text-2xs text-muted underline hover:text-ink disabled:opacity-40"
-            >
-              {packaging ? "Writing…" : "Make it the reel"}
-            </button>
-          )}
           {/* Once it has actually been cut there is a file, and the only way
               to reach it was the library two screens away. */}
           {clip.exportedAssetId && (
