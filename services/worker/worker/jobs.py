@@ -178,10 +178,17 @@ def transcribe(hub: Hub, job: Job, scratch: Path) -> list[dict[str, object]]:
         device=settings.whisper_device,
         compute_type=settings.whisper_compute_type,
     )
-    segments, info = model.transcribe(str(audio), vad_filter=True)
+    # word_timestamps, because cadence is measured off them. Without it
+    # Whisper returns phrase-level spans only, and the Clip Lab's whole
+    # vocabulary — pause punch, rising intensity, stacked statements — has
+    # nothing to be computed from. It was being asked for and guessed at.
+    segments, info = model.transcribe(
+        str(audio), vad_filter=True, word_timestamps=True
+    )
 
     collected: list[dict[str, object]] = []
     words: list[str] = []
+    timed_words: list[dict[str, object]] = []
     total = info.duration or 0
     last_reported = 25.0
 
@@ -190,6 +197,11 @@ def transcribe(hub: Hub, job: Job, scratch: Path) -> list[dict[str, object]]:
             {"start": segment.start, "end": segment.end, "text": segment.text.strip()}
         )
         words.append(segment.text.strip())
+        for w in getattr(segment, "words", None) or []:
+            # The shape the cadence builder speaks: start, end, word.
+            timed_words.append(
+                {"s": round(float(w.start), 3), "e": round(float(w.end), 3), "w": w.word}
+            )
 
         # Report sparingly. faster-whisper yields segments continuously and a
         # call per segment would be thousands of writes on a long sermon.
@@ -198,6 +210,44 @@ def transcribe(hub: Hub, job: Job, scratch: Path) -> list[dict[str, object]]:
             if done - last_reported >= 5:
                 last_reported = done
                 hub.progress(job, round(done), "Transcribing")
+
+    # How it was said, alongside what was said.
+    #
+    # Here rather than in a job of its own because this one has already
+    # decoded the audio and already knows where every word falls. A separate
+    # job would download the sermon a second time to learn what this one is
+    # holding.
+    hub.progress(job, 92, "Listening to the delivery")
+    analysis: dict[str, object] | None = None
+    try:
+        from worker.tasks.audio_analysis import (
+            build_cadence_payload,
+            compute_energy_map,
+            extract_wav,
+        )
+
+        wav = extract_wav(audio, scratch / "analysis.wav")
+        words_payload = {"words": timed_words}
+        bundle = {
+            "words": words_payload,
+            "energy": compute_energy_map(wav),
+            "cadence": build_cadence_payload(words_payload),
+        }
+        path = scratch / "clip_analysis.json"
+        path.write_text(json.dumps(bundle), encoding="utf-8")
+        analysis = {
+            "kind": "clip_analysis",
+            "storageKey": hub.upload_file(
+                job, "clip_analysis", str(path), "application/json"
+            ),
+            "filename": path.name,
+            "mimeType": "application/json",
+        }
+    except Exception:
+        # Never fatal. The transcript is the thing this job exists for, and
+        # a sermon with words but no delivery measurements still clips —
+        # the ranker simply judges it the way it did before this existed.
+        logger.warning("could not measure the delivery", exc_info=True)
 
     hub.progress(job, 98, "Saving the transcript")
     return [
@@ -213,7 +263,8 @@ def transcribe(hub: Hub, job: Job, scratch: Path) -> list[dict[str, object]]:
             # list for a forty-minute sermon is thousands of objects, and it
             # is only ever read back whole.
             "segmentsJson": json.dumps(collected),
-        }
+        },
+        *([analysis] if analysis else []),
     ]
 
 
