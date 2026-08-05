@@ -82,6 +82,15 @@ export function Shell({
             >
               Settings
             </Link>
+            {/* Last, and in the bar rather than on a page somebody has to
+                already know about. Whoever needs the manual is by
+                definition somebody who does not know where things are. */}
+            <Link
+              to="/help"
+              className="text-xs text-muted transition-colors hover:text-ink"
+            >
+              Help
+            </Link>
           </nav>
         </div>
       </header>

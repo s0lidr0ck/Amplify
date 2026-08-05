@@ -6,6 +6,7 @@ import { HubGate } from "./auth/hubAuth";
 import { useChurch } from "./auth/useChurch";
 import { Mark } from "./brand/Mark";
 import { Shell } from "./components/Shell";
+import { HelpPage } from "./pages/Help";
 import { LibraryPage } from "./pages/Library";
 import { ProjectPage } from "./pages/Project";
 import {
@@ -128,6 +129,10 @@ function Inside() {
           <Route path="publish" element={<PublishRoom />} />
         </Route>
         <Route path="/library" element={<LibraryPage churchId={churchId} />} />
+        {/* The manual, a chapter per URL — so pointing somebody at the
+            answer is a link to the answer rather than to the manual. */}
+        <Route path="/help" element={<HelpPage />} />
+        <Route path="/help/:slug" element={<HelpPage />} />
         <Route path="/settings" element={<SettingsPage churchId={churchId} />} />
         <Route path="*" element={<Navigate to="/projects" replace />} />
       </Routes>
