@@ -353,18 +353,48 @@ function ClipRow({
             )}
           </div>
 
-          {/* Five judgements behind one number. Shown as bars because the
-              useful question is "what is this clip weak at", and five
-              numbers in a row does not answer it at a glance. */}
+          {/* Four judgements behind one number, so the useful question —
+              what is this clip weak at — can be answered at a glance.
+
+              The number is the score. The bar is only there to make the
+              weak one findable without reading four figures, and it is
+              drawn from 50 rather than 0: these are the ranker's top ten
+              of a whole sermon, so nothing scores below the fifties, and a
+              0–100 track spent half its width on a range that never
+              occurs. Everything landed in the top third and read as four
+              identical grey pills. */}
           {scores.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5">
               {scores.map(([name, value]) => (
-                <span key={name} className="flex items-center gap-1.5">
-                  <span className="text-2xs capitalize text-faint">{name}</span>
-                  <span className="h-1 w-10 overflow-hidden rounded-full bg-surface-strong">
+                <span key={name} className="grid gap-1">
+                  <span className="flex items-baseline gap-1.5">
+                    <span className="text-2xs capitalize text-faint">
+                      {name}
+                    </span>
                     <span
-                      className="block h-full rounded-full bg-ink/50"
-                      style={{ width: `${Math.min(100, Math.max(0, value))}%` }}
+                      className={`text-2xs font-semibold tabular-nums ${
+                        value >= 85
+                          ? "text-ok"
+                          : value >= 70
+                            ? "text-muted"
+                            : "text-faint"
+                      }`}
+                    >
+                      {Math.round(value)}
+                    </span>
+                  </span>
+                  <span className="block h-1 w-14 overflow-hidden rounded-full bg-surface-strong">
+                    <span
+                      className={`block h-full rounded-full ${
+                        value >= 85
+                          ? "bg-ok"
+                          : value >= 70
+                            ? "bg-muted"
+                            : "bg-faint"
+                      }`}
+                      style={{
+                        width: `${Math.min(100, Math.max(0, (value - 50) * 2))}%`,
+                      }}
                     />
                   </span>
                 </span>
