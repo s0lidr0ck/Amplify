@@ -233,7 +233,7 @@ function ClipCard({
   clip,
   hasReel,
   written,
-  coverReady,
+  coverUrl,
   masterUrl,
   onOpen,
 }: {
@@ -242,7 +242,8 @@ function ClipCard({
   hasReel: boolean;
   /** Captions have been written for it. */
   written: boolean;
-  coverReady: boolean;
+  /** The cover somebody actually attached, not the brief for one. */
+  coverUrl: string | null;
   masterUrl: string | null;
   onOpen: () => void;
 }) {
@@ -255,10 +256,15 @@ function ClipCard({
   // is the order of the work: cut it, write it, cover it, hand back the
   // edit. Showing the furthest step reached answers "what's left here"
   // without a row of chips on every tile.
+  //
+  // "cover" means a picture is attached. It used to mean the brief had been
+  // written, which is a different fact and an earlier one — so the tile
+  // claimed a cover before any picture existed, and then had nothing to say
+  // when one did.
   const stage = hasReel
     ? "reel ready"
-    : coverReady
-      ? "cover ready"
+    : coverUrl
+      ? "cover on"
       : written
         ? "written"
         : exported
@@ -271,7 +277,14 @@ function ClipCard({
         onClick={onOpen}
         className="group grid w-full gap-2 rounded-xl text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
       >
-        <div className="relative aspect-video overflow-hidden rounded-xl bg-black">
+        <div
+          className={`relative aspect-video overflow-hidden rounded-xl bg-black ${
+            // A finished reel is the one state worth seeing from across the
+            // room: it is the difference between work outstanding and work
+            // done, and a small chip in a corner was not carrying it.
+            hasReel ? "ring-2 ring-ok ring-offset-2 ring-offset-surface" : ""
+          }`}
+        >
           {masterUrl ? (
             <video
               // The fragment never reaches S3; the browser range-requests
@@ -284,6 +297,21 @@ function ClipCard({
             />
           ) : (
             <div className="h-full w-full animate-pulse bg-surface-strong" />
+          )}
+
+          {/* The cover somebody attached, shown rather than announced.
+              Inset rather than in place of the frame: a cover is 9:16 and
+              the tile is 16:9, so using it as the tile picture crops a tall
+              image to a horizontal strip of its middle — which on a dark
+              cover is a black rectangle. The frame still says which moment
+              this is; this says a cover is on it, and which one. */}
+          {coverUrl && (
+            <img
+              src={coverUrl}
+              alt=""
+              loading="lazy"
+              className="absolute left-1.5 top-1.5 h-12 w-[1.6875rem] rounded object-cover shadow-md ring-1 ring-white/50"
+            />
           )}
 
           {/* The score sits on the picture, where the eye already is when
@@ -307,7 +335,14 @@ function ClipCard({
           {/* What has already been done to this moment. Only shown when it
               is true, so an untouched grid carries no badges at all. */}
           {stage && (
-            <span className="absolute bottom-1.5 right-1.5 rounded bg-ok/90 px-1.5 py-0.5 text-[0.625rem] font-medium text-white">
+            <span
+              className={`absolute bottom-1.5 right-1.5 rounded px-1.5 py-0.5 text-[0.625rem] font-medium text-white ${
+                // The finished state reads at full strength; the steps on
+                // the way to it are quieter, because they are progress
+                // reports rather than answers.
+                hasReel ? "bg-ok" : "bg-black/65"
+              }`}
+            >
               {stage}
             </span>
           )}
@@ -659,7 +694,13 @@ function ClipDetail({
             <div className="grid gap-4 lg:grid-cols-[1fr_1.35fr]">
               <div className="grid content-start gap-2.5">
                 <div className="flex flex-wrap items-center gap-2.5">
-                  <span className="text-2xs font-medium text-muted">Cover</span>
+                  {/* "The brief", not "Cover". This chip is about the
+                      written directions; the picture is the thing below it,
+                      and one word covering both is how the gallery came to
+                      claim a cover that did not exist. */}
+                  <span className="text-2xs font-medium text-muted">
+                    Cover brief
+                  </span>
                   {coverIsReady ? (
                     <span className="rounded-md bg-ok-soft px-2 py-0.5 text-2xs font-medium text-ok">
                       written
@@ -949,6 +990,7 @@ export function Clips({
   const drafts = useQuery(api.amplifyDrafts.list, { projectId });
   const findClips = useAction(api.amplifyClipFinder.findClips);
   const signMaster = useAction(api.amplifyMedia.playbackUrl);
+  const signCovers = useAction(api.amplifyMedia.reelCovers);
 
   // One signed URL for the whole gallery. Every tile shows the frame at its
   // own start time by seeking into the same file, so ten clips cost one
@@ -964,6 +1006,23 @@ export function Clips({
       alive = false;
     };
   }, [signMaster, masterAssetId]);
+
+  // The covers people have attached, signed in one go. Re-run when the
+  // asset list changes, so attaching a cover shows up on its tile without
+  // a reload — the complaint that started this was that it never did.
+  const [covers, setCovers] = useState<Map<string, string>>(new Map());
+  const coverCount = (assets ?? []).filter(
+    (a) => a.kind === "reel_cover" && a.status !== "replaced",
+  ).length;
+  useEffect(() => {
+    let alive = true;
+    void signCovers({ projectId }).then((rows) => {
+      if (alive) setCovers(new Map(rows.map((r) => [r.subjectId, r.url])));
+    });
+    return () => {
+      alive = false;
+    };
+  }, [signCovers, projectId, coverCount]);
 
   // Which clips already have a finished reel against them — so an editor
   // can see at a glance that a moment is taken, which is the whole reason
@@ -1065,7 +1124,7 @@ export function Clips({
                 clip={clip}
                 hasReel={reeled.has(clip._id)}
                 written={reelFor.has(clip._id)}
-                coverReady={coverFor.get(clip._id)?.status === "ready"}
+                coverUrl={covers.get(clip._id) ?? null}
                 masterUrl={masterUrl}
                 onOpen={() => setOpenId(clip._id)}
               />
