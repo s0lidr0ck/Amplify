@@ -176,11 +176,16 @@ def _publish_youtube(
             "categoryId": "22",
         },
         "status": {
-            # Private, always. Amplify's job is to get it onto the channel,
-            # not to decide the moment a church's sermon goes public — and an
-            # accidental public post cannot be taken back from subscribers
-            # who already got the notification.
-            "privacyStatus": "private",
+            # Private by default. Amplify's job is to get it onto the
+            # channel, not to decide the moment a church's sermon goes
+            # public — and an accidental public post cannot be taken back
+            # from subscribers who already got the notification. A finisher
+            # in Convex sets the real visibility once the thumbnail is on.
+            #
+            # A short is the exception and says so explicitly: there is no
+            # thumbnail to wait for and no finisher scheduled, so a private
+            # short would stay private with nothing left to change it.
+            "privacyStatus": str(payload.get("privacyStatus") or "private"),
             "selfDeclaredMadeForKids": False,
         },
     }
@@ -391,12 +396,20 @@ def _publish_tiktok(
     # every church. Pushing the bytes needs no domain verification at all.
     #
     # One chunk: clips are seconds long, well under TikTok's 64 MB limit.
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json; charset=UTF-8",
+    }
+    source_info = {
+        "source": "FILE_UPLOAD",
+        "video_size": size,
+        "chunk_size": size,
+        "total_chunk_count": 1,
+    }
+
     init = httpx.post(
         "https://open.tiktokapis.com/v2/post/publish/video/init/",
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json; charset=UTF-8",
-        },
+        headers=headers,
         json={
             "post_info": {
                 "title": str(payload.get("caption") or "")[:2200],
@@ -407,15 +420,37 @@ def _publish_tiktok(
                 "privacy_level": "SELF_ONLY",
                 "disable_comment": False,
             },
-            "source_info": {
-                "source": "FILE_UPLOAD",
-                "video_size": size,
-                "chunk_size": size,
-                "total_chunk_count": 1,
-            },
+            "source_info": source_info,
         },
         timeout=API_TIMEOUT,
     )
+
+    # Direct Post is only for apps TikTok has audited. Everyone else gets a
+    # 403 saying "review our integration guidelines", which reads like a
+    # mistake in the request and is not one — it is the app's status.
+    #
+    # So fall back to the creator's inbox, which needs only video.upload and
+    # takes no post_info at all. The clip lands in TikTok's drafts and a
+    # person finishes it on the phone. Tried in this order rather than going
+    # straight to the inbox, so the day the app is audited direct posting
+    # starts working on its own.
+    note = None
+    if init.status_code == 403:
+        init = httpx.post(
+            "https://open.tiktokapis.com/v2/post/publish/inbox/video/init/",
+            headers=headers,
+            json={"source_info": source_info},
+            timeout=API_TIMEOUT,
+        )
+        # No post_info means no caption went with it. Saying so matters:
+        # the words Amplify wrote are not on the clip, and somebody has to
+        # paste them in before posting.
+        note = (
+            "TikTok hasn't audited this app yet, so the clip went to your "
+            "TikTok drafts instead of straight to the profile. Open TikTok, "
+            "finish it from the inbox, and paste the caption in."
+        )
+
     if init.status_code != 200:
         raise _explain(init, "TikTok refused the upload")
     data = init.json().get("data", {})
@@ -471,7 +506,10 @@ def _publish_tiktok(
         on_progress(75.0, "TikTok is processing the clip")
         time.sleep(10)
 
-    return {"externalId": publish_id, "externalUrl": ""}
+    out: dict[str, str] = {"externalId": publish_id, "externalUrl": ""}
+    if note:
+        out["note"] = note
+    return out
 
 
 PUBLISHERS: dict[str, Callable[..., dict[str, str]]] = {

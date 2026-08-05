@@ -24,6 +24,7 @@ const NOTES: Record<string, string> = {
   youtube: "The full sermon, with its title and description.",
   facebook: "The short written version, with a link to the blog post.",
   facebook_reel: "The clip, as a Facebook reel.",
+  youtube_short: "The clip, as a YouTube Short.",
   instagram: "The clip, as a reel.",
   tiktok: "The clip.",
   blog: "The long-form write-up, for your website.",
@@ -461,6 +462,24 @@ export function Publish({ projectId }: { projectId: Id<"amplifyProjects"> }) {
                 </div>
 
                 {shared && <p className="text-[0.8125rem] text-warn">{shared}</p>}
+
+                {/* What the platform said when it refused. Grouping the
+                    rows lost this at first — a reel that failed showed a
+                    "try again" button and nothing about why, which is the
+                    one thing you need before pressing it again. */}
+                {group.map((row) => {
+                  const record = done.get(key(row.destination, subjectId));
+                  if (record?.status !== "failed") return null;
+                  return (
+                    <p
+                      key={`${row.destination}-why`}
+                      className="text-[0.8125rem] text-danger"
+                    >
+                      <span className="font-medium">{row.label}:</span>{" "}
+                      {record.error ?? "That didn't go through."}
+                    </p>
+                  );
+                })}
 
                 <div className="flex flex-wrap items-center gap-2">
                   {group.map((row) => {
