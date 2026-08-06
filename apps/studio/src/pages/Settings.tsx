@@ -715,6 +715,7 @@ function PromptRow({
     editable: boolean;
     scope: string;
     sharedIsCustom: boolean;
+    sharedIsBehind: boolean;
     inUse: boolean;
     unfillable: string[];
   };
@@ -780,6 +781,20 @@ function PromptRow({
         {prompt.sharedIsCustom && (
           <span className="rounded-md bg-brand-soft px-2 py-0.5 text-2xs font-medium text-brand-strong">
             changed
+          </span>
+        )}
+        {/* "changed" goes true the moment anything is saved and stays true
+            forever, so it stops carrying news. This is the part that dates:
+            the built-in wording has moved on since this copy was saved, and
+            the saved copy quietly wins. The thumbnail planner was rewritten
+            from three rigid variants to five open ones and went on producing
+            three for weeks, because nothing on this screen said so.
+
+            Reports a fact, not a verdict — a saved prompt can be better than
+            the built-in one, and the reel-graphics wording is. */}
+        {prompt.sharedIsBehind && (
+          <span className="rounded-md bg-warn-soft px-2 py-0.5 text-2xs font-medium text-warn">
+            built-in updated since
           </span>
         )}
         {/* Louder than the sentence in the description, because the thing
