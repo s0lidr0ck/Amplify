@@ -405,6 +405,7 @@ function ClipDetail({
   projectId,
   masterAssetId,
   hasReel,
+  reelAssetId,
   reel,
   cover,
   onClose,
@@ -413,6 +414,8 @@ function ClipDetail({
   projectId: Id<"amplifyProjects">;
   masterAssetId: Id<"amplifyAssets"> | null;
   hasReel: boolean;
+  /** The editor's finished video, once one has been handed back. */
+  reelAssetId: Id<"amplifyAssets"> | null;
   /** The written reel this moment became, once "Make it the reel" has run. */
   reel?: Draft;
   cover?: Draft & { status: string };
@@ -471,6 +474,24 @@ function ClipDetail({
       cancelled = true;
     };
   }, [playbackUrl, masterAssetId]);
+
+  // The finished reel, so it can be watched here.
+  //
+  // There was no way to see it at all: uploading said "reel ready" and the
+  // video went somewhere you had to take on faith. Checking that the right
+  // file went to the right clip meant going to the library and matching
+  // filenames, which is exactly the mistake the pairing was meant to end.
+  const [reelUrl, setReelUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!reelAssetId) return;
+    let cancelled = false;
+    void playbackUrl({ assetId: reelAssetId }).then((u) => {
+      if (!cancelled) setReelUrl(u);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [playbackUrl, reelAssetId]);
 
   // Escape closes it, the way every other dialog on the machine does.
   useEffect(() => {
@@ -690,6 +711,42 @@ function ClipDetail({
         {(reel || hasReel || exported) && (
           <div className="grid gap-4 border-t border-border pt-4">
             <p className="section-label">The reel</p>
+
+            {/* The finished video, watchable. Vertical and small, because
+                that is the shape it will be seen in and the point of
+                looking is to check the crop and the captions. */}
+            {reelAssetId && (
+              <div className="flex flex-wrap items-start gap-3.5 rounded-xl bg-surface-strong p-3.5">
+                {reelUrl ? (
+                  <video
+                    src={reelUrl}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    className="h-56 w-auto rounded-lg bg-black"
+                  />
+                ) : (
+                  <div className="h-56 w-[7.875rem] animate-pulse rounded-lg bg-surface" />
+                )}
+                <div className="grid content-start gap-1">
+                  <p className="text-2xs font-medium text-muted">
+                    The edit that came back
+                  </p>
+                  <p className="text-2xs text-faint">
+                    This is the file that gets posted.
+                  </p>
+                  {reelUrl && (
+                    <a
+                      href={reelUrl}
+                      download
+                      className="justify-self-start pt-1 text-2xs text-muted underline hover:text-ink"
+                    >
+                      Download it
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="grid gap-4 lg:grid-cols-[1fr_1.35fr]">
               <div className="grid content-start gap-2.5">
@@ -1027,11 +1084,16 @@ export function Clips({
   // Which clips already have a finished reel against them — so an editor
   // can see at a glance that a moment is taken, which is the whole reason
   // the two are tied together.
-  const reeled = new Set(
+  // The finished reel per clip, so the detail can play it rather than only
+  // report that one exists.
+  const reelAssetFor = new Map(
     (assets ?? [])
-      .filter((a) => a.kind === "reel_video" && a.status === "ready")
-      .map((a) => a.subjectId),
+      .filter(
+        (a) => a.kind === "reel_video" && a.status === "ready" && a.subjectId,
+      )
+      .map((a) => [a.subjectId as string, a._id]),
   );
+  const reeled = new Set(reelAssetFor.keys());
 
   // The written reel and its cover, both filed under the clip they belong
   // to. This is the join the second panel was doing; doing it here puts
@@ -1142,6 +1204,7 @@ export function Clips({
           projectId={projectId}
           masterAssetId={masterAssetId}
           hasReel={reeled.has(open._id)}
+          reelAssetId={reelAssetFor.get(open._id) ?? null}
           reel={reelFor.get(open._id)}
           cover={coverFor.get(open._id)}
           onClose={() => setOpenId(null)}
