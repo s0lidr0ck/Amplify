@@ -4,7 +4,7 @@ import type { Id } from "@convex/dataModel";
 import { useEffect, useRef, useState } from "react";
 
 import { errorText } from "../lib/errorText";
-import { AttachImage } from "./AttachImage";
+import { ReelMedia } from "./ReelMedia";
 import { hhmmss, TimeMark } from "./TimeMark";
 import { Variants } from "./Variants";
 
@@ -475,23 +475,6 @@ function ClipDetail({
     };
   }, [playbackUrl, masterAssetId]);
 
-  // The finished reel, so it can be watched here.
-  //
-  // There was no way to see it at all: uploading said "reel ready" and the
-  // video went somewhere you had to take on faith. Checking that the right
-  // file went to the right clip meant going to the library and matching
-  // filenames, which is exactly the mistake the pairing was meant to end.
-  const [reelUrl, setReelUrl] = useState<string | null>(null);
-  useEffect(() => {
-    if (!reelAssetId) return;
-    let cancelled = false;
-    void playbackUrl({ assetId: reelAssetId }).then((u) => {
-      if (!cancelled) setReelUrl(u);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [playbackUrl, reelAssetId]);
 
   // Escape closes it, the way every other dialog on the machine does.
   useEffect(() => {
@@ -712,41 +695,16 @@ function ClipDetail({
           <div className="grid gap-4 border-t border-border pt-4">
             <p className="section-label">The reel</p>
 
-            {/* The finished video, watchable. Vertical and small, because
-                that is the shape it will be seen in and the point of
-                looking is to check the crop and the captions. */}
-            {reelAssetId && (
-              <div className="flex flex-wrap items-start gap-3.5 rounded-xl bg-surface-strong p-3.5">
-                {reelUrl ? (
-                  <video
-                    src={reelUrl}
-                    controls
-                    playsInline
-                    preload="metadata"
-                    className="h-56 w-auto rounded-lg bg-black"
-                  />
-                ) : (
-                  <div className="h-56 w-[7.875rem] animate-pulse rounded-lg bg-surface" />
-                )}
-                <div className="grid content-start gap-1">
-                  <p className="text-2xs font-medium text-muted">
-                    The edit that came back
-                  </p>
-                  <p className="text-2xs text-faint">
-                    This is the file that gets posted.
-                  </p>
-                  {reelUrl && (
-                    <a
-                      href={reelUrl}
-                      download
-                      className="justify-self-start pt-1 text-2xs text-muted underline hover:text-ink"
-                    >
-                      Download it
-                    </a>
-                  )}
-                </div>
-              </div>
-            )}
+            {/* Everything this moment has produced, in one gallery: the
+                cut, the editor's reel, and the covers. They were three
+                separate treatments — a player, a download link and an image
+                grid — and they are all just media belonging to this clip. */}
+            <ReelMedia
+              projectId={projectId}
+              clipId={clip._id}
+              exportedAssetId={clip.exportedAssetId}
+              hasReel={hasReel}
+            />
 
             <div className="grid gap-4 lg:grid-cols-[1fr_1.35fr]">
               <div className="grid content-start gap-2.5">
@@ -797,15 +755,9 @@ function ClipDetail({
                   </button>
                 </div>
 
-                {/* Where the picture comes back. The concepts are a brief
-                    for an image tool; this is the image that came out of
-                    it, kept beside the reel it was made for instead of in
-                    a download folder. */}
-                <AttachImage
-                  projectId={projectId}
-                  kind="reel_cover"
-                  subjectId={clip._id}
-                />
+                {/* The pictures themselves live in the gallery above, with
+                    the videos. This column is the written direction that
+                    produced them. */}
 
                 {/* The brief, in the open. It was behind a toggle because
                     it is long, but a brief nobody can see is a brief
@@ -894,106 +846,11 @@ function ClipDetail({
           >
             Discard
           </button>
-          {/* Once it has actually been cut there is a file, and the only way
-              to reach it was the library two screens away. */}
-          {clip.exportedAssetId && (
-            <button
-              disabled={downloading}
-              onClick={async () => {
-                setDownloading(true);
-                try {
-                  const link = await playbackUrl({
-                    assetId: clip.exportedAssetId!,
-                    download: true,
-                    // Named for the moment, not the timecodes it was cut
-                    // at, because the file lands in somebody's downloads
-                    // folder with nothing else to identify it.
-                    filename: reelFilename(written?.hook || clip.title || ""),
-                  });
-                  window.location.href = link;
-                } finally {
-                  setDownloading(false);
-                }
-              }}
-              className="text-2xs text-muted underline hover:text-ink disabled:opacity-40"
-            >
-              {downloading ? "Preparing…" : "Download"}
-            </button>
-          )}
+          {/* Uploading and downloading moved into the gallery, where the
+              files they produce are. This row is now only the two things
+              that act on the clip itself. */}
 
           <div className="ml-auto flex flex-wrap items-center gap-2.5">
-            {/* The finished reel, coming back from an editor.
-
-                Stored against the clip rather than over it. A clip and a
-                reel are different things: the clip is the moment cut out of
-                the sermon and it stays that, which is what lets an editor
-                work from it and what stops two of them building a reel out
-                of the same moment. This is the reel — what actually gets
-                posted. */}
-            <label
-              className={`cursor-pointer rounded-lg border border-border bg-surface px-3 py-1.5 text-2xs font-medium transition-colors ${
-                uploading
-                  ? "text-faint"
-                  : "text-muted hover:border-border-strong hover:text-ink"
-              }`}
-            >
-              <input
-                type="file"
-                accept="video/*"
-                className="hidden"
-                disabled={uploading}
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  e.target.value = "";
-                  if (!file) return;
-                  setUploading(true);
-                  setError(null);
-                  try {
-                    // Measured before sending. Publishing checks the shape
-                    // to stop a widescreen clip being letterboxed into a
-                    // strip down the middle of a phone screen, and it can
-                    // only do that if the dimensions were recorded.
-                    const probe = await measureVideo(file);
-                    const { uploadUrl, storageKey } = await requestUpload({
-                      projectId,
-                      kind: "reel_video",
-                      filename: file.name,
-                      contentType: file.type || "video/mp4",
-                    });
-                    const put = await fetch(uploadUrl, {
-                      method: "PUT",
-                      body: file,
-                      headers: { "Content-Type": file.type || "video/mp4" },
-                    });
-                    if (!put.ok)
-                      throw new Error(`Upload failed (${put.status})`);
-
-                    // subjectId ties it to the clip it was built from, which
-                    // is how publishing finds it and how a second editor can
-                    // see the moment is already taken. No second step: the
-                    // clip's own cut is left exactly where it was.
-                    await recordAsset({
-                      projectId,
-                      kind: "reel_video",
-                      subjectId: clip._id,
-                      storageKey,
-                      filename: file.name,
-                      mimeType: file.type || "video/mp4",
-                      ...probe,
-                    });
-                  } catch (err) {
-                    setError(errorText(err, "That upload didn't work"));
-                  } finally {
-                    setUploading(false);
-                  }
-                }}
-              />
-              {uploading
-                ? "Uploading…"
-                : hasReel
-                  ? "Replace the reel"
-                  : "Upload the reel"}
-            </label>
             <button
               disabled={cutting || !masterAssetId}
               onClick={async () => {
