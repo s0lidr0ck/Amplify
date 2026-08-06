@@ -22,6 +22,7 @@ import json
 import logging
 import os
 import socket
+import time
 import uuid
 from dataclasses import dataclass
 from typing import Any
@@ -35,6 +36,18 @@ logger = logging.getLogger(__name__)
 # Long enough for Convex to answer under load; short enough that a wedged
 # request does not stall the loop for minutes.
 TIMEOUT = 30.0
+
+# Above this, upload in parts. S3's hard limit for a single PUT is 5GiB; this
+# sits below it deliberately, because the limit applies to what S3 receives
+# and finding the edge experimentally costs a failed sermon each time.
+MULTIPART_THRESHOLD = 4 * 1024 * 1024 * 1024
+
+# 64MiB parts: S3 allows 10,000 of them, so this tops out around 625GiB, and
+# one part at a time is what stays in memory on a box that has already been
+# taken down once by something that helped itself.
+PART_SIZE = 64 * 1024 * 1024
+
+PART_ATTEMPTS = 3
 
 
 def _s3_reason(body: str) -> str:
@@ -280,11 +293,105 @@ class Hub:
 
     # ── files ───────────────────────────────────────────────────────────────
 
+    def _multipart_upload(
+        self, job: Job, kind: str, path: str, content_type: str, size: int
+    ) -> str:
+        """Send a file too big for one PUT, in parts.
+
+        Sequential rather than concurrent: parts are read into memory one at a
+        time, and this box has already been taken down once by a process that
+        helped itself to everything. A 6.6GiB master is a hundred and six
+        parts, and the transfer is the cost either way.
+        """
+        filename = os.path.basename(path)
+        target = {"jobId": job.job_id, "kind": kind, "filename": filename}
+        started = self._post(
+            "multipart/create", {**target, "contentType": content_type}
+        )
+        upload_id, storage_key = started["uploadId"], started["storageKey"]
+        total_parts = (size + PART_SIZE - 1) // PART_SIZE
+        logger.info(
+            "uploading %s (%.2f GiB) in %d parts",
+            filename,
+            size / 1_073_741_824,
+            total_parts,
+        )
+
+        parts: list[dict[str, Any]] = []
+        try:
+            with open(path, "rb") as handle:
+                part_number = 1
+                while True:
+                    chunk = handle.read(PART_SIZE)
+                    if not chunk:
+                        break
+                    part = self._post(
+                        "multipart/part-url",
+                        {**target, "uploadId": upload_id, "partNumber": part_number},
+                    )
+                    etag = self._put_part(part["uploadUrl"], chunk, part_number)
+                    parts.append({"partNumber": part_number, "etag": etag})
+                    part_number += 1
+            self._post(
+                "multipart/complete",
+                {**target, "uploadId": upload_id, "parts": parts},
+            )
+        except Exception:
+            # Parts of an abandoned upload are stored, and billed, until
+            # something removes them. Failing without this leaves six
+            # gigabytes behind on every attempt, invisibly.
+            try:
+                self._post("multipart/abort", {**target, "uploadId": upload_id})
+            except Exception:
+                logger.warning("could not abandon upload %s", upload_id)
+            raise
+        return storage_key
+
+    def _put_part(self, url: str, chunk: bytes, part_number: int) -> str:
+        """One part, with retries, returning the ETag S3 gives back.
+
+        A part is retried where the whole upload is not: losing part 90 of a
+        hundred to one dropped connection would otherwise throw away an hour
+        of transfer.
+        """
+        last: Exception | None = None
+        for attempt in range(1, PART_ATTEMPTS + 1):
+            try:
+                response = httpx.put(url, content=chunk, timeout=None)
+                if response.is_error:
+                    raise RuntimeError(
+                        f"HTTP {response.status_code} {_s3_reason(response.text)}"
+                    )
+                etag = response.headers.get("ETag")
+                if not etag:
+                    raise RuntimeError("S3 accepted the part but returned no ETag")
+                return etag
+            except Exception as exc:  # noqa: BLE001 - retried, then re-raised
+                last = exc
+                logger.warning(
+                    "part %d failed (attempt %d/%d): %s",
+                    part_number,
+                    attempt,
+                    PART_ATTEMPTS,
+                    exc,
+                )
+                if attempt < PART_ATTEMPTS:
+                    time.sleep(2 * attempt)
+        raise RuntimeError(f"Part {part_number} failed: {last}")
+
     def upload_file(self, job: Job, kind: str, path: str, content_type: str) -> str:
         """Send a finished file to S3 and return its key."""
+        size = os.path.getsize(path)
+        # S3 refuses a single PUT over 5GiB with EntityTooLarge, and a sermon
+        # cut from a long service goes past it — 6.64GiB, in the case that
+        # sent me looking. The threshold sits below the limit rather than on
+        # it: the cap is on what S3 receives, and there is no reason to find
+        # the edge experimentally once a week.
+        if size > MULTIPART_THRESHOLD:
+            return self._multipart_upload(job, kind, path, content_type, size)
+
         filename = os.path.basename(path)
         url, storage_key = self.upload_url(job, kind, filename)
-        size = os.path.getsize(path)
         with open(path, "rb") as handle:
             # Streamed rather than read into memory: a sermon master is
             # gigabytes, and this container has other work to do.
