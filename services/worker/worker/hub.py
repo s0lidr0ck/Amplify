@@ -37,6 +37,38 @@ logger = logging.getLogger(__name__)
 TIMEOUT = 30.0
 
 
+def _s3_reason(body: str) -> str:
+    """Pull S3's own explanation out of its XML error body.
+
+    S3 answers a refused request with <Code> and <Message>, and those two
+    fields are the difference between "400 Bad Request" and "the file is over
+    the 5GiB limit for a single PUT". Parsed by hand rather than with an XML
+    library because a truncated or empty body must still produce something
+    sayable — this runs in the path where things have already gone wrong.
+    """
+    if not body:
+        return "(no response body)"
+
+    def tag(name: str) -> str | None:
+        opening = f"<{name}>"
+        start = body.find(opening)
+        if start < 0:
+            return None
+        end = body.find(f"</{name}>", start)
+        if end < 0:
+            return None
+        return body[start + len(opening) : end].strip()
+
+    code, message = tag("Code"), tag("Message")
+    if code and message:
+        return f"{code}: {message}"
+    if code:
+        return code
+    # Not XML, or not the shape we expected. Say some of it rather than
+    # nothing, and keep it short enough for a job log.
+    return body.strip()[:300]
+
+
 @dataclass
 class Job:
     job_id: str
@@ -265,5 +297,15 @@ class Hub:
                 },
                 timeout=None,
             )
-        response.raise_for_status()
+        if response.is_error:
+            # S3 always says why, in an XML body, and raise_for_status throws
+            # it away. Two sermons have failed here for weeks behind a bare
+            # "400 Bad Request" that named neither the file nor the reason —
+            # so the trim looked broken when the upload was, and nothing said
+            # which of the two it was.
+            raise RuntimeError(
+                f"Upload of {filename} ({size / 1_073_741_824:.2f} GiB) "
+                f"failed: HTTP {response.status_code} "
+                f"{_s3_reason(response.text)}"
+            )
         return storage_key

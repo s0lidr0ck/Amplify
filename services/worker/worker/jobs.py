@@ -49,6 +49,90 @@ def _download(hub: Hub, job: Job, asset_id: str, into: Path) -> Path:
     return target
 
 
+"""How an MP4 says where its index is.
+
+A file is a flat sequence of boxes: a 4-byte big-endian size, a 4-byte type,
+then the payload. Size 1 means the real size is a 64-bit value straight after
+the type; size 0 means "to the end of the file". Walking the sizes hops from
+one box to the next without reading any payload, which is the whole point —
+each hop costs sixteen bytes.
+
+We want to know whether `moov` (the index) comes before `mdat` (the video).
+If it does, ffmpeg can seek over HTTP: it reads the index, works out the byte
+offset of the timestamp it wants, and asks S3 for that range. If `mdat` comes
+first the index is at the end, and ffmpeg would read the entire file to find
+it — for a 12GB service that is worse than downloading, because it is the same
+bytes with no local copy to show for it.
+"""
+
+_BOX_HEADER = 16
+_MAX_BOXES = 16
+
+
+def _moov_before_mdat(read_at, file_size: int | None = None) -> bool:
+    """True if the index precedes the media. `read_at(offset, length) -> bytes`.
+
+    Takes a reader rather than a URL so the box walk can be tested against
+    bytes in memory. Anything unexpected returns False: the caller's fallback
+    is to download the file, which always works, so guessing "streamable" is
+    the only answer that can make things worse.
+    """
+    offset = 0
+    for _ in range(_MAX_BOXES):
+        header = read_at(offset, _BOX_HEADER)
+        if not header or len(header) < 8:
+            return False
+        size = int.from_bytes(header[0:4], "big")
+        kind = header[4:8]
+
+        if kind == b"moov":
+            return True
+        if kind == b"mdat":
+            return False
+
+        if size == 1:
+            if len(header) < _BOX_HEADER:
+                return False
+            size = int.from_bytes(header[8:16], "big")
+        elif size == 0:
+            # Runs to EOF, so nothing follows it to find.
+            return False
+        if size < 8:
+            return False
+
+        offset += size
+        if file_size is not None and offset >= file_size:
+            return False
+    return False
+
+
+def _source_streams_over_http(url: str) -> bool:
+    """Can ffmpeg seek this URL, or must we pull the whole thing down?
+
+    Every failure path answers False. A server that ignores Range would hand
+    back the entire body on the first probe, so a 206 is required rather than
+    merely a 2xx — asking "is this cheap to stream" must not itself download
+    twelve gigabytes.
+    """
+
+    def read_at(offset: int, length: int) -> bytes:
+        response = httpx.get(
+            url,
+            headers={"Range": f"bytes={offset}-{offset + length - 1}"},
+            timeout=30.0,
+            follow_redirects=True,
+        )
+        if response.status_code != 206:
+            raise RuntimeError(f"no ranged read: HTTP {response.status_code}")
+        return response.content
+
+    try:
+        return _moov_before_mdat(read_at)
+    except Exception as exc:  # noqa: BLE001 - any failure means "download it"
+        logger.info("source not seekable over http (%s); downloading", exc)
+        return False
+
+
 def _run(cmd: list[str], job: Job, hub: Hub) -> None:
     """Run a binary, and put its complaint somewhere a human will see it."""
     result = subprocess.run(cmd, capture_output=True, text=True)
@@ -91,19 +175,42 @@ def trim(hub: Hub, job: Job, scratch: Path) -> list[dict[str, object]]:
     if end <= start:
         raise ValueError("The end of the sermon must come after the start")
 
-    hub.progress(job, 5, "Fetching the source")
-    source = _download(hub, job, str(source_asset_id), scratch)
+    # A service recording is around twelve gigabytes and the sermon is a
+    # forty-minute slice of it. If the index is at the front, ffmpeg can read
+    # S3 directly and range-request only the part it keeps — which is what the
+    # clip path already does. If it is not, download as before: that always
+    # works, and it is what the fallback is for.
+    url, _ = hub.download_url(job, str(source_asset_id))
+    streaming = _source_streams_over_http(url)
+    if streaming:
+        hub.progress(job, 5, "Reading the source")
+        hub.log(job, "Source index is at the front; streaming instead of downloading")
+        source_input = url
+    else:
+        hub.progress(job, 5, "Fetching the source")
+        source_input = str(_download(hub, job, str(source_asset_id), scratch))
+
+    # Only when the input really is a URL: these are options on ffmpeg's http
+    # protocol, and it exits with "Option reconnect not found" if the input is
+    # a local file. Forty minutes read over the network is long enough for one
+    # dropped connection to lose the whole job, which a local file never was.
+    reconnect = (
+        ["-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "30"]
+        if streaming
+        else []
+    )
 
     hub.progress(job, 30, "Trimming")
     output = scratch / "sermon-master.mp4"
     _run(
         [
             "ffmpeg", "-y",
+            *reconnect,
             # -ss before -i seeks by index rather than decoding to the point,
             # which is the difference between seconds and minutes on a
             # two-hour file.
             "-ss", str(start),
-            "-i", str(source),
+            "-i", source_input,
             "-to", str(end - start),
             # No re-encode. The sermon is a slice of an existing file, and
             # re-encoding would cost an hour and quality for nothing.
