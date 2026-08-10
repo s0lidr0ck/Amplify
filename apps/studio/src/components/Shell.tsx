@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 
 import { Mark } from "../brand/Mark";
+import { AccountMenu } from "./AccountMenu";
 
 /**
  * The chrome every page wears.
@@ -76,21 +77,11 @@ export function Shell({
             >
               Library
             </Link>
-            <Link
-              to="/settings"
-              className="text-xs text-muted transition-colors hover:text-ink"
-            >
-              Settings
-            </Link>
-            {/* Last, and in the bar rather than on a page somebody has to
-                already know about. Whoever needs the manual is by
-                definition somebody who does not know where things are. */}
-            <Link
-              to="/help"
-              className="text-xs text-muted transition-colors hover:text-ink"
-            >
-              Help
-            </Link>
+            {/* Settings and Help moved into the account menu. The bar is for
+                where you are; those are about who you are — and Help still
+                sits in the chrome rather than on a page somebody has to
+                already know about, which was the point of putting it here. */}
+            <AccountMenu />
           </nav>
         </div>
       </header>
