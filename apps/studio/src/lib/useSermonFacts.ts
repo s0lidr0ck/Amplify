@@ -3,6 +3,7 @@ import { api } from "@convex/api";
 import type { Id } from "@convex/dataModel";
 
 import { readStages, type SermonFacts, type StageReading, type StageSlug } from "./stages";
+import { timelineAsset } from "./timeline";
 
 /**
  * Everything the rail needs to know about a sermon, in one read.
@@ -50,6 +51,10 @@ export function useSermonFacts(projectId: Id<"amplifyProjects">) {
 
   const source = assets?.find((a) => a.kind === "source_video") ?? null;
   const master = assets?.find((a) => a.kind === "sermon_master") ?? null;
+  // The file this sermon's timestamps count into — the one the transcript
+  // was read from, which is the master on a sermon that was trimmed here and
+  // the recording itself on one that arrived already cut.
+  const timeline = timelineAsset(assets ?? [], transcript?.assetId ?? null);
 
   const ready = (kind: string) =>
     (drafts ?? []).some((d) => d.kind === kind && d.status === "ready");
@@ -93,6 +98,7 @@ export function useSermonFacts(projectId: Id<"amplifyProjects">) {
     assets: assets ?? [],
     source,
     master,
+    timeline,
     hasTranscript: transcript !== null && transcript !== undefined,
   };
 }

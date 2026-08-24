@@ -28,7 +28,12 @@ export type RoomContext = {
   projectId: Id<"amplifyProjects">;
   /** For the one control that has to name what it is about to destroy. */
   title: string;
-  masterAssetId: Id<"amplifyAssets"> | null;
+  /**
+   * The video this sermon's timestamps count into: the file the transcript
+   * was read from, which is the trimmed sermon when there is one and the
+   * recording itself when the sermon arrived already cut.
+   */
+  timelineAssetId: Id<"amplifyAssets"> | null;
   hasTranscript: boolean;
   /** Rendered by the layout, because Source needs the upload and trim UI. */
   source: React.ReactNode;
@@ -114,7 +119,7 @@ export function VisualsRoom() {
 }
 
 export function ClipsRoom() {
-  const { projectId, masterAssetId, hasTranscript } = useRoom();
+  const { projectId, timelineAssetId, hasTranscript } = useRoom();
   return (
     <div className="grid gap-5">
       <RoomHeading slug="clips" />
@@ -125,7 +130,7 @@ export function ClipsRoom() {
       <Jobs projectId={projectId} types={["clip_export"]} />
       <Clips
         projectId={projectId}
-        masterAssetId={masterAssetId}
+        timelineAssetId={timelineAssetId}
         hasTranscript={hasTranscript}
       />
     </div>

@@ -224,17 +224,20 @@ function ScoreBar({
 /**
  * A moment in the gallery.
  *
- * The frame is seeked out of the sermon everybody already has — no render,
+ * The frame is seeked out of the video everybody already has — no render,
  * no second file, no worker. Enough on the face of it to choose between ten
  * of them: what is said, how strong it is, how long it runs, and whether
  * somebody has already dealt with it.
+ *
+ * That video is whichever file the transcript was read from, because a
+ * clip's start is a position in it. See `timelineAsset`.
  */
 function ClipCard({
   clip,
   hasReel,
   written,
   coverUrl,
-  masterUrl,
+  timelineUrl,
   onOpen,
 }: {
   clip: Clip;
@@ -244,7 +247,8 @@ function ClipCard({
   written: boolean;
   /** The cover somebody actually attached, not the brief for one. */
   coverUrl: string | null;
-  masterUrl: string | null;
+  /** The video the clip's start counts into, signed once for the whole grid. */
+  timelineUrl: string | null;
   onOpen: () => void;
 }) {
   const analysis = parseAnalysis(clip.analysisJson);
@@ -285,11 +289,11 @@ function ClipCard({
             hasReel ? "ring-2 ring-ok ring-offset-2 ring-offset-surface" : ""
           }`}
         >
-          {masterUrl ? (
+          {timelineUrl ? (
             <video
               // The fragment never reaches S3; the browser range-requests
               // around that timestamp and paints the frame.
-              src={`${masterUrl}#t=${Math.max(0, Math.floor(clip.startSeconds))}`}
+              src={`${timelineUrl}#t=${Math.max(0, Math.floor(clip.startSeconds))}`}
               preload="metadata"
               muted
               playsInline
@@ -403,7 +407,7 @@ function ClipCard({
 function ClipDetail({
   clip,
   projectId,
-  masterAssetId,
+  timelineAssetId,
   hasReel,
   reelAssetId,
   reel,
@@ -412,7 +416,7 @@ function ClipDetail({
 }: {
   clip: Clip;
   projectId: Id<"amplifyProjects">;
-  masterAssetId: Id<"amplifyAssets"> | null;
+  timelineAssetId: Id<"amplifyAssets"> | null;
   hasReel: boolean;
   /** The editor's finished video, once one has been handed back. */
   reelAssetId: Id<"amplifyAssets"> | null;
@@ -465,15 +469,15 @@ function ClipDetail({
   };
 
   useEffect(() => {
-    if (!masterAssetId) return;
+    if (!timelineAssetId) return;
     let cancelled = false;
-    void playbackUrl({ assetId: masterAssetId }).then((u) => {
+    void playbackUrl({ assetId: timelineAssetId }).then((u) => {
       if (!cancelled) setUrl(u);
     });
     return () => {
       cancelled = true;
     };
-  }, [playbackUrl, masterAssetId]);
+  }, [playbackUrl, timelineAssetId]);
 
 
   // Escape closes it, the way every other dialog on the machine does.
@@ -579,10 +583,10 @@ function ClipDetail({
               needs to be watched while it is done, so it sits with the
               player rather than in a panel that covers it. */}
           <div className="grid content-start gap-2.5">
-            {!masterAssetId ? (
+            {!timelineAssetId ? (
               <p className="rounded-xl bg-surface-strong p-3 text-[0.8125rem] text-muted">
-                Trim the sermon first — clips are cut from the sermon, not the
-                whole service.
+                The recording this moment was read from isn&rsquo;t here any
+                more, so there is nothing to play or cut.
               </p>
             ) : url ? (
               <video
@@ -601,7 +605,7 @@ function ClipDetail({
               </div>
             )}
 
-            {masterAssetId && (
+            {timelineAssetId && (
               <>
                 <TimeMark
                   label="Clip starts"
@@ -852,9 +856,9 @@ function ClipDetail({
 
           <div className="ml-auto flex flex-wrap items-center gap-2.5">
             <button
-              disabled={cutting || !masterAssetId}
+              disabled={cutting || !timelineAssetId}
               onClick={async () => {
-                if (!masterAssetId) return;
+                if (!timelineAssetId) return;
                 setCutting(true);
                 try {
                   await enqueue({
@@ -862,7 +866,7 @@ function ClipDetail({
                     jobType: "clip_export",
                     payloadJson: JSON.stringify({
                       clipId: clip._id,
-                      assetId: masterAssetId,
+                      assetId: timelineAssetId,
                       startSeconds: clip.startSeconds,
                       endSeconds: clip.endSeconds,
                     }),
@@ -892,34 +896,34 @@ function ClipDetail({
 
 export function Clips({
   projectId,
-  masterAssetId,
+  timelineAssetId,
   hasTranscript,
 }: {
   projectId: Id<"amplifyProjects">;
-  masterAssetId: Id<"amplifyAssets"> | null;
+  timelineAssetId: Id<"amplifyAssets"> | null;
   hasTranscript: boolean;
 }) {
   const clips = useQuery(api.amplifyClips.list, { projectId });
   const assets = useQuery(api.amplifyMedia.listAssets, { projectId });
   const drafts = useQuery(api.amplifyDrafts.list, { projectId });
   const findClips = useAction(api.amplifyClipFinder.findClips);
-  const signMaster = useAction(api.amplifyMedia.playbackUrl);
+  const signTimeline = useAction(api.amplifyMedia.playbackUrl);
   const signCovers = useAction(api.amplifyMedia.reelCovers);
 
   // One signed URL for the whole gallery. Every tile shows the frame at its
   // own start time by seeking into the same file, so ten clips cost one
   // signature and one file rather than ten of each.
-  const [masterUrl, setMasterUrl] = useState<string | null>(null);
+  const [timelineUrl, setTimelineUrl] = useState<string | null>(null);
   useEffect(() => {
-    if (!masterAssetId) return;
+    if (!timelineAssetId) return;
     let alive = true;
-    void signMaster({ assetId: masterAssetId }).then((u) => {
-      if (alive) setMasterUrl(u);
+    void signTimeline({ assetId: timelineAssetId }).then((u) => {
+      if (alive) setTimelineUrl(u);
     });
     return () => {
       alive = false;
     };
-  }, [signMaster, masterAssetId]);
+  }, [signTimeline, timelineAssetId]);
 
   // The covers people have attached, signed in one go. Re-run when the
   // asset list changes, so attaching a cover shows up on its tile without
@@ -1027,10 +1031,14 @@ export function Clips({
         </p>
       ) : (
         <>
-          {!masterAssetId && (
+          {/* Only when the video itself has gone. This used to read "trim
+              the sermon first" and showed on any sermon without a trimmed
+              master — including one imported already cut, where there was
+              nothing to trim and the recording was the sermon. */}
+          {!timelineAssetId && (
             <p className="text-[0.8125rem] text-muted">
-              Trim the sermon before cutting clips — clips are cut from the
-              sermon, not the whole service.
+              The recording these moments were read from isn&rsquo;t here any
+              more, so there is nothing to play or cut.
             </p>
           )}
           {/* The moments, not a description of them. Ordered best-first,
@@ -1044,7 +1052,7 @@ export function Clips({
                 hasReel={reeled.has(clip._id)}
                 written={reelFor.has(clip._id)}
                 coverUrl={covers.get(clip._id) ?? null}
-                masterUrl={masterUrl}
+                timelineUrl={timelineUrl}
                 onOpen={() => setOpenId(clip._id)}
               />
             ))}
@@ -1059,7 +1067,7 @@ export function Clips({
           key={open._id}
           clip={open}
           projectId={projectId}
-          masterAssetId={masterAssetId}
+          timelineAssetId={timelineAssetId}
           hasReel={reeled.has(open._id)}
           reelAssetId={reelAssetFor.get(open._id) ?? null}
           reel={reelFor.get(open._id)}

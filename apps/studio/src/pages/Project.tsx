@@ -235,7 +235,7 @@ export function ProjectPage() {
     return <Navigate to={firstStageNeeding(sermon.readings)} replace />;
   }
 
-  const { source, master } = sermon;
+  const { source, master, timeline } = sermon;
 
   const sourceRoom = (
     <>
@@ -313,7 +313,7 @@ export function ProjectPage() {
   const context: RoomContext = {
     projectId,
     title: project.title,
-    masterAssetId: master?._id ?? null,
+    timelineAssetId: timeline?._id ?? null,
     hasTranscript: sermon.hasTranscript,
     source: sourceRoom,
   };
