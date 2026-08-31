@@ -32,11 +32,18 @@ export function WritingList({
   projectId: Id<"amplifyProjects">;
 }) {
   const transcript = useQuery(api.amplifyTranscripts.summary, { projectId });
+  const notes = useQuery(api.amplifyNotes.summary, { projectId });
   const drafts = useQuery(api.amplifyDrafts.list, { projectId });
+
+  // Notes are a source, but only for one piece. Everything else here needs
+  // the recording — there is no video to package and no audio to clip.
+  const onNotesAlone = transcript === null && Boolean(notes);
+  const needsRecording = (kind: string) =>
+    onNotesAlone && kind !== "study_guide";
 
   const byKind = new Map((drafts ?? []).map((d) => [d.kind, d]));
 
-  if (transcript === null) {
+  if (transcript === null && notes === null) {
     // Says what is missing rather than listing five things that would each
     // fail the same way.
     return (
@@ -48,8 +55,10 @@ export function WritingList({
             to={`/projects/${projectId}/transcript`}
             className="underline hover:text-ink"
           >
-            Transcribe the sermon first.
+            Transcribe the sermon first
           </Link>
+          {" — "}or, if it has not been preached yet, open the study guide and
+          give it his notes.
         </p>
       </div>
     );
@@ -57,13 +66,18 @@ export function WritingList({
 
   return (
     <div className="card overflow-hidden">
-      {transcript && (
-        <p className="border-b border-border px-5 py-3">
-          <span className="data">
-            {transcript.wordCount.toLocaleString()} words of transcript
+      <p className="border-b border-border px-5 py-3">
+        <span className="data">
+          {transcript
+            ? `${transcript.wordCount.toLocaleString()} words of transcript`
+            : `${(notes?.wordCount ?? 0).toLocaleString()} words of his notes`}
+        </span>
+        {onNotesAlone && (
+          <span className="ml-2 text-2xs text-muted">
+            The rest is written once the sermon is recorded.
           </span>
-        </p>
-      )}
+        )}
+      </p>
 
       <ul>
         {PIECES.map((piece) => {
@@ -98,7 +112,9 @@ export function WritingList({
                       ? draft?.editedByHuman
                         ? "written, edited"
                         : "written"
-                      : "not written"}
+                      : needsRecording(piece.kind)
+                        ? "needs the recording"
+                        : "not written"}
                 </span>
                 {/* A chevron rather than the word "Read": the row is the
                     link, and labelling it twice is what made the old one a

@@ -265,6 +265,595 @@
   }
 }
 
+/* THE STUDY SHEET
+   ---------------------------------------------------------------------------
+   The one thing this product makes that ends up on paper, in a hand, with a
+   pen mark on it. It is set here rather than in Tailwind utilities because
+   it is a document design — two dozen decisions that only make sense
+   together — and scattering it through JSX would mean nobody could see the
+   design in one place to judge it.
+
+   The first version of this sheet was styled with the app's own tokens, and
+   it came out looking like a dashboard panel that happened to contain
+   scripture: body copy in --color-muted, section labels smaller than
+   everything they labelled, and tables set as data grids. Grey is how a
+   screen says "secondary". On paper it is just faint, and it was carrying
+   most of the actual content.
+
+   So the rules here are: ink is ink, hierarchy comes from size and weight
+   rather than colour, and nothing that is content is ever grey. Two columns,
+   because 950 words in one narrow measure ran to three pages and left the
+   right half of every one of them empty.
+
+   Note what is NOT here: background fills. Browsers drop them when printing
+   unless asked twice, so the sheet is built from rules and type only, and
+   the paper matches the screen instead of quietly losing its structure. */
+@layer components {
+  /* The handout's own palette, on both layouts that use it.
+     Defined once for the pair rather than on .study-sheet alone: when it
+     was only on the sheet, every var() inside the booklet resolved to
+     nothing, and an invalid var() in a shorthand drops the whole
+     declaration — so the booklet printed with no heading rules, no
+     dividers and no fold line, and nothing anywhere said why. */
+  .study-sheet,
+  .fold-book {
+    --sheet-ink: hsl(250 24% 11%);
+    --sheet-quiet: hsl(248 12% 38%);
+    --sheet-rule: hsl(248 12% 76%);
+  }
+
+  .study-sheet {
+    /* A letter page on screen, so what you are looking at is what comes out
+       of the printer. Judging a handout from a fluid column that is nothing
+       like the paper is how the first one shipped looking wrong. */
+    width: 8.5in;
+    max-width: 100%;
+    margin-inline: auto;
+    padding: 0.5in;
+    background: #fff;
+    border: 1px solid var(--color-border);
+    color: var(--sheet-ink);
+    font-family: var(--font-body);
+    font-size: 13.5px;
+    line-height: 1.5;
+  }
+
+  .sheet-masthead {
+    border-bottom: 3px solid var(--sheet-ink);
+    padding-bottom: 0.4rem;
+    margin-bottom: 0.8rem;
+  }
+
+  .sheet-title {
+    font-family: var(--font-display);
+    font-size: 1.6rem;
+    font-weight: 800;
+    line-height: 1.04;
+    letter-spacing: -0.015em;
+    text-transform: uppercase;
+  }
+
+  .sheet-byline {
+    margin-top: 0.3rem;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--sheet-quiet);
+  }
+
+  /* Logo, title, QR — across the top of the sheet.
+     ------------------------------------------------------------------------
+     The title takes the middle and the two marks flank it, both fixed in
+     inches while the title flexes. That order is not arbitrary: the church's
+     logo is what somebody recognises from across a room, and the QR is what
+     they reach for last, so it sits where a thumb already is on a sheet held
+     in one hand.
+
+     Both sides collapse to nothing when unset, and the row falls back to
+     exactly the old masthead — which is what the shared read-only view and
+     every guide printed before any of this existed still get. */
+  .sheet-masthead-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.28in;
+  }
+
+  .sheet-masthead-title {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* Contained, never cropped: most church logos are a transparent wordmark,
+     and filling a box with one cuts its ends off. Height-led because that is
+     what keeps a tall mark and a wide one looking like the same weight of
+     thing beside 21pt type. */
+  .sheet-logo {
+    flex: none;
+    height: 0.62in;
+    width: auto;
+    max-width: 1.9in;
+    object-fit: contain;
+    object-position: left top;
+  }
+
+  /* The QR block. Sized from what actually scans off a photocopy held at
+     arm's length rather than from what looks tidy on screen — under about
+     0.75in the modules start to fill in on a second-generation copy, and a
+     code nobody can scan is worse than the space it took. */
+  .sheet-qr {
+    flex: none;
+    width: 0.85in;
+    text-align: center;
+  }
+
+  .sheet-qr img {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  .sheet-qr-caption {
+    margin-top: 0.12rem;
+    font-size: 6.5px;
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--sheet-quiet);
+  }
+
+  /* The way into the sheet. Set a touch larger than the body and with no
+     heading over it, because it is the paragraph somebody reads before
+     deciding whether to read the rest — a section head above it would make
+     it the first of twelve equal things instead of the top of the page. */
+  .sheet-overview {
+    margin-bottom: 0.8rem;
+    font-size: 1.04em;
+    line-height: 1.5;
+  }
+
+  /* The worksheet's two columns. The rule between them is the one piece of
+     decoration on the sheet, and it earns its place: it is what stops two
+     columns of similar-looking text reading as one wrapped paragraph. */
+  .sheet-columns {
+    column-count: 2;
+    column-gap: 0.46in;
+    column-rule: 1px solid var(--sheet-rule);
+  }
+
+  .sheet-section {
+    margin-bottom: 0.75rem;
+  }
+
+  /* A divider between sections, not above the first one — a rule under the
+     masthead's own rule would read as a mistake. Set in the light rule
+     rather than the ink, because the heavy line under each heading is
+     already doing the loud half of this job; two black rules a centimetre
+     apart would fight.
+
+     The padding matches the margin above it so the divider sits midway
+     between two sections rather than crowding the heading below it. */
+  .sheet-section + .sheet-section,
+  .sheet-span {
+    border-top: 1px solid var(--sheet-rule);
+    padding-top: 0.75rem;
+  }
+
+  /* Only the short ones. Telling a ten-item list not to break just moves the
+     whole block to the next column and leaves half of this one empty. */
+  .sheet-section--whole {
+    break-inside: avoid;
+  }
+
+  /* Never last thing on a page: a heading whose section starts overleaf is
+     a heading for nothing. */
+  .sheet-h {
+    break-after: avoid;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    border-bottom: 1.5px solid var(--sheet-ink);
+    padding-bottom: 2px;
+    margin-bottom: 0.35rem;
+  }
+
+  /* Full width. The tables sit between the column blocks rather than inside
+     one, so this needs no `column-span` — see the note in StudyGuide.tsx
+     for why that matters on paper.
+
+     Deliberately allowed to break across a page. Holding a table together
+     was the instinct, and it cost a whole sheet of paper: a 130pt table
+     that will not split cannot use the 126pt left at the foot of page one,
+     so the page ends early AND the table starts page two. Rows stay whole
+     and the header repeats itself on the next page, which is what makes a
+     split table perfectly readable and an early-ending page merely
+     wasteful. */
+  .sheet-span {
+    margin: 0.75rem 0 0.95rem;
+  }
+
+  .sheet-item {
+    break-inside: avoid;
+    margin-bottom: 0.55rem;
+  }
+
+  /* A number in the margin rather than inline, so the eye can run down the
+     numbers and the text keeps one left edge. */
+  .sheet-numbered {
+    display: grid;
+    grid-template-columns: 1.05rem 1fr;
+    gap: 0.3rem;
+  }
+
+  .sheet-n {
+    font-size: 11px;
+    font-weight: 700;
+    padding-top: 1px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .sheet-lead {
+    font-weight: 700;
+  }
+
+  /* Deliberately near-black, not the app's muted grey. This is the teaching,
+     not a caption. */
+  .sheet-body {
+    color: var(--sheet-ink);
+  }
+
+  .sheet-pull {
+    font-weight: 700;
+    border-left: 3px solid var(--sheet-ink);
+    padding-left: 0.5rem;
+    margin-top: 0.4rem;
+  }
+
+  /* THE BI-FOLD BOOKLET
+     -------------------------------------------------------------------------
+     One landscape sheet, printed both sides, folded once into four
+     5.5 × 8.5in panels. The panel order is the imposition — see the note in
+     StudyGuideFold.tsx for why side one reads back-cover-then-front.
+
+     Everything inherits .study-sheet's type; only the geometry changes. A
+     panel is a hand's width, so the measure is narrower and the type sits a
+     half point smaller, but a booklet set in a different voice from the
+     sheet would be a second design to maintain. */
+  .fold-book {
+    --panel-w: 5.5in;
+    --panel-h: 8.5in;
+    margin-inline: auto;
+    max-width: 100%;
+    color: var(--sheet-ink);
+    font-family: var(--font-body);
+    font-size: 12.5px;
+    line-height: 1.45;
+  }
+
+  .fold-side {
+    display: flex;
+    width: calc(var(--panel-w) * 2);
+    max-width: 100%;
+    height: var(--panel-h);
+    margin-inline: auto;
+    background: #fff;
+    border: 1px solid var(--color-border);
+  }
+
+  /* On screen the two sides stack with a gap, so both are legible at once.
+     In print they are two sides of one sheet and the gap goes away. */
+  .fold-side--two {
+    margin-top: 1.25rem;
+  }
+
+  .fold-panel {
+    width: var(--panel-w);
+    height: var(--panel-h);
+    padding: 0.42in;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* The fold line. Dashed on screen so it reads as an instruction rather
+     than a rule of the design; gone on paper, where the crease is real. */
+  .fold-panel + .fold-panel {
+    border-left: 1px dashed var(--sheet-rule);
+  }
+
+  .fold-panel--cover {
+    justify-content: flex-start;
+  }
+
+  .fold-cover-top {
+    border-bottom: 3px solid var(--sheet-ink);
+    padding-bottom: 0.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .fold-title {
+    font-family: var(--font-display);
+    font-size: 1.75rem;
+    font-weight: 800;
+    line-height: 1.02;
+    letter-spacing: -0.02em;
+    text-transform: uppercase;
+    margin-top: 0.5rem;
+  }
+
+  .fold-stamp {
+    margin-top: 0.55rem;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--sheet-quiet);
+  }
+
+  /* The cover carries the overview and the purpose — the central truth
+     moved to the first inside page when the logo and the QR arrived. Still
+     centred in what is left rather than crowding the title. */
+  .fold-cover-body {
+    margin-top: auto;
+    margin-bottom: auto;
+  }
+
+  /* The QR sits at the foot of the cover, pushed there rather than placed:
+     the cover body centres itself in whatever room is left above it. */
+  .fold-cover-foot {
+    margin-top: auto;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--sheet-rule);
+  }
+
+  .fold-cover-foot .sheet-qr {
+    width: 1in;
+    margin-inline: auto;
+  }
+
+  /* Above the title on the cover, where a bulletin puts it. Larger than the
+     sheet's, because a cover is a cover. */
+  .fold-logo {
+    height: 0.78in;
+    max-width: 2.6in;
+    margin-bottom: 0.55rem;
+    object-position: center;
+  }
+
+  /* The reading sits with its day but is not the day, so it steps back a
+     weight rather than taking a column of its own. */
+  .sheet-day-read {
+    font-weight: 400;
+    color: var(--sheet-quiet);
+  }
+
+  .sheet-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .sheet-table thead {
+    break-inside: avoid;
+    break-after: avoid;
+  }
+
+  .sheet-table tr {
+    break-inside: avoid;
+  }
+
+  .sheet-table th {
+    text-align: left;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    border-bottom: 1.5px solid var(--sheet-ink);
+    padding: 0 0.6rem 0.2rem 0;
+  }
+
+  .sheet-table td {
+    vertical-align: top;
+    padding: 0.36rem 0.6rem 0.36rem 0;
+    border-bottom: 1px solid var(--sheet-rule);
+  }
+
+  .sheet-table td:last-child,
+  .sheet-table th:last-child {
+    padding-right: 0;
+  }
+
+  /* Blank ruled lines, for the person who brought a pen. Tall enough to
+     write on in biro — the screen version was set at list spacing, which is
+     about half what a hand needs. */
+  .sheet-write {
+    border-bottom: 1px solid var(--sheet-rule);
+    height: 1.3rem;
+  }
+
+  .sheet-verse {
+    border-left: 3px solid var(--sheet-ink);
+    padding-left: 0.5rem;
+    font-weight: 600;
+  }
+
+  .sheet-closing {
+    break-inside: avoid;
+    margin-top: 0.4rem;
+    padding-top: 0.5rem;
+    border-top: 3px solid var(--sheet-ink);
+    font-weight: 700;
+  }
+}
+
+/* PUTTING IT ON PAPER
+   ---------------------------------------------------------------------------
+   Printing the page the sheet sits on would take the chrome with it — the
+   nav bar, the stage rail, a "Write it again" button that means nothing on
+   a sheet of paper.
+
+   Two mechanisms, on purpose. `visibility: hidden` on everything is the
+   safety net: anything added to this app later is off the paper by default,
+   without anyone remembering this rule exists. `.print-hide` then collapses
+   the chrome we actually know about, because hidden-but-present elements
+   still occupy their space and would otherwise push the sheet down page one.
+
+   The sheet itself stays in normal flow. An earlier version lifted it out
+   with `position: absolute`, which fixed the same gap and risked something
+   far worse: out-of-flow content can be clipped to the first page, and a
+   handout that silently loses page two is worse than one with a gap at the
+   top. */
+@media print {
+  @page {
+    margin: 14mm 13mm;
+  }
+
+  html,
+  body {
+    background: #fff;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .print-hide {
+    display: none !important;
+  }
+
+  .print-sheet,
+  .print-sheet * {
+    visibility: visible;
+  }
+
+  .study-sheet {
+    width: auto;
+    max-width: none;
+    padding: 0;
+    border: 0;
+    font-size: 10pt;
+  }
+
+  .sheet-title {
+    font-size: 21pt;
+  }
+
+  /* The booklet sets its own paper via an inline @page (landscape, no
+     margin) because the panels carry their own. Each side is exactly one
+     sheet face, so each gets a page of its own. */
+  .fold-side {
+    border: 0;
+    margin: 0;
+    break-after: page;
+    width: 11in;
+    height: 8.5in;
+    position: relative;
+    /* The screen rule caps this at the width of whatever contains it, which
+       is right on a laptop and catastrophic on paper: the sheet is measured
+       in inches to match the sheet it prints on, and anything that narrows
+       it moves the fold off the crease. */
+    max-width: none;
+  }
+
+  .fold-book {
+    max-width: none;
+    margin-inline: 0;
+  }
+
+  /* Fold marks, and they are not decoration.
+     -------------------------------------------------------------------------
+     The design's fold is the middle of an 11in sheet, and the obvious way to
+     fold one is to bring the paper's edges together. Those are only the same
+     line if the printer laid the page down at exactly 100% in exactly the
+     right place — and it usually does not. A print dialog left on default
+     margins scales the page down a few percent and nudges it sideways, so
+     the panels end up sitting a quarter-inch off the crease and the booklet
+     never quite squares up.
+
+     A printed tick at the top and bottom of the fold moves with the artwork,
+     whatever the printer does to it. Fold to the marks and the panels line
+     up even on a page that was scaled. */
+  .fold-side::before,
+  .fold-side::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    height: 0.2in;
+    border-left: 0.5pt solid var(--sheet-rule);
+  }
+
+  .fold-side::before {
+    top: 0;
+  }
+
+  .fold-side::after {
+    bottom: 0;
+  }
+
+  .fold-side:last-child {
+    break-after: auto;
+  }
+
+  .fold-panel {
+    /* Exactly half the sheet. Flex would otherwise shrink both panels to
+       fit a container narrower than the paper, which is the same bug from
+       the other end. */
+    flex: none;
+    font-size: 9.5pt;
+    /* Clipped, deliberately. A panel that overflows onto a fifth page turns
+       a folded booklet into loose paper, and the fifth page of a folded
+       sheet does not exist. A clipped line is visible, recoverable and
+       obviously wrong; a broken imposition is none of those. On screen the
+       same content is allowed to overflow so it can be seen before it is
+       printed. */
+    overflow: hidden;
+  }
+
+  /* The crease is real once it is folded; the guide line is only for the
+     screen. */
+  .fold-panel + .fold-panel {
+    border-left: 0;
+  }
+
+  .fold-title {
+    font-size: 19pt;
+  }
+
+  /* Both marks are <img> rather than background fills, so they print without
+     being asked twice — which is the same reason the rest of the sheet is
+     built from rules and type. The sizes are restated in points so they do
+     not inherit the screen's pixel geometry through a scaled print. */
+  .sheet-logo {
+    height: 45pt;
+    max-width: 137pt;
+  }
+
+  .fold-logo {
+    height: 56pt;
+    max-width: 187pt;
+  }
+
+  .sheet-qr {
+    width: 61pt;
+  }
+
+  .fold-cover-foot .sheet-qr {
+    width: 72pt;
+  }
+
+  .sheet-qr-caption {
+    font-size: 5pt;
+  }
+
+  /* A QR split across a page break is a QR nobody can scan. */
+  .sheet-qr,
+  .sheet-masthead {
+    break-inside: avoid;
+  }
+}
+
 /* Keyboard users get to see where they are. The ring is ink rather than the
    signal colour, because focus is not "something is happening". */
 @layer base {

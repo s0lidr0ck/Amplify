@@ -37,6 +37,7 @@ const KIND_LABELS: Record<string, string> = {
 const LABELS: Record<string, string> = {
   metadata: "details",
   blog_post: "blog post",
+  study_guide: "study guide",
   youtube_packaging: "title & description",
   facebook_post: "text post",
   reel: "reel",

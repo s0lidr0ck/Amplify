@@ -322,7 +322,10 @@ export function ProjectPage() {
     // The wash covers the whole page below the header, so moving between
     // rooms is a change of ground rather than a change of card.
     <div className={`min-h-screen transition-colors ${TINT[slug]}`}>
-      <div className="mx-auto max-w-5xl px-5 pb-4 pt-7">
+      {/* print-hide on both the sermon's title block and the rail below it:
+          the study guide prints from inside this layout, and the sheet has
+          its own masthead. */}
+      <div className="mx-auto max-w-5xl px-5 pb-4 pt-7 print-hide">
         <Link
           to="/projects"
           className="text-xs text-muted transition-colors hover:text-ink"
@@ -348,9 +351,17 @@ export function ProjectPage() {
         </p>
       </div>
 
-      <StageRail readings={sermon.readings} />
+      <div className="print-hide">
+        <StageRail readings={sermon.readings} />
+      </div>
 
-      <div className="mx-auto max-w-5xl px-5 py-7">
+      {/* On paper this wrapper must stop existing. Its padding put the study
+          sheet a quarter inch low, and its max-width was worse: the bi-fold
+          booklet is sized in inches to match the paper, and a 64rem cap
+          squeezed an 11in sheet into 10.5in and shunted it half an inch off
+          the left edge. Everything still printed, so nothing looked broken —
+          the panels just stopped meeting the crease when you folded it. */}
+      <div className="mx-auto max-w-5xl px-5 py-7 print:max-w-none print:p-0">
         <Outlet context={context} />
       </div>
     </div>

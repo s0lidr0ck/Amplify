@@ -105,6 +105,9 @@ export type SermonFacts = {
   hasMaster: boolean;
   transcriptWords: number | null;
   transcriptApproved: boolean;
+  /** The preacher's manuscript, when a guide is being written before the
+   *  sermon. It unlocks the study guide and nothing else. */
+  hasNotes: boolean;
   writingReady: number;
   writingTotal: number;
   writingFailed: boolean;
@@ -155,23 +158,35 @@ export function readStages(f: SermonFacts): Record<StageSlug, StageReading> {
             reason: "Everything else gets written from this.",
           };
 
-  const writingBlocked = f.transcriptWords === null;
+  // Notes unlock exactly one piece, so the room is not blocked — but it is
+  // not fully open either, and the caption has to be honest about which.
+  const writingBlocked = f.transcriptWords === null && !f.hasNotes;
+  const onNotesAlone = f.transcriptWords === null && f.hasNotes;
   const writing: StageReading = f.writingFailed
     ? { state: "failed", caption: "one of them failed" }
     : writingBlocked
       ? {
           state: "waiting",
           caption: `0 of ${f.writingTotal}`,
-          reason: "Transcribe the sermon first.",
+          reason: "Transcribe the sermon, or upload his notes.",
         }
-      : f.writingReady === 0
-        ? { state: "attention", caption: `0 of ${f.writingTotal}` }
-        : f.writingReady >= f.writingTotal
-          ? { state: "done", caption: `all ${f.writingTotal} written` }
-          : {
-              state: "attention",
-              caption: `${f.writingReady} of ${f.writingTotal}`,
-            };
+      : onNotesAlone
+        ? {
+            // Never "done" on notes alone: the other four need the recording,
+            // and a room reporting all-written before the sermon has been
+            // preached would be lying about the four it cannot do yet.
+            state: "attention",
+            caption: `${f.writingReady} of ${f.writingTotal}, from his notes`,
+            reason: "The rest needs the recording.",
+          }
+        : f.writingReady === 0
+          ? { state: "attention", caption: `0 of ${f.writingTotal}` }
+          : f.writingReady >= f.writingTotal
+            ? { state: "done", caption: `all ${f.writingTotal} written` }
+            : {
+                state: "attention",
+                caption: `${f.writingReady} of ${f.writingTotal}`,
+              };
 
   const clips: StageReading = f.running.has("clip_export")
     ? { state: "running", caption: "cutting a clip" }

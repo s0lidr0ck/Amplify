@@ -23,6 +23,7 @@ const LABELS: Record<string, string> = {
   transcript: "the transcript",
   metadata: "the sermon details",
   blog_post: "the blog post",
+  study_guide: "the study guide",
   youtube_packaging: "the title and description",
   facebook_post: "the text post",
   thumbnail_concepts: "the thumbnail concepts",
@@ -40,6 +41,7 @@ const LABELS: Record<string, string> = {
 const ORDER = [
   "metadata",
   "blog_post",
+  "study_guide",
   "youtube_packaging",
   "facebook_post",
   "thumbnail_concepts",

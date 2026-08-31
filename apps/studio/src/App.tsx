@@ -6,6 +6,7 @@ import { HubGate } from "./auth/hubAuth";
 import { useChurch } from "./auth/useChurch";
 import { Mark } from "./brand/Mark";
 import { Shell } from "./components/Shell";
+import { FromNotesPage } from "./pages/FromNotes";
 import { HelpPage } from "./pages/Help";
 import { LibraryPage } from "./pages/Library";
 import { ProjectPage } from "./pages/Project";
@@ -128,6 +129,12 @@ function Inside() {
           <Route path="clips" element={<ClipsRoom />} />
           <Route path="publish" element={<PublishRoom />} />
         </Route>
+        {/* Its own route rather than a step inside a sermon: it is the one
+            way into Amplify that starts before there is a recording. */}
+        <Route
+          path="/from-notes"
+          element={<FromNotesPage churchId={churchId} />}
+        />
         <Route path="/library" element={<LibraryPage churchId={churchId} />} />
         {/* The manual, a chapter per URL — so pointing somebody at the
             answer is a link to the answer rather than to the manual. */}

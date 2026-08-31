@@ -13,8 +13,9 @@ const EMPTY: SermonFacts = {
   hasMaster: false,
   transcriptWords: null,
   transcriptApproved: false,
+  hasNotes: false,
   writingReady: 0,
-  writingTotal: 4,
+  writingTotal: 5,
   writingFailed: false,
   visualsReady: false,
   hasCover: false,
@@ -84,7 +85,7 @@ describe("reading the rooms", () => {
         writingReady: 3,
       }),
     );
-    expect(r.writing.caption).toBe("3 of 4");
+    expect(r.writing.caption).toBe("3 of 5");
     expect(r.writing.state).toBe("attention");
   });
 
@@ -109,7 +110,7 @@ describe("reading the rooms", () => {
       facts({
         hasSource: true,
         transcriptWords: 100,
-        writingReady: 4,
+        writingReady: 5,
         writingFailed: true,
       }),
     );
@@ -146,7 +147,7 @@ describe("where to land", () => {
         hasMaster: true,
         transcriptWords: 7068,
         transcriptApproved: true,
-        writingReady: 4,
+        writingReady: 5,
         visualsReady: true,
         hasCover: false,
       }),
@@ -161,7 +162,7 @@ describe("where to land", () => {
       hasMaster: true,
       transcriptWords: 7068,
       transcriptApproved: true,
-      writingReady: 4,
+      writingReady: 5,
       visualsReady: true,
       hasCover: true,
       clipsFound: 9,
@@ -171,5 +172,44 @@ describe("where to land", () => {
     // Clips never report done, so it is the one asking — which is right:
     // there is always another moment worth cutting.
     expect(firstStageNeeding(readStages(done))).toBe("clips");
+  });
+});
+
+describe("a study guide written before the sermon", () => {
+  it("does not call Writing blocked when there are notes", () => {
+    // The manuscript is a source. Saying "transcribe the sermon first" to
+    // somebody who has already handed over the sermon he is about to preach
+    // is the room refusing work it can do.
+    const r = readStages(facts({ hasNotes: true, writingReady: 1 }));
+    expect(r.writing.state).toBe("attention");
+    expect(r.writing.caption).toBe("1 of 5, from his notes");
+    expect(r.writing.reason).toBe("The rest needs the recording.");
+  });
+
+  it("says what is missing when there is neither", () => {
+    expect(readStages(facts()).writing.reason).toBe(
+      "Transcribe the sermon, or upload his notes.",
+    );
+  });
+
+  it("never calls Writing done on notes alone", () => {
+    // Four of the five need the recording. A room claiming all-written
+    // before the sermon has been preached would be lying about them.
+    const r = readStages(facts({ hasNotes: true, writingReady: 5 }));
+    expect(r.writing.state).not.toBe("done");
+  });
+
+  it("goes back to counting normally once the transcript lands", () => {
+    const r = readStages(
+      facts({ hasNotes: true, transcriptWords: 4530, writingReady: 5 }),
+    );
+    expect(r.writing.state).toBe("done");
+    expect(r.writing.caption).toBe("all 5 written");
+  });
+
+  it("still will not pretend clips can be found from notes", () => {
+    // Clips need audio with timestamps on it. Notes have neither.
+    const r = readStages(facts({ hasNotes: true }));
+    expect(r.clips.state).toBe("attention");
   });
 });

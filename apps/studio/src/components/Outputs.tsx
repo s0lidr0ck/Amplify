@@ -5,6 +5,9 @@ import { useState } from "react";
 
 import { AttachImage } from "./AttachImage";
 import { SermonDetails } from "./SermonDetails";
+import { StudyGuide } from "./StudyGuide";
+import { StudyGuideFold } from "./StudyGuideFold";
+import type { HandoutBrand } from "../lib/useHandoutBrand";
 import { Variants } from "./Variants";
 
 /**
@@ -27,6 +30,7 @@ type Piece = {
     | null
     | "metadata"
     | "blogPost"
+    | "studyGuide"
     | "youtubePackaging"
     | "facebookPost"
     | "thumbnailConcepts"
@@ -46,6 +50,12 @@ export const PIECES: Piece[] = [
     label: "Blog post",
     blurb: "The long-form write-up.",
     run: "blogPost",
+  },
+  {
+    kind: "study_guide",
+    label: "Study guide",
+    blurb: "The printable handout, for the congregation.",
+    run: "studyGuide",
   },
   {
     kind: "youtube_packaging",
@@ -184,7 +194,32 @@ ${(current.tags ?? []).join(" ")}`,
 }
 
 /** Renders a draft's payload without pretending to know every shape. */
-export function Preview({ payloadJson }: { payloadJson: string }) {
+export function Preview({
+  payloadJson,
+  /**
+   * Who preached it and when, for the one piece that leaves the screen.
+   *
+   * Passed in rather than read from the payload because it is not the
+   * draft's — it belongs to the sermon, and a handout that gets filed in a
+   * drawer wants it on the page. The shared read-only view leaves it unset,
+   * and the header closes up without it.
+   */
+  byline,
+  /** Set the handout as the landscape bi-fold booklet instead of the sheet. */
+  fold,
+  /**
+   * The church's logo and QR code, for the one piece that gets printed.
+   *
+   * Same posture as the byline: it belongs to the church rather than to the
+   * draft, so it is handed in rather than read out of the payload.
+   */
+  brand,
+}: {
+  payloadJson: string;
+  byline?: string;
+  fold?: boolean;
+  brand?: HandoutBrand | null;
+}) {
   let parsed: unknown;
   try {
     parsed = JSON.parse(payloadJson);
@@ -205,6 +240,17 @@ export function Preview({ payloadJson }: { payloadJson: string }) {
 
   if (Array.isArray(obj.variants)) {
     return <Variants variants={obj.variants as Record<string, string>[]} />;
+  }
+
+  // The handout. Checked on two of its fields rather than one, because
+  // `mainTruths` alone is close enough to the sermon details below to be
+  // worth ruling out properly.
+  if (Array.isArray(obj.mainTruths) && Array.isArray(obj.weekPlan)) {
+    return fold ? (
+      <StudyGuideFold payload={obj} byline={byline} brand={brand} />
+    ) : (
+      <StudyGuide payload={obj} byline={byline} brand={brand} />
+    );
   }
 
   // The sermon details carry nine fields of four different shapes. The

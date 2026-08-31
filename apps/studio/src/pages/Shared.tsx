@@ -3,6 +3,7 @@ import { api } from "@convex/api";
 import { useParams } from "react-router-dom";
 
 import { Mark } from "../brand/Mark";
+import { StudyGuide } from "../components/StudyGuide";
 import { formatSermonDate } from "../lib/dates";
 
 /**
@@ -22,6 +23,7 @@ const ORDER = [
   ["metadata", "Sermon details"],
   ["youtube_packaging", "Title & description"],
   ["blog_post", "Blog post"],
+  ["study_guide", "Study guide"],
   ["facebook_post", "Text post"],
   ["reel", "Reel"],
 ] as const;
@@ -41,6 +43,13 @@ function Body({ payloadJson }: { payloadJson: string }) {
         {prose}
       </p>
     );
+  }
+
+  // Before the title branch below, which the handout would otherwise fall
+  // into — it has a title and no description, so a pastor asked to approve
+  // the sheet would be shown its name and nothing else.
+  if (Array.isArray(parsed.mainTruths) && Array.isArray(parsed.weekPlan)) {
+    return <StudyGuide payload={parsed} />;
   }
 
   if (typeof parsed.title === "string") {

@@ -30,7 +30,7 @@ export function Shell({
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-background-alt">
+      <header className="border-b border-border bg-background-alt print-hide">
         <div className="mx-auto flex max-w-4xl flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3">
           <Link
             to="/projects"
@@ -71,6 +71,16 @@ export function Shell({
           )}
 
           <nav className="ml-auto flex items-center gap-4">
+            {/* The one way in that does not begin with a recording. It sits
+                in the bar rather than on the sermon list because it is a
+                different errand — somebody arrives on a Thursday with a
+                manuscript and needs paper by Sunday, not a sermon to file. */}
+            <Link
+              to="/from-notes"
+              className="text-xs text-muted transition-colors hover:text-ink"
+            >
+              From notes
+            </Link>
             <Link
               to="/library"
               className="text-xs text-muted transition-colors hover:text-ink"

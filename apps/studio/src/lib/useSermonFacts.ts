@@ -17,16 +17,17 @@ import { timelineAsset } from "./timeline";
  * dedupes identical queries, so asking here costs nothing extra.
  */
 
-/** The four written pieces, which is what "3 of 4" counts.
+/** The written pieces, which is what "3 of 5" counts.
  *
  * Thumbnail concepts left, deliberately. They are pictures, not prose, and
- * counting them here made "all 5 written" true of a sermon with no cover —
+ * counting them here made "all written" true of a sermon with no cover —
  * the one thing the website refuses to publish without. They live in
  * Visuals now and are counted there.
  */
 const WRITING_KINDS = [
   "metadata",
   "blog_post",
+  "study_guide",
   "youtube_packaging",
   "facebook_post",
 ];
@@ -34,6 +35,7 @@ const WRITING_KINDS = [
 export function useSermonFacts(projectId: Id<"amplifyProjects">) {
   const assets = useQuery(api.amplifyMedia.listAssets, { projectId });
   const transcript = useQuery(api.amplifyTranscripts.summary, { projectId });
+  const notes = useQuery(api.amplifyNotes.summary, { projectId });
   const drafts = useQuery(api.amplifyDrafts.list, { projectId });
   const publications = useQuery(api.amplifyPublish.list, { projectId });
   const readiness = useQuery(api.amplifyPublish.readiness, { projectId });
@@ -43,6 +45,7 @@ export function useSermonFacts(projectId: Id<"amplifyProjects">) {
   const loading =
     !assets ||
     transcript === undefined ||
+    notes === undefined ||
     !drafts ||
     !publications ||
     !readiness ||
@@ -68,6 +71,7 @@ export function useSermonFacts(projectId: Id<"amplifyProjects">) {
     hasMaster: Boolean(master),
     transcriptWords: transcript ? transcript.wordCount : null,
     transcriptApproved: transcript?.approved ?? false,
+    hasNotes: Boolean(notes),
     writingReady: WRITING_KINDS.filter(ready).length,
     writingTotal: WRITING_KINDS.length,
     writingFailed: (drafts ?? []).some(
@@ -100,5 +104,6 @@ export function useSermonFacts(projectId: Id<"amplifyProjects">) {
     master,
     timeline,
     hasTranscript: transcript !== null && transcript !== undefined,
+    notes: notes ?? null,
   };
 }
