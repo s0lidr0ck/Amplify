@@ -1,8 +1,11 @@
-<!-- Amplify, small cut: two humps rather than two cycles, heavier stroke.
-     At 16px the trailing half of each cycle is about a pixel tall and only
-     muddies the shape; what has to survive is one small rise then one big. -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <g stroke="#f43f5e" stroke-width="13" stroke-linecap="round" fill="none">
-    <path d="M8 58 C18 58 20 38 30 38 C40 38 42 58 52 58"/>
-    <path d="M52 58 C64 58 66 14 78 14 C90 14 92 58 94 58"/>
-  </g></svg>
+<!-- Amplify. GENERATED from Study/brand/marks.ts. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <style>
+    .m { fill: #16191f; stroke: #16191f; }
+    @media (prefers-color-scheme: dark) { .m { fill: #f7f6f3; stroke: #f7f6f3; } }
+  </style>
+  <g data-fit transform="translate(50 50) scale(0.8687) translate(-51.000 -36.000)">
+    <path d="M8 58 C18 58 20 38 30 38 C40 38 42 58 52 58" fill="none" class="m" stroke="currentColor" stroke-width="13" stroke-linecap="round"/>
+    <path d="M52 58 C64 58 66 14 78 14 C90 14 92 58 94 58" fill="none" class="m" stroke="currentColor" stroke-width="13" stroke-linecap="round"/>
+  </g>
+</svg>
