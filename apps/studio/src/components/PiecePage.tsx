@@ -8,6 +8,7 @@ import { AttachImage } from "./AttachImage";
 import { DraftEditor, isProse, PIECES, Preview, VISUAL_PIECE } from "./Outputs";
 import { NotesUpload } from "./NotesUpload";
 import { StudyGuideEditor } from "./StudyGuideEditor";
+import { PublishToStudy } from "./PublishToStudy";
 import { formatSermonDateShort } from "../lib/dates";
 import { useHandoutBrand } from "../lib/useHandoutBrand";
 import { errorText } from "../lib/errorText";
@@ -418,6 +419,18 @@ export function PiecePage({
               brand={brand}
             />
           )}
+        </div>
+      )}
+
+      {/* Publishing the guide to Study, under the sheet rather than beside
+          the buttons at the top. The decision is made by somebody who has
+          just read what is above it and judged it good enough to go out
+          under the church's name; at the top it would be made before
+          reading. Its own card, because the sheet above draws its own page
+          and putting a control inside that frame would print it. */}
+      {ready && draft && piece.kind === "study_guide" && !editing && (
+        <div className="card p-5">
+          <PublishToStudy projectId={projectId} />
         </div>
       )}
 

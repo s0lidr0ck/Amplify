@@ -422,6 +422,29 @@
     column-rule: 1px solid var(--sheet-rule);
   }
 
+  /* On a phone, one column.
+     
+     The two columns are a decision about PAPER — a 0.46in gutter and a rule
+     between them is right at 8.5in and absurd at 390px, where each column is
+     about twenty characters wide and every line breaks mid-word. The sheet
+     still has to be readable on the screen somebody checks it on before
+     printing, and increasingly that is a phone.
+     
+     A width query rather than a control: which layout the PAPER gets is a
+     real choice and already has a picker beside the piece (two-page sheet or
+     bi-fold booklet). Which layout a 390px screen gets is not a choice
+     anybody would make differently, so it is not worth a third button.
+     
+     Scoped to screen so it cannot reach the print stylesheet: a narrow
+     browser window printing a one-column sheet would silently produce a
+     different handout from the same page on a laptop. */
+  @media screen and (max-width: 700px) {
+    .sheet-columns {
+      column-count: 1;
+      column-rule: none;
+    }
+  }
+
   .sheet-section {
     margin-bottom: 0.75rem;
   }
