@@ -12,6 +12,7 @@ import {
 
 import { Mark } from "../brand/Mark";
 import { DoTheRest } from "../components/DoTheRest";
+import { EditSermonDetails } from "../components/EditSermonDetails";
 import { Jobs } from "../components/Jobs";
 import { StageRail } from "../components/StageRail";
 import { Trim } from "../components/Trim";
@@ -348,6 +349,16 @@ export function ProjectPage() {
               written as {project.speakerDisplayName}
             </span>
           ) : null}
+          <span className="h-3 w-px bg-border" aria-hidden />
+          <EditSermonDetails
+            projectId={project._id}
+            churchId={project.churchId}
+            title={project.title}
+            speaker={project.speaker}
+            speakerDisplayName={project.speakerDisplayName}
+            sermonDate={project.sermonDate}
+            sermonTime={project.sermonTime}
+          />
         </p>
       </div>
 
