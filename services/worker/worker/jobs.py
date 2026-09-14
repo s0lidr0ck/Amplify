@@ -240,6 +240,77 @@ def trim(hub: Hub, job: Job, scratch: Path) -> list[dict[str, object]]:
     ]
 
 
+@handles("sermon_audio")
+def sermon_audio(hub: Hub, job: Job, scratch: Path) -> list[dict[str, object]]:
+    """A listenable mp3 of the sermon, pulled off the master.
+
+    The master is video and around two gigabytes of it. Study plays sermons on
+    phones, and that is not something you do by downloading a video: what it
+    needs is the audio on its own, mono at 128kbps, roughly a thirty-fifth of
+    the bytes.
+
+    Streamed rather than downloaded wherever the master allows it. trim writes
+    the master with +faststart precisely so the index can be read first, which
+    is what lets ffmpeg read this over HTTP instead of pulling two gigabytes
+    onto a scratch disk to throw the video away.
+    """
+    payload = _payload(job)
+    source_asset_id = payload.get("assetId") or job.subject_id
+    if not source_asset_id:
+        raise ValueError("No master to take the audio from")
+
+    url, _ = hub.download_url(job, str(source_asset_id))
+    streaming = _source_streams_over_http(url)
+    if streaming:
+        hub.progress(job, 5, "Reading the sermon")
+        source_input = url
+    else:
+        hub.progress(job, 5, "Fetching the sermon")
+        source_input = str(_download(hub, job, str(source_asset_id), scratch))
+
+    # ffmpeg http options only; it exits with "Option reconnect not found"
+    # when the input is a local file.
+    reconnect = (
+        ["-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "30"]
+        if streaming
+        else []
+    )
+
+    hub.progress(job, 30, "Extracting the audio")
+    output = scratch / "sermon-audio.mp3"
+    _run(
+        [
+            "ffmpeg", "-y",
+            *reconnect,
+            "-i", source_input,
+            # No video. Without this the mp4 is remuxed and an .mp3 name is put
+            # on a video file, which plays nowhere useful.
+            "-vn",
+            # One voice from one position. Stereo doubles the file to encode a
+            # difference between channels that is not in the room.
+            "-ac", "1",
+            "-c:a", "libmp3lame",
+            "-b:a", "128k",
+            str(output),
+        ],
+        job,
+        hub,
+    )
+
+    hub.progress(job, 75, "Uploading the audio")
+    key = hub.upload_file(job, "sermon_audio", str(output), "audio/mpeg")
+
+    return [
+        {
+            "kind": "sermon_audio",
+            "storageKey": key,
+            "filename": output.name,
+            "mimeType": "audio/mpeg",
+            "durationSeconds": _probe_duration(output),
+        }
+    ]
+
+
 @handles("transcribe")
 def transcribe(hub: Hub, job: Job, scratch: Path) -> list[dict[str, object]]:
     """Turn the sermon audio into text.
